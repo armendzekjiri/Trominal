@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace App\Providers\Filament;
 
-use App\Filament\Pages\Auth\RegisterFirstAdmin;
 use App\Filament\Widgets\RecentAudit;
 use App\Filament\Widgets\RecentRegistrations;
 use App\Filament\Widgets\StatsOverview;
@@ -36,7 +35,12 @@ class AdminPanelProvider extends PanelProvider
             ->path('admin')
             ->brandName('Trominal')
             ->login()
-            ->registration(RegisterFirstAdmin::class)
+            // No Filament-side registration: the first user must sign up
+            // through the client app at `/register`, where they pick a master
+            // password and we generate real vault material. Filament-driven
+            // signup would have to fake those columns and the resulting user
+            // could never unlock their vault. Subsequent users are created
+            // either by an admin via Filament UserResource or via API invites.
             ->profile()
             ->multiFactorAuthentication([
                 AppAuthentication::make()

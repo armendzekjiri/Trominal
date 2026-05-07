@@ -4,15 +4,12 @@ declare(strict_types=1);
 
 namespace Tests\Feature\Admin;
 
-use App\Filament\Pages\Auth\RegisterFirstAdmin;
 use App\Filament\Resources\AuditLogs\AuditLogResource;
 use App\Filament\Resources\Permissions\PermissionResource;
 use App\Filament\Resources\Users\UserResource;
-use App\Models\AppSetting;
 use App\Models\User;
 use Database\Seeders\RoleAndPermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use Livewire\Livewire;
 use Tests\TestCase;
 
 final class AdminPanelTest extends TestCase
@@ -49,27 +46,13 @@ final class AdminPanelTest extends TestCase
             ->assertOk();
     }
 
-    public function test_first_admin_can_register_from_filament_then_registration_is_closed(): void
+    public function test_filament_does_not_expose_a_registration_page(): void
     {
-        $this->get('/admin/register')->assertOk();
-
-        Livewire::test(RegisterFirstAdmin::class)
-            ->fillForm([
-                'name' => 'First Admin',
-                'email' => 'admin@example.test',
-                'password' => 'correct-horse-battery-staple',
-                'passwordConfirmation' => 'correct-horse-battery-staple',
-            ])
-            ->call('register')
-            ->assertHasNoFormErrors();
-
-        /** @var User $admin */
-        $admin = User::query()->where('email', 'admin@example.test')->firstOrFail();
-
-        self::assertTrue($admin->hasRole('admin'));
-        self::assertTrue($admin->hasRole('user'));
-        self::assertFalse((bool) AppSetting::registration()->value['open']);
-
+        // Phase 4 makes the client app the canonical first-user signup flow:
+        // it derives a master password, generates the X25519 keypair, and
+        // uploads real vault material. A Filament-side signup would have to
+        // fake those columns and the resulting user could never unlock the
+        // client. The /admin/register route must stay disabled.
         $this->get('/admin/register')->assertNotFound();
     }
 
