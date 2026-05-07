@@ -40,6 +40,20 @@ final class AppSetting extends Model
     }
 
     /**
+     * @param  array{mode: string, open: bool, instance_name: string, web_ssh_enabled: bool}  $value
+     */
+    public static function setRegistration(array $value): self
+    {
+        /** @var self $setting */
+        $setting = self::query()->updateOrCreate(
+            ['key' => self::REGISTRATION],
+            ['value' => $value],
+        );
+
+        return $setting;
+    }
+
+    /**
      * @return array{mode: string, open: bool, instance_name: string, web_ssh_enabled: bool}
      */
     public static function defaultRegistrationValue(): array

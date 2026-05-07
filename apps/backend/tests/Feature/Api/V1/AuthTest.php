@@ -6,6 +6,7 @@ namespace Tests\Feature\Api\V1;
 
 use App\Models\AppSetting;
 use App\Models\AuditLog;
+use App\Models\Invite;
 use App\Models\RefreshToken;
 use App\Models\User;
 use Database\Seeders\RoleAndPermissionSeeder;
@@ -82,6 +83,88 @@ final class AuthTest extends TestCase
                 'private_key_ciphertext',
                 'private_key_nonce',
             ]);
+    }
+
+    public function test_invite_mode_requires_a_valid_invite_code_and_consumes_it(): void
+    {
+        AppSetting::registration()->update([
+            'value' => [
+                'mode' => 'invite',
+                'open' => true,
+                'instance_name' => 'Trominal',
+                'web_ssh_enabled' => true,
+            ],
+        ]);
+
+        $inviteCode = 'invite-code-'.str_repeat('a', 32);
+
+        /** @var Invite $invite */
+        $invite = Invite::query()->create([
+            'code_hash' => hash('sha256', $inviteCode),
+            'email' => 'first@example.test',
+            'expires_at' => now()->addDay(),
+        ]);
+
+        $this->postJson('/api/v1/auth/register', self::validRegistrationPayload())
+            ->assertForbidden();
+
+        $this->postJson('/api/v1/auth/register', [
+            ...self::validRegistrationPayload(),
+            'invite_code' => 'wrong-invite-code-'.str_repeat('b', 32),
+        ])->assertForbidden();
+
+        $this->postJson('/api/v1/auth/register', [
+            ...self::validRegistrationPayload(),
+            'invite_code' => $inviteCode,
+        ])->assertCreated();
+
+        $invite->refresh();
+
+        self::assertNotNull($invite->used_at);
+        self::assertSame(1, User::query()->count());
+
+        $this->postJson('/api/v1/auth/register', [
+            ...self::validRegistrationPayload('second@example.test'),
+            'invite_code' => $inviteCode,
+        ])->assertForbidden();
+    }
+
+    public function test_invite_mode_rejects_email_scoped_and_expired_invites(): void
+    {
+        AppSetting::registration()->update([
+            'value' => [
+                'mode' => 'invite',
+                'open' => true,
+                'instance_name' => 'Trominal',
+                'web_ssh_enabled' => true,
+            ],
+        ]);
+
+        $emailScopedInvite = 'invite-code-'.str_repeat('c', 32);
+        $expiredInvite = 'invite-code-'.str_repeat('d', 32);
+
+        Invite::query()->create([
+            'code_hash' => hash('sha256', $emailScopedInvite),
+            'email' => 'other@example.test',
+            'expires_at' => now()->addDay(),
+        ]);
+
+        Invite::query()->create([
+            'code_hash' => hash('sha256', $expiredInvite),
+            'expires_at' => now()->subMinute(),
+        ]);
+
+        $this->postJson('/api/v1/auth/register', [
+            ...self::validRegistrationPayload(),
+            'invite_code' => $emailScopedInvite,
+        ])->assertForbidden();
+
+        $this->postJson('/api/v1/auth/register', [
+            ...self::validRegistrationPayload(),
+            'invite_code' => $expiredInvite,
+        ])->assertForbidden();
+
+        self::assertSame(0, User::query()->count());
     }
 
     public function test_logs_in_with_valid_credentials_and_records_failed_attempts_without_plaintext_email_metadata(): void

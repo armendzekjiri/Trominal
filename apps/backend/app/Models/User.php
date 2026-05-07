@@ -6,6 +6,9 @@ namespace App\Models;
 
 // use Illuminate\Contracts\Auth\MustVerifyEmail;
 use Database\Factories\UserFactory;
+use Filament\Auth\MultiFactor\App\Contracts\HasAppAuthentication;
+use Filament\Models\Contracts\FilamentUser;
+use Filament\Panel;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Hidden;
 use Illuminate\Database\Eloquent\Concerns\HasUlids;
@@ -30,7 +33,7 @@ use Spatie\Permission\Traits\HasRoles;
     'suspended_at',
 ])]
 #[Hidden(['password', 'remember_token', 'two_fa_secret_enc'])]
-class User extends Authenticatable
+class User extends Authenticatable implements FilamentUser, HasAppAuthentication
 {
     /** @use HasFactory<UserFactory> */
     use HasApiTokens, HasFactory, HasRoles, HasUlids, Notifiable, SoftDeletes;
@@ -51,5 +54,34 @@ class User extends Authenticatable
             'two_fa_enabled_at' => 'datetime',
             'suspended_at' => 'datetime',
         ];
+    }
+
+    public function canAccessPanel(Panel $panel): bool
+    {
+        return $panel->getId() === 'admin'
+            && $this->suspended_at === null
+            && $this->hasRole('admin');
+    }
+
+    public function getAppAuthenticationSecret(): ?string
+    {
+        if ($this->two_fa_enabled_at === null) {
+            return null;
+        }
+
+        return $this->two_fa_secret_enc;
+    }
+
+    public function saveAppAuthenticationSecret(?string $secret): void
+    {
+        $this->forceFill([
+            'two_fa_secret_enc' => $secret,
+            'two_fa_enabled_at' => $secret === null ? null : now(),
+        ])->save();
+    }
+
+    public function getAppAuthenticationHolderName(): string
+    {
+        return $this->email;
     }
 }

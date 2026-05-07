@@ -7,6 +7,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Concerns\HasUlids;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 /**
  * @property array<string, mixed>|null $metadata
@@ -23,6 +24,14 @@ use Illuminate\Database\Eloquent\Model;
 final class AuditLog extends Model
 {
     use HasUlids;
+
+    /**
+     * @return BelongsTo<User, $this>
+     */
+    public function actor(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'actor_user_id');
+    }
 
     /**
      * @param  array<string, mixed>  $metadata

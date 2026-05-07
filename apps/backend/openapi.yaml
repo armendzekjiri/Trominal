@@ -202,6 +202,9 @@ components:
           type: string
         device_name:
           type: string
+        invite_code:
+          type: string
+          description: Required when server registration mode is invite.
     LoginRequest:
       type: object
       required: [email, password]

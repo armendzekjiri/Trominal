@@ -7,6 +7,7 @@ namespace App\Services;
 use App\Models\AppSetting;
 use App\Models\AuditLog;
 use App\Models\Device;
+use App\Models\Invite;
 use App\Models\PersonalAccessToken;
 use App\Models\RefreshToken;
 use App\Models\User;
@@ -44,6 +45,10 @@ final class AuthService
                 throw new AuthorizationException(__('Registration is closed.'));
             }
 
+            $invite = $mode === 'invite'
+                ? $this->consumeInviteForRegistration($payload)
+                : null;
+
             /** @var User $user */
             $user = User::query()->create([
                 'name' => $payload['name'] ?? null,
@@ -67,12 +72,55 @@ final class AuthService
                 ]);
             }
 
-            AuditLog::record($user, 'auth.registered', 'user', (string) $user->id);
+            AuditLog::record(
+                actor: $user,
+                action: 'auth.registered',
+                resourceType: 'user',
+                resourceId: (string) $user->id,
+                metadata: $invite instanceof Invite ? ['invite_id' => $invite->id] : [],
+            );
 
             return $this->issueTokenPair($user, (string) ($payload['device_name'] ?? 'Unknown device'));
         });
 
         return $tokenPair;
+    }
+
+    /**
+     * @param  array<string, mixed>  $payload
+     */
+    private function consumeInviteForRegistration(array $payload): Invite
+    {
+        $inviteCode = (string) ($payload['invite_code'] ?? '');
+
+        if ($inviteCode === '') {
+            throw new AuthorizationException(__('An invite code is required.'));
+        }
+
+        /** @var Invite|null $invite */
+        $invite = Invite::query()
+            ->where('code_hash', hash('sha256', $inviteCode))
+            ->lockForUpdate()
+            ->first();
+
+        if (! $invite instanceof Invite) {
+            throw new AuthorizationException(__('The invite code is invalid.'));
+        }
+
+        $email = strtolower((string) $payload['email']);
+        $inviteEmail = strtolower((string) ($invite->email ?? ''));
+
+        if (
+            $invite->used_at !== null
+            || ($invite->expires_at !== null && $invite->expires_at->isPast())
+            || ($inviteEmail !== '' && $inviteEmail !== $email)
+        ) {
+            throw new AuthorizationException(__('The invite code is invalid.'));
+        }
+
+        $invite->forceFill(['used_at' => now()])->save();
+
+        return $invite;
     }
 
     /**

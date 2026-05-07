@@ -22,6 +22,9 @@ apps/client/src-tauri/gen/
 
 # Laravel
 apps/backend/database/*.sqlite
+apps/backend/public/css/filament/
+apps/backend/public/fonts/filament/
+apps/backend/public/js/filament/
 apps/backend/storage/*.key
 apps/backend/storage/logs/*
 apps/backend/storage/framework/cache/*
