@@ -4,12 +4,14 @@
 
 ## Mandatory primitives
 
-| Operation       | Primitive             | TS lib                                      | Rust lib                                |
-| --------------- | --------------------- | ------------------------------------------- | --------------------------------------- |
-| Password → key  | Argon2id              | `libsodium-wrappers-sumo` (`crypto_pwhash`) | `dryoc::pwhash`                         |
-| Symmetric AEAD  | XChaCha20-Poly1305    | `crypto_aead_xchacha20poly1305_ietf_*`      | `dryoc::aead::Aead` (XChaCha20Poly1305) |
-| Random bytes    | `randombytes_buf`     | same                                        | `dryoc::rng::randombytes_buf`           |
-| Ed25519 keypair | `crypto_sign_keypair` | same                                        | `dryoc::sign`                           |
+| Operation       | Primitive             | TS lib                                      | Rust lib                              |
+| --------------- | --------------------- | ------------------------------------------- | ------------------------------------- |
+| Password → key  | Argon2id (RFC 9106)   | `libsodium-wrappers-sumo` (`crypto_pwhash`) | `argon2` (RustCrypto)                 |
+| Symmetric AEAD  | XChaCha20-Poly1305    | `crypto_aead_xchacha20poly1305_ietf_*`      | `chacha20poly1305::XChaCha20Poly1305` |
+| Random bytes    | `randombytes_buf`     | same                                        | `rand` / `getrandom`                  |
+| Ed25519 keypair | `crypto_sign_keypair` | same                                        | `ed25519-dalek`                       |
+
+The cross-platform parity test in `packages/crypto/parity/` asserts the JS and Rust implementations produce byte-equal output. We deliberately use pure-Rust RustCrypto crates rather than libsodium FFI on the Rust side: it removes the system-libsodium dependency and the matching ciphertexts prove RFC compliance on both sides.
 
 **Forbidden:** AES-GCM with random nonces (nonce reuse risk), SHA1 anywhere, MD5, custom crypto, Math.random for any security purpose.
 
