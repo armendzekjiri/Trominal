@@ -1,0 +1,218 @@
+openapi: 3.1.0
+info:
+  title: Trominal API
+  version: 0.1.0
+  license:
+    name: AGPL-3.0-only
+servers:
+  - url: http://127.0.0.1:8001
+paths:
+  /api/server-info:
+    get:
+      summary: Get public instance registration and feature information.
+      responses:
+        '200':
+          description: Server information.
+  /api/health:
+    get:
+      summary: Get basic health checks for the API, database, and Redis.
+      responses:
+        '200':
+          description: Health status.
+  /api/v1/auth/register:
+    post:
+      summary: Register a user and bootstrap first-user admin mode.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegisterRequest'
+      responses:
+        '201':
+          description: User registered with access and refresh tokens.
+        '403':
+          description: Registration is closed.
+        '422':
+          description: Validation failed.
+  /api/v1/auth/login:
+    post:
+      summary: Log in with login password and optional TOTP code.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+      responses:
+        '200':
+          description: Access and refresh tokens.
+        '422':
+          description: Invalid credentials or TOTP code.
+  /api/v1/auth/refresh:
+    post:
+      summary: Rotate a refresh token and issue a new token pair.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [refresh_token]
+              properties:
+                refresh_token:
+                  type: string
+                device_name:
+                  type: string
+      responses:
+        '200':
+          description: New token pair.
+        '422':
+          description: Invalid refresh token.
+  /api/v1/auth/logout:
+    post:
+      summary: Revoke the current access token and active refresh tokens.
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Logged out.
+        '401':
+          description: Unauthenticated.
+  /api/v1/me:
+    get:
+      summary: Get the authenticated user with roles and permissions.
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Current user.
+        '401':
+          description: Unauthenticated.
+  /api/v1/auth/forgot-password:
+    post:
+      summary: Request a password reset link without disclosing account existence.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email]
+              properties:
+                email:
+                  type: string
+                  format: email
+      responses:
+        '202':
+          description: Request accepted.
+  /api/v1/auth/reset-password:
+    post:
+      summary: Reset the login password with a reset token.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, token, password, password_confirmation]
+              properties:
+                email:
+                  type: string
+                  format: email
+                token:
+                  type: string
+                password:
+                  type: string
+                  minLength: 12
+                password_confirmation:
+                  type: string
+      responses:
+        '200':
+          description: Password reset.
+        '422':
+          description: Invalid token or validation failed.
+  /api/v1/auth/two-factor/enable:
+    post:
+      summary: Start TOTP setup and return the secret and otpauth URI.
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: TOTP setup payload.
+        '401':
+          description: Unauthenticated.
+  /api/v1/auth/two-factor/verify:
+    post:
+      summary: Confirm TOTP setup with a six-digit code.
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: TOTP enabled.
+        '422':
+          description: Invalid code.
+  /api/v1/auth/two-factor/disable:
+    post:
+      summary: Disable TOTP after password and code confirmation.
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: TOTP disabled.
+        '422':
+          description: Invalid password or code.
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+  schemas:
+    RegisterRequest:
+      type: object
+      required:
+        - email
+        - password
+        - password_confirmation
+        - kdf_salt
+        - kdf_params
+        - public_key
+        - private_key_ciphertext
+        - private_key_nonce
+      properties:
+        name:
+          type: string
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+          minLength: 12
+        password_confirmation:
+          type: string
+        kdf_salt:
+          type: string
+        kdf_params:
+          type: object
+        public_key:
+          type: string
+        private_key_ciphertext:
+          type: string
+        private_key_nonce:
+          type: string
+        device_name:
+          type: string
+    LoginRequest:
+      type: object
+      required: [email, password]
+      properties:
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+        two_factor_code:
+          type: string
+          pattern: "^\\d{6}$"
+        device_name:
+          type: string
