@@ -80,6 +80,9 @@ packages/api-client/src/generated/
 Thumbs.db
 desktop.ini
 
+# Claude Code per-developer state (plugins, permissions)
+.claude/
+
 # pnpm
 .pnpm-store/
 
