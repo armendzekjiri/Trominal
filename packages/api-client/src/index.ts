@@ -60,6 +60,108 @@ export type MasterPasswordChangeRequest = {
   items: MasterPasswordChangeItem[]
 }
 
+/** Public-facing instance metadata returned by GET /api/server-info. */
+export type ServerInfoResponse = {
+  instance_name: string
+  registration_mode: 'single' | 'open' | 'invite' | 'closed'
+  registration_open: boolean
+  web_ssh_enabled: boolean
+}
+
+/** Argon2id parameters serialised on the user record. */
+export type KdfParamsDto = {
+  version: number
+  alg: string
+  memlimit: number
+  opslimit: number
+  salt_len: number
+  out_len: number
+}
+
+/** Vault material returned alongside the user object. */
+export type UserVaultMaterial = {
+  kdf_salt: string
+  kdf_params: KdfParamsDto
+  public_key: string
+  private_key_ciphertext: string
+  private_key_nonce: string
+}
+
+/** User as returned by the API. */
+export type UserDto = {
+  id: number | string
+  name: string | null
+  email: string
+  roles: string[]
+  permissions: string[]
+  vault: UserVaultMaterial
+  two_factor_enabled: boolean
+  suspended_at: string | null
+  created_at: string | null
+  updated_at: string | null
+}
+
+/** Request body for POST /api/v1/auth/register. */
+export type RegisterRequest = {
+  name?: string
+  email: string
+  password: string
+  password_confirmation: string
+  kdf_salt: string
+  kdf_params: KdfParamsDto
+  public_key: string
+  private_key_ciphertext: string
+  private_key_nonce: string
+  device_name?: string
+  invite_code?: string
+}
+
+/** Request body for POST /api/v1/auth/login. */
+export type LoginRequest = {
+  email: string
+  password: string
+  two_factor_code?: string
+  device_name?: string
+}
+
+/** Request body for POST /api/v1/auth/refresh. */
+export type RefreshRequest = {
+  refresh_token: string
+  device_name?: string
+}
+
+/** Token-pair response shared by register / login / refresh. */
+export type TokenPairResponse = {
+  user: UserDto
+  access_token: string
+  refresh_token: string
+  token_type: 'Bearer'
+  expires_in: number
+}
+
+/** Request body for POST /api/v1/auth/forgot-password. */
+export type ForgotPasswordRequest = { email: string }
+
+/** Request body for POST /api/v1/auth/reset-password. */
+export type ResetPasswordRequest = {
+  email: string
+  token: string
+  password: string
+  password_confirmation: string
+}
+
+/** Response for POST /api/v1/auth/two-factor/enable. */
+export type TwoFactorEnableResponse = {
+  secret: string
+  otpauth_uri: string
+}
+
+/** Request body for POST /api/v1/auth/two-factor/verify. */
+export type TwoFactorVerifyRequest = { code: string }
+
+/** Request body for POST /api/v1/auth/two-factor/disable. */
+export type TwoFactorDisableRequest = { password: string; code: string }
+
 /** Error thrown when the Trominal API responds outside the 2xx range. */
 export class TrominalApiError extends Error {
   readonly status: number
@@ -71,6 +173,15 @@ export class TrominalApiError extends Error {
     this.status = status
     this.body = body
   }
+
+  /** Parse the response body as JSON if possible; null on failure. */
+  json<T = unknown>(): T | null {
+    try {
+      return JSON.parse(this.body) as T
+    } catch {
+      return null
+    }
+  }
 }
 
 /** Configuration for the generated Trominal API client. */
@@ -78,6 +189,13 @@ export type TrominalApiClientOptions = {
   baseUrl: string
   accessToken?: string
   fetcher?: Fetcher
+}
+
+type RequestInit = {
+  method?: 'DELETE' | 'GET' | 'PATCH' | 'POST'
+  body?: unknown
+  /** Skip the bearer token even if one is set. Used by /auth/refresh. */
+  skipAuth?: boolean
 }
 
 /** Minimal typed client for Trominal API v1 endpoints. */
@@ -97,10 +215,93 @@ export class TrominalApiClient {
     this.accessToken = accessToken
   }
 
+  /** Get public instance metadata. Used by the first-launch screen. */
+  async getServerInfo(): Promise<ServerInfoResponse> {
+    return this.request<ServerInfoResponse>('/api/server-info', { skipAuth: true })
+  }
+
+  /** Register the first / next user. Server enforces the active registration mode. */
+  async register(payload: RegisterRequest): Promise<TokenPairResponse> {
+    return this.request<TokenPairResponse>('/api/v1/auth/register', {
+      method: 'POST',
+      body: payload,
+      skipAuth: true,
+    })
+  }
+
+  /** Log in with email + login password and (optionally) a 6-digit TOTP code. */
+  async login(payload: LoginRequest): Promise<TokenPairResponse> {
+    return this.request<TokenPairResponse>('/api/v1/auth/login', {
+      method: 'POST',
+      body: payload,
+      skipAuth: true,
+    })
+  }
+
+  /** Rotate a refresh token and receive a new access/refresh pair. */
+  async refresh(payload: RefreshRequest): Promise<TokenPairResponse> {
+    return this.request<TokenPairResponse>('/api/v1/auth/refresh', {
+      method: 'POST',
+      body: payload,
+      skipAuth: true,
+    })
+  }
+
+  /** Revoke the current access token and active refresh tokens. */
+  async logout(): Promise<void> {
+    await this.request<{ message: string }>('/api/v1/auth/logout', { method: 'POST' })
+  }
+
+  /** Get the authenticated user, roles, permissions, and vault material. */
+  async me(): Promise<UserDto> {
+    const response = await this.request<{ data: UserDto }>('/api/v1/me')
+    return response.data
+  }
+
+  /** Begin TOTP setup. Returns a base32 secret and otpauth:// URI for QR rendering. */
+  async enableTwoFactor(): Promise<TwoFactorEnableResponse> {
+    return this.request<TwoFactorEnableResponse>('/api/v1/auth/two-factor/enable', {
+      method: 'POST',
+    })
+  }
+
+  /** Confirm TOTP setup with a 6-digit code. */
+  async verifyTwoFactor(payload: TwoFactorVerifyRequest): Promise<void> {
+    await this.request<{ message: string }>('/api/v1/auth/two-factor/verify', {
+      method: 'POST',
+      body: payload,
+    })
+  }
+
+  /** Disable TOTP after re-confirming password and a current 6-digit code. */
+  async disableTwoFactor(payload: TwoFactorDisableRequest): Promise<void> {
+    await this.request<{ message: string }>('/api/v1/auth/two-factor/disable', {
+      method: 'POST',
+      body: payload,
+    })
+  }
+
+  /** Send a password-reset email if the account exists. Always returns 202. */
+  async forgotPassword(payload: ForgotPasswordRequest): Promise<void> {
+    await this.request<{ message: string }>('/api/v1/auth/forgot-password', {
+      method: 'POST',
+      body: payload,
+      skipAuth: true,
+    })
+  }
+
+  /** Complete a password reset with the token from the email. */
+  async resetPassword(payload: ResetPasswordRequest): Promise<void> {
+    await this.request<{ message: string }>('/api/v1/auth/reset-password', {
+      method: 'POST',
+      body: payload,
+      skipAuth: true,
+    })
+  }
+
   /** List encrypted vault records for one resource type. */
   async listVaultRecords(resource: VaultResourceType): Promise<VaultRecord[]> {
     const response = await this.request<{ data: VaultRecord[] }>(`/api/v1/vault/${resource}`)
-
     return response.data
   }
 
@@ -113,14 +314,12 @@ export class TrominalApiClient {
       method: 'POST',
       body: payload,
     })
-
     return response.data
   }
 
   /** Read one encrypted vault record. */
   async getVaultRecord(resource: VaultResourceType, id: string): Promise<VaultRecord> {
     const response = await this.request<{ data: VaultRecord }>(`/api/v1/vault/${resource}/${id}`)
-
     return response.data
   }
 
@@ -134,21 +333,17 @@ export class TrominalApiClient {
       method: 'PATCH',
       body: payload,
     })
-
     return response.data
   }
 
   /** Soft-delete one encrypted vault record. */
   async deleteVaultRecord(resource: VaultResourceType, id: string): Promise<void> {
-    await this.request<void>(`/api/v1/vault/${resource}/${id}`, {
-      method: 'DELETE',
-    })
+    await this.request<void>(`/api/v1/vault/${resource}/${id}`, { method: 'DELETE' })
   }
 
   /** Fetch encrypted vault deltas since the optional cursor. */
   async syncVault(cursor?: string): Promise<VaultSyncResponse> {
     const query = cursor === undefined ? '' : `?cursor=${encodeURIComponent(cursor)}`
-
     return this.request<VaultSyncResponse>(`/api/v1/vault/sync${query}`)
   }
 
@@ -162,15 +357,12 @@ export class TrominalApiClient {
     })
   }
 
-  private async request<T>(
-    path: string,
-    options: { method?: 'DELETE' | 'GET' | 'PATCH' | 'POST'; body?: unknown } = {},
-  ): Promise<T> {
+  private async request<T>(path: string, options: RequestInit = {}): Promise<T> {
     const headers: Record<string, string> = {
       Accept: 'application/json',
     }
 
-    if (this.accessToken !== undefined) {
+    if (options.skipAuth !== true && this.accessToken !== undefined) {
       headers.Authorization = `Bearer ${this.accessToken}`
     }
 
