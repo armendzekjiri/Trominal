@@ -84,7 +84,10 @@ jobs:
       - name: Typecheck
         run: pnpm typecheck
 
-      - name: Unit tests
+      - name: Crypto unit tests
+        run: pnpm --filter @trominal/crypto test
+
+      - name: Client unit tests
         run: pnpm test:client
 
       - name: Build web client
@@ -93,3 +96,26 @@ jobs:
       - name: Check Tauri crate
         working-directory: apps/client/src-tauri
         run: cargo check
+
+  crypto-parity:
+    name: Crypto parity (TS ↔ Rust)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo registry
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            packages/crypto/parity/target
+          key: ${{ runner.os }}-cargo-parity-${{ hashFiles('packages/crypto/parity/Cargo.toml') }}
+
+      - name: Run parity tests (RustCrypto vs libsodium fixture)
+        run: cargo test --manifest-path packages/crypto/parity/Cargo.toml
