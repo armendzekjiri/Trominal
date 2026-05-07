@@ -49,29 +49,72 @@ async function applyTokenPair(
   })
 }
 
+/**
+ * The server rotates the refresh token on every call to /auth/refresh — using
+ * the same token twice rejects the second call with 422. React StrictMode in
+ * dev fires effects twice, so two hydrate()s racing each other guaranteed
+ * one of them got a 422 and wiped the stored token. Single-flight prevents
+ * concurrent /auth/refresh roundtrips from anywhere in the app.
+ */
+let refreshInflight: Promise<boolean> | null = null
+let hydrateInflight: Promise<void> | null = null
+
+/**
+ * Distinguish "the server explicitly rejected this token" (clear it; force
+ * full re-login) from "we couldn't reach the server / something else broke"
+ * (keep the token; let the user retry). Anything else gets the safer
+ * keep-the-token behaviour.
+ */
+function shouldClearTokenOnError(err: unknown): boolean {
+  if (err instanceof TrominalApiError) {
+    return err.status === 401 || err.status === 422
+  }
+  return false
+}
+
 export const useAuth = create<AuthStore>((set, get) => ({
   ...initial,
 
   async hydrate() {
+    if (hydrateInflight !== null) {
+      // Concurrent hydration (StrictMode double-mount, multi-tab focus, etc.)
+      // would race for the same single-use refresh token. Coalesce.
+      return hydrateInflight
+    }
     set({ isHydrating: true, hydrateError: null })
-    try {
-      const refreshToken = await secureStorage.get('refresh_token')
-      if (refreshToken === null || refreshToken === '') {
+    hydrateInflight = (async (): Promise<void> => {
+      try {
+        const refreshToken = await secureStorage.get('refresh_token')
+        if (refreshToken === null || refreshToken === '') {
+          set({ isHydrating: false })
+          return
+        }
+        const api = await getApiClient()
+        const pair = await api.refresh({ refresh_token: refreshToken })
+        await applyTokenPair(set, pair)
         set({ isHydrating: false })
-        return
+      } catch (err) {
+        if (shouldClearTokenOnError(err)) {
+          await secureStorage.delete('refresh_token')
+          set({
+            ...initial,
+            isHydrating: false,
+            hydrateError: err instanceof Error ? err.message : 'Session expired',
+          })
+        } else {
+          // Transient: keep the token so a retry can succeed once the issue
+          // clears. Just stop showing the splash.
+          set({
+            isHydrating: false,
+            hydrateError: err instanceof Error ? err.message : 'Hydration failed',
+          })
+        }
       }
-      const api = await getApiClient()
-      const pair = await api.refresh({ refresh_token: refreshToken })
-      await applyTokenPair(set, pair)
-      set({ isHydrating: false })
-    } catch (err) {
-      // Bad / expired refresh token — clear and force a fresh login.
-      await secureStorage.delete('refresh_token')
-      set({
-        ...initial,
-        isHydrating: false,
-        hydrateError: err instanceof Error ? err.message : 'Hydration failed',
-      })
+    })()
+    try {
+      await hydrateInflight
+    } finally {
+      hydrateInflight = null
     }
   },
 
@@ -90,18 +133,32 @@ export const useAuth = create<AuthStore>((set, get) => ({
   },
 
   async refresh() {
-    const refreshToken = get().refreshToken ?? (await secureStorage.get('refresh_token'))
-    if (refreshToken === null || refreshToken === '') {
-      return false
+    if (refreshInflight !== null) {
+      // Same coalescing rationale as hydrate(): the rotation contract on the
+      // server makes concurrent refreshes mutually destructive.
+      return refreshInflight
     }
+    refreshInflight = (async (): Promise<boolean> => {
+      const refreshToken = get().refreshToken ?? (await secureStorage.get('refresh_token'))
+      if (refreshToken === null || refreshToken === '') {
+        return false
+      }
+      try {
+        const api = await getApiClient()
+        const pair = await api.refresh({ refresh_token: refreshToken })
+        await applyTokenPair(set, pair)
+        return true
+      } catch (err) {
+        if (shouldClearTokenOnError(err)) {
+          await get().logout()
+        }
+        return false
+      }
+    })()
     try {
-      const api = await getApiClient()
-      const pair = await api.refresh({ refresh_token: refreshToken })
-      await applyTokenPair(set, pair)
-      return true
-    } catch {
-      await get().logout()
-      return false
+      return await refreshInflight
+    } finally {
+      refreshInflight = null
     }
   },
 
