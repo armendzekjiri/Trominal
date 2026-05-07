@@ -162,11 +162,170 @@ paths:
           description: TOTP disabled.
         '422':
           description: Invalid password or code.
+  /api/v1/vault/sync:
+    get:
+      summary: Delta sync encrypted vault records visible to the authenticated user.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: cursor
+          in: query
+          required: false
+          schema:
+            type: string
+            format: date-time
+          description: Return records updated or soft-deleted after this timestamp.
+      responses:
+        '200':
+          description: Encrypted vault changes grouped by resource type.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VaultSyncResponse'
+        '401':
+          description: Unauthenticated.
+  /api/v1/vault/{resource}:
+    get:
+      summary: List encrypted vault records for one resource type.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/VaultResource'
+      responses:
+        '200':
+          description: Vault records.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VaultListResponse'
+        '403':
+          description: Missing permission.
+    post:
+      summary: Create an encrypted vault record.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/VaultResource'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VaultRecordPayload'
+      responses:
+        '201':
+          description: Vault record created.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VaultRecordResponse'
+        '403':
+          description: Missing permission.
+        '422':
+          description: Validation failed.
+  /api/v1/vault/{resource}/{id}:
+    get:
+      summary: Read one encrypted vault record.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/VaultResource'
+        - $ref: '#/components/parameters/VaultRecordId'
+      responses:
+        '200':
+          description: Vault record.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VaultRecordResponse'
+        '403':
+          description: Missing permission or not the owner.
+        '404':
+          description: Vault record not found.
+    patch:
+      summary: Update one encrypted vault record.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/VaultResource'
+        - $ref: '#/components/parameters/VaultRecordId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VaultRecordPayload'
+      responses:
+        '200':
+          description: Vault record updated.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VaultRecordResponse'
+        '403':
+          description: Missing permission or not the owner.
+        '404':
+          description: Vault record not found.
+        '422':
+          description: Validation failed.
+    delete:
+      summary: Soft-delete one encrypted vault record.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/VaultResource'
+        - $ref: '#/components/parameters/VaultRecordId'
+      responses:
+        '204':
+          description: Vault record soft-deleted.
+        '403':
+          description: Missing permission or not the owner.
+        '404':
+          description: Vault record not found.
+  /api/v1/me/master-password/change:
+    post:
+      summary: Atomically rotate all encrypted vault material after a client-side master-password change.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MasterPasswordChangeRequest'
+      responses:
+        '200':
+          description: Vault version bumped and other sessions invalidated.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [vault_version]
+                properties:
+                  vault_version:
+                    type: integer
+        '401':
+          description: Unauthenticated.
+        '422':
+          description: Validation failed.
 components:
   securitySchemes:
     bearerAuth:
       type: http
       scheme: bearer
+  parameters:
+    VaultResource:
+      name: resource
+      in: path
+      required: true
+      schema:
+        $ref: '#/components/schemas/VaultResourceType'
+    VaultRecordId:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
   schemas:
     RegisterRequest:
       type: object
@@ -219,3 +378,97 @@ components:
           pattern: "^\\d{6}$"
         device_name:
           type: string
+    VaultResourceType:
+      type: string
+      enum:
+        - groups
+        - hosts
+        - host-credentials
+        - snippets
+        - identities
+        - tunnels
+        - ai-settings
+    VaultRecordPayload:
+      type: object
+      additionalProperties: true
+      description: Encrypted client payload. Ciphertext fields carry base64 XChaCha20-Poly1305 ciphertexts; nonce fields carry base64 24-byte nonces.
+      examples:
+        - name_ciphertext: 'base64-ciphertext'
+          name_nonce: 'base64-nonce'
+          hostname_ciphertext: 'base64-ciphertext'
+          hostname_nonce: 'base64-nonce'
+    VaultRecord:
+      type: object
+      required: [id, type, created_at, updated_at, deleted_at]
+      additionalProperties: true
+      properties:
+        id:
+          type: string
+        type:
+          $ref: '#/components/schemas/VaultResourceType'
+        created_at:
+          type:
+            - string
+            - 'null'
+          format: date-time
+        updated_at:
+          type:
+            - string
+            - 'null'
+          format: date-time
+        deleted_at:
+          type:
+            - string
+            - 'null'
+          format: date-time
+    VaultRecordResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          $ref: '#/components/schemas/VaultRecord'
+    VaultListResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/VaultRecord'
+    VaultSyncResponse:
+      type: object
+      required: [cursor, vault_version, data]
+      properties:
+        cursor:
+          type: string
+          format: date-time
+        vault_version:
+          type: integer
+        data:
+          type: object
+          additionalProperties:
+            type: array
+            items:
+              $ref: '#/components/schemas/VaultRecord'
+    MasterPasswordChangeRequest:
+      type: object
+      required: [new_kdf_salt, new_kdf_params, current_refresh_token, items]
+      properties:
+        new_kdf_salt:
+          type: string
+        new_kdf_params:
+          type: object
+        current_refresh_token:
+          type: string
+        items:
+          type: array
+          items:
+            type: object
+            required: [type, id, fields]
+            properties:
+              type:
+                $ref: '#/components/schemas/VaultResourceType'
+              id:
+                type: string
+              fields:
+                $ref: '#/components/schemas/VaultRecordPayload'

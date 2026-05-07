@@ -1,0 +1,12 @@
+{
+  "name": "@trominal/api-client",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Typed Trominal API client generated from apps/backend/openapi.yaml.",
+  "license": "AGPL-3.0-only",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "types": "./src/index.ts"
+}
