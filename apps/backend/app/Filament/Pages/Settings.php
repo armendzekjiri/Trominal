@@ -58,13 +58,16 @@ class Settings extends Page
                     Select::make('mode')
                         ->label('Registration mode')
                         ->options([
-                            'single' => 'Single user',
+                            'single' => 'Single user (first signup becomes admin, then closes)',
+                            'open' => 'Open (anyone can sign up)',
                             'invite' => 'Invite only',
                             'closed' => 'Closed',
                         ])
+                        ->helperText('In single mode the API auto-closes registration after the first user, so switching this toggle alone is not enough — pick "Open" to keep accepting public signups.')
                         ->required(),
                     Toggle::make('open')
-                        ->label('Registration open'),
+                        ->label('Registration open')
+                        ->helperText('Must be on for any signup to succeed. The API resets this to off automatically after the first single-mode user.'),
                     Toggle::make('web_ssh_enabled')
                         ->label('Web SSH enabled'),
                 ])
