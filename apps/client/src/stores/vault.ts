@@ -82,6 +82,20 @@ export const useVault = create<VaultStore>((set, get) => ({
     if (material === null) {
       throw new Error('Vault material not loaded; call setMaterial first.')
     }
+    // Phase-2 placeholder: a since-removed Filament bootstrap page filled in
+    // these columns with random bytes so an admin could be created before the
+    // client existed. Such an account has no real master password — the user
+    // has to delete it and re-register through the client.
+    if (
+      typeof material.kdf_params === 'object' &&
+      material.kdf_params !== null &&
+      (material.kdf_params as { alg?: string }).alg === 'temporary-filament-bootstrap'
+    ) {
+      throw new Error(
+        'This account was bootstrapped from the admin panel and has no master password. ' +
+          'Run `php artisan migrate:fresh --seed` and register through the client at /register.',
+      )
+    }
     if (!isKdfParams(material.kdf_params)) {
       throw new Error('Stored kdf_params are malformed.')
     }
