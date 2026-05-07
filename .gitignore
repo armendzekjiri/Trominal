@@ -1,0 +1,84 @@
+# Environment
+.env
+.env.local
+.env.*.local
+!.env.example
+
+# Dependencies
+node_modules/
+vendor/
+target/
+
+# Build output
+dist/
+build/
+out/
+*.log
+*.pid
+
+# Tauri
+apps/client/src-tauri/target/
+apps/client/src-tauri/gen/
+
+# Laravel
+apps/backend/database/*.sqlite
+apps/backend/storage/*.key
+apps/backend/storage/logs/*
+apps/backend/storage/framework/cache/*
+apps/backend/storage/framework/sessions/*
+apps/backend/storage/framework/views/*
+apps/backend/bootstrap/cache/*
+!apps/backend/storage/logs/.gitkeep
+!apps/backend/bootstrap/cache/.gitkeep
+
+# Tests
+coverage/
+.nyc_output/
+*.lcov
+.phpunit.cache/
+.phpunit.result.cache
+test-results/
+playwright-report/
+
+# IDE
+.idea/
+*.iml
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# VS Code — keep agreed shared settings, ignore personal
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
+!.vscode/launch.json
+
+# Secrets / keys (never commit)
+*.pem
+*.key
+*.p12
+*.pfx
+id_rsa
+id_rsa.*
+id_ed25519
+id_ed25519.*
+*.cert
+*.crt
+known_hosts
+
+# Generated
+apps/backend/openapi.generated.yaml
+packages/api-client/src/generated/
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# pnpm
+.pnpm-store/
+
+# Husky generated helper files
+.husky/_/

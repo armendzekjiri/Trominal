@@ -1,0 +1,44 @@
+---
+description: Testing patterns and CI rules
+globs:
+  - "**/*.test.ts"
+  - "**/*.spec.ts"
+  - "**/*Test.php"
+  - "**/tests/**"
+  - "**/*test.rs"
+  - .github/workflows/**
+alwaysApply: false
+---
+
+# Trominal Testing
+
+Full skill: [testing.md](mdc:.ai/skills/testing.md)
+
+## Coverage thresholds (CI enforced)
+
+- Backend (Pest): **≥80%**
+- Client TS (Vitest): **≥70%**
+- Rust (tarpaulin): **≥60%**
+- Cross-platform crypto fixtures: **100%** (golden file parity)
+
+## What to test
+
+- **Every endpoint:** happy path + auth required + validation errors + ownership enforcement
+- **Every service method:** all branches
+- **Every policy:** allow + deny
+- **Single-user mode race condition:** parallel registration
+- **Audit log writes** for sensitive actions
+- **Encrypted casts** round-trip correctly
+
+## What NOT to test
+
+- ❌ Framework code (TanStack Query internals)
+- ❌ Types (TS does that)
+- ❌ Trivial getters/setters
+- ❌ Tests that mirror implementation rather than verify behavior
+
+## Flaky test policy
+
+- Flaky test → quarantine within 24h with TODO + issue link
+- Fix or delete within 1 sprint
+- No `--retry` to mask flakes

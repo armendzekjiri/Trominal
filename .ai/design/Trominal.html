@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<title>Trominal — UI mockups</title>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Inter:wght@400;500;600&display=swap" rel="stylesheet"/>
+<link rel="stylesheet" href="tokens.css"/>
+<style>
+  html, body { margin: 0; padding: 0; background: #08070a; color: #e7e2d4; font-family: var(--font-ui); }
+  #root { min-height: 100vh; }
+  @keyframes blink { 0%, 50% { opacity: 1 } 50.01%, 100% { opacity: 0 } }
+  /* Design canvas overrides */
+  .dc-artboard { background: var(--bg) !important; }
+</style>
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+</head>
+<body class="tr">
+<div id="root"></div>
+
+<script type="text/babel" src="design-canvas.jsx"></script>
+<script type="text/babel" src="tweaks-panel.jsx"></script>
+<script type="text/babel" src="primitives.jsx"></script>
+<script type="text/babel" src="screens-auth.jsx"></script>
+<script type="text/babel" src="screens-hosts.jsx"></script>
+<script type="text/babel" src="screens-terminal.jsx"></script>
+<script type="text/babel" src="screens-tools.jsx"></script>
+<script type="text/babel" src="screens-settings.jsx"></script>
+<script type="text/babel" src="screens-system.jsx"></script>
+
+<script type="text/babel" data-presets="react">
+const TDC = window.DesignCanvas, TDCS = window.DCSection, TDCA = window.DCArtboard;
+
+// Tweak defaults
+const TWEAK_DEFAULTS = /*EDITMODE-BEGIN*/{
+  "theme": "dark",
+  "accent": "#7dd3a0",
+  "sidebarCollapsed": false,
+  "density": "comfortable",
+  "radius": "subtle",
+  "vaultLocked": false,
+  "connectionState": "connected"
+}/*EDITMODE-END*/;
+
+const App = () => {
+  const t = useTweaks ? useTweaks(TWEAK_DEFAULTS) : [TWEAK_DEFAULTS, () => {}];
+  const tweaks = t[0]; const setTweak = t[1];
+
+  // Apply tweaks at root
+  React.useEffect(() => {
+    document.documentElement.dataset.theme = tweaks.theme === "light" ? "light" : "";
+    document.documentElement.style.setProperty("--accent", tweaks.accent);
+    document.documentElement.style.setProperty("--accent-soft", tweaks.accent + "1A");
+    document.documentElement.style.setProperty("--accent-ring", tweaks.accent + "59");
+    const r = { sharp: { 2: "2px", 3: "3px", 4: "4px" }, subtle: { 2: "4px", 3: "6px", 4: "8px" }, soft: { 2: "6px", 3: "10px", 4: "12px" } }[tweaks.radius] || { 2: "4px", 3: "6px", 4: "8px" };
+    document.documentElement.style.setProperty("--r-2", r[2]);
+    document.documentElement.style.setProperty("--r-3", r[3]);
+    document.documentElement.style.setProperty("--r-4", r[4]);
+  }, [tweaks]);
+
+  return (
+    <>
+      <TDC
+        title="Trominal — Client UI"
+        subtitle="Open-source SSH client · 21 screens + design system · dark-first, light supported"
+        bg="#08070a"
+        zoom={0.55}
+      >
+        <TDCS id="ds" title="Design system" subtitle="Tokens, type scale, components">
+          <TDCA id="ds-color" label="Color tokens" width={920} height={680}>
+            <ColorTokens/>
+          </TDCA>
+          <TDCA id="ds-type" label="Typography" width={760} height={680}>
+            <TypeScale/>
+          </TDCA>
+          <TDCA id="ds-comp" label="Components" width={1100} height={760}>
+            <ComponentsShowcase/>
+          </TDCA>
+        </TDCS>
+
+        <TDCS id="auth" title="Auth & onboarding" subtitle="First-launch through unlock">
+          <TDCA id="connect" label="01 · Connect to server" width={880} height={600}>
+            <ScreenConnect/>
+          </TDCA>
+          <TDCA id="signup" label="02 · Sign up" width={880} height={700}>
+            <ScreenSignup/>
+          </TDCA>
+          <TDCA id="login" label="03 · Login" width={880} height={600}>
+            <ScreenLogin/>
+          </TDCA>
+          <TDCA id="2fa" label="04 · 2FA challenge" width={880} height={540}>
+            <Screen2FA/>
+          </TDCA>
+          <TDCA id="unlock" label="05 · Master password unlock" width={880} height={540}>
+            <ScreenUnlock/>
+          </TDCA>
+        </TDCS>
+
+        <TDCS id="hosts" title="Hosts" subtitle="Empty state, list, edit, TOFU">
+          <TDCA id="hosts-empty" label="06 · Hosts — empty state" width={1180} height={720}>
+            <ScreenHostsEmpty/>
+          </TDCA>
+          <TDCA id="hosts-list" label="07 · Hosts — list" width={1280} height={800}>
+            <ScreenHostsList/>
+          </TDCA>
+          <TDCA id="hosts-edit" label="08 · Host detail / edit drawer" width={1280} height={800}>
+            <ScreenHostDetail/>
+          </TDCA>
+          <TDCA id="hosts-tofu" label="09 · TOFU fingerprint prompt" width={1180} height={720}>
+            <ScreenTOFU/>
+          </TDCA>
+        </TDCS>
+
+        <TDCS id="terminal" title="Terminal & AI" subtitle="Core workspace + BYOK assistant">
+          <TDCA id="terminal" label="10 · Terminal screen" width={1280} height={800}>
+            <ScreenTerminal/>
+          </TDCA>
+          <TDCA id="terminal-ai" label="14 · Terminal + AI panel" width={1440} height={820}>
+            <ScreenTerminalWithAi/>
+          </TDCA>
+        </TDCS>
+
+        <TDCS id="tools" title="Snippets, identities, tunnels, SFTP">
+          <TDCA id="snippets" label="11 · Snippets list + editor" width={1280} height={800}>
+            <ScreenSnippets/>
+          </TDCA>
+          <TDCA id="identities" label="12 · Identities (SSH keys)" width={1280} height={800}>
+            <ScreenIdentities/>
+          </TDCA>
+          <TDCA id="tunnels" label="13 · Tunnels manager" width={1280} height={800}>
+            <ScreenTunnels/>
+          </TDCA>
+          <TDCA id="sftp" label="15 · SFTP file browser" width={1280} height={800}>
+            <ScreenSFTP/>
+          </TDCA>
+        </TDCS>
+
+        <TDCS id="settings" title="Settings" subtitle="Connection, account, AI, appearance">
+          <TDCA id="set-conn" label="16 · Settings — Connection" width={1280} height={800}>
+            <ScreenSettingsConnection/>
+          </TDCA>
+          <TDCA id="set-acct" label="17 · Settings — Account" width={1280} height={800}>
+            <ScreenSettingsAccount/>
+          </TDCA>
+          <TDCA id="set-ai" label="18 · Settings — AI" width={1280} height={800}>
+            <ScreenSettingsAi/>
+          </TDCA>
+          <TDCA id="set-appear" label="19 · Settings — Appearance" width={1280} height={800}>
+            <ScreenSettingsAppearance/>
+          </TDCA>
+        </TDCS>
+
+        <TDCS id="states" title="System states" subtitle="Locked overlay">
+          <TDCA id="locked" label="20 · Auto-locked overlay" width={1280} height={800}>
+            <ScreenLocked/>
+          </TDCA>
+        </TDCS>
+
+        <TDCS id="light" title="Light mode" subtitle="Sample of dark/light parity">
+          <TDCA id="light-hosts" label="21 · Hosts — light theme" width={1100} height={680}>
+            <LightHostsSample/>
+          </TDCA>
+          <TDCA id="light-auth" label="Sign in — light theme" width={760} height={680}>
+            <LightAuthSample/>
+          </TDCA>
+        </TDCS>
+      </TDC>
+
+      {typeof TweaksPanel !== "undefined" && (
+        <TweaksPanel title="Tweaks">
+          <TweakSection title="Appearance">
+            <TweakRadio label="Theme" value={tweaks.theme} options={[{value: "dark", label: "Dark"}, {value: "light", label: "Light"}]} onChange={v => setTweak("theme", v)}/>
+            <TweakColor label="Accent" value={tweaks.accent} options={["#7dd3a0", "#7aa2f7", "#e0af68", "#f7768e", "#c0caf5"]} onChange={v => setTweak("accent", v)}/>
+            <TweakRadio label="Density" value={tweaks.density} options={[{value: "compact", label: "Compact"}, {value: "comfortable", label: "Comfy"}, {value: "spacious", label: "Spacious"}]} onChange={v => setTweak("density", v)}/>
+            <TweakRadio label="Radius" value={tweaks.radius} options={[{value: "sharp", label: "Sharp"}, {value: "subtle", label: "Subtle"}, {value: "soft", label: "Soft"}]} onChange={v => setTweak("radius", v)}/>
+          </TweakSection>
+          <TweakSection title="App state">
+            <TweakToggle label="Sidebar collapsed" value={tweaks.sidebarCollapsed} onChange={v => setTweak("sidebarCollapsed", v)}/>
+            <TweakToggle label="Vault locked" value={tweaks.vaultLocked} onChange={v => setTweak("vaultLocked", v)}/>
+            <TweakSelect label="Connection state" value={tweaks.connectionState} options={[{value: "connected", label: "Connected"}, {value: "connecting", label: "Connecting"}, {value: "error", label: "Error"}, {value: "idle", label: "Idle"}]} onChange={v => setTweak("connectionState", v)}/>
+          </TweakSection>
+        </TweaksPanel>
+      )}
+    </>
+  );
+};
+
+ReactDOM.createRoot(document.getElementById("root")).render(<App/>);
+</script>
+
+</body>
+</html>

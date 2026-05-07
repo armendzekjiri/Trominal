@@ -1,0 +1,106 @@
+---
+description: Filament admin panel conventions — auto-attached for app/Filament files
+globs:
+  - apps/backend/app/Filament/**/*.php
+  - apps/backend/app/Providers/Filament/**/*.php
+  - apps/backend/resources/views/filament/**/*.blade.php
+alwaysApply: false
+---
+
+# Trominal Filament Admin Panel
+
+Full skill: [filament-admin.md](mdc:.ai/skills/filament-admin.md)
+
+## Mental model
+
+Filament is the **operator's control panel**, not a user feature. End-users live in the client app. The admin panel manages the instance.
+
+URL: `/admin`. Required role: `admin`. 2FA required.
+
+## Mandatory rules
+
+### 1. Every Resource and Page MUST gate access
+
+```php
+public static function canViewAny(): bool
+{
+    return auth()->user()?->can('admin.users.manage') ?? false;
+}
+```
+
+Forgetting this = critical security bug. Defense in depth: panel-level middleware + resource-level guards + Policies.
+
+### 2. Every state-changing action MUST write an audit log entry
+
+```php
+Action::make('suspend')
+    ->action(function ($record) {
+        DB::transaction(function () use ($record) {
+            $record->update(['suspended_at' => now()]);
+            AuditLog::record(auth()->user(), 'admin.user.suspended', 'user', $record->id);
+        });
+    })
+```
+
+### 3. Self-foot-gun prevention
+
+Don't let admins:
+- Delete themselves
+- Demote themselves to non-admin if they're the only admin
+- Remove the last admin's `admin` role
+
+```php
+public static function canDelete(Model $record): bool
+{
+    if ($record->id === auth()->id()) return false;
+    if ($record->hasRole('admin') && User::role('admin')->count() <= 1) return false;
+    return auth()->user()->hasRole('admin');
+}
+```
+
+### 4. Never expose sensitive columns in tables
+
+Forbidden in any Filament TextColumn / display:
+- `password`
+- `two_fa_secret_enc`
+- `private_key_*`
+- Refresh tokens
+- API tokens
+- Vault ciphertexts
+
+## Required v0.1 resources
+
+- `UserResource` — list/edit/suspend, role assignment, password reset
+- `RoleResource` — CRUD roles, assign permissions
+- `PermissionResource` — read-only list (permissions are seeded)
+- `InviteResource` — generate/revoke invite codes
+- `AuditLogResource` — read-only filterable log
+
+## Required v0.1 pages
+
+- `Settings` — registration mode toggle, instance name, feature flags
+- `SystemHealth` — queue/Redis/DB/Reverb status
+
+## What admin panel does NOT do
+
+- ❌ Decrypt user vaults (server can't anyway, don't try)
+- ❌ Show terminal session content
+- ❌ Bypass 2FA
+- ❌ Manage personal user resources (hosts, snippets) — those are user-private
+- ❌ Allow self-modification that could lock out the instance
+
+## Patterns
+
+Settings persistence via `AppSetting::value()` and `AppSetting::set()` — cached via `Cache::rememberForever`, busted on update.
+
+Role/permission UI uses Spatie `relationship('roles', 'name')` Filament integration.
+
+Custom pages use `protected static string $view = 'filament.pages.<name>';` and a Blade view.
+
+## Tests required
+
+- Non-admin gets 403 from every admin URL
+- Admin can list every resource
+- Cannot delete self
+- Cannot delete last admin
+- Audit log entry created for every state-changing action

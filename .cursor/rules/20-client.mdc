@@ -1,0 +1,77 @@
+---
+description: Tauri 2 + React + TypeScript client conventions for Trominal
+globs:
+  - apps/client/**/*.ts
+  - apps/client/**/*.tsx
+  - apps/client/**/*.rs
+  - packages/**/*.ts
+  - packages/**/*.tsx
+alwaysApply: false
+---
+
+# Trominal Client (Tauri 2 + React + TypeScript)
+
+Full skill: [tauri-react-client.md](mdc:.ai/skills/tauri-react-client.md)
+
+## Quick reference
+
+- **Tauri 2**, React 18, strict TypeScript
+- **Vite** dev server, **pnpm** package manager
+- Web build = Vite output. Desktop build wraps it in Tauri.
+
+## State management
+
+| Type | Tool |
+|---|---|
+| Server data | TanStack Query |
+| Vault key | Zustand (NEVER persisted) |
+| Auth session | Zustand (refresh token only persisted) |
+| UI ephemeral | useState |
+| UI cross-component | Zustand |
+
+## Vault key rules
+
+- **In memory only.** Never localStorage/IndexedDB/Tauri storage.
+- **Wipe on lock:** call `.fill(0)` on the Uint8Array before dropping the reference.
+- **Auto-lock:** default 15 min idle.
+
+## Forms
+
+react-hook-form + zod resolvers. Schema is source of truth, types inferred via `z.infer<>`.
+
+## Styling
+
+- **Tailwind only.** No CSS-in-JS, no inline `style` except for dynamic values.
+- **shadcn/ui** primitives first; extend rather than replace.
+- Dark mode default.
+
+## Tauri commands
+
+```rust
+#[tauri::command]
+pub async fn ssh_connect(
+    state: State<'_, SshSessionManager>,
+    host: String,
+    port: u16,
+    username: String,
+    private_key_pem: Vec<u8>,
+) -> Result<String, String> { ... }
+```
+
+After invoking from JS, wipe the JS-side key buffer in a `finally` block.
+
+## Rust rules
+
+- Clippy clean (`-D warnings`)
+- No `unwrap()` in production paths
+- `Zeroizing<>` wrapper for any secret bytes
+- `thiserror` for error types
+
+## What NOT to suggest
+
+- ❌ Redux, MobX, Recoil, Jotai (Zustand only)
+- ❌ Material UI, Chakra, Ant Design (shadcn/ui only)
+- ❌ CSS-in-JS or styled-components
+- ❌ `any` without comment justification
+- ❌ `useEffect` for derived state — use `useMemo`
+- ❌ localStorage/sessionStorage for anything sensitive

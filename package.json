@@ -1,0 +1,48 @@
+{
+  "name": "trominal",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Open-source, self-hostable, cross-platform Termius alternative.",
+  "license": "AGPL-3.0-only",
+  "packageManager": "pnpm@9.15.9",
+  "scripts": {
+    "prepare": "husky",
+    "dev:backend": "composer --working-dir apps/backend dev",
+    "dev:client": "pnpm --dir apps/client tauri dev",
+    "dev:web": "pnpm --dir apps/client dev",
+    "build": "pnpm --filter @trominal/client build && pnpm --dir apps/backend build",
+    "lint": "pnpm lint:client && pnpm lint:backend",
+    "lint:client": "eslint apps/client/src --ext .ts,.tsx",
+    "lint:backend": "composer --working-dir apps/backend pint -- --test",
+    "format": "prettier --write \"**/*.{css,js,json,jsx,md,ts,tsx,yaml,yml}\"",
+    "test": "pnpm test:backend && pnpm test:client",
+    "test:backend": "composer --working-dir apps/backend test",
+    "test:client": "pnpm --dir apps/client test -- --run",
+    "typecheck": "pnpm --dir apps/client typecheck",
+    "analyse:backend": "composer --working-dir apps/backend analyse"
+  },
+  "devDependencies": {
+    "@eslint/js": "latest",
+    "eslint": "latest",
+    "eslint-plugin-react-hooks": "latest",
+    "eslint-plugin-react-refresh": "latest",
+    "globals": "latest",
+    "husky": "latest",
+    "lint-staged": "latest",
+    "prettier": "latest",
+    "typescript-eslint": "latest"
+  },
+  "lint-staged": {
+    "*.{js,jsx,ts,tsx}": [
+      "eslint --fix",
+      "prettier --write"
+    ],
+    "*.php": [
+      "composer --working-dir apps/backend pint"
+    ],
+    "*.{css,json,md,yaml,yml}": [
+      "prettier --write"
+    ]
+  }
+}

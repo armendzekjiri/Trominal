@@ -1,0 +1,81 @@
+---
+description: Crypto and security rules — auto-attached for crypto-relevant files
+globs:
+  - packages/crypto/**/*
+  - apps/client/src/lib/crypto*
+  - apps/client/src-tauri/src/ssh/**/*
+  - apps/backend/app/Support/Crypto/**/*
+  - apps/backend/app/Http/Controllers/Api/V1/AuthController.php
+  - apps/backend/app/Http/Controllers/Api/V1/VaultController.php
+alwaysApply: false
+---
+
+# Trominal Crypto & Security
+
+Full skill: [crypto.md](mdc:.ai/skills/crypto.md)
+
+## Mandatory primitives
+
+| Operation | Primitive |
+|---|---|
+| Password → key | **Argon2id** (memlimit 64 MiB, opslimit 3) |
+| Symmetric AEAD | **XChaCha20-Poly1305** (24-byte random nonce) |
+| Random bytes | libsodium `randombytes_buf` |
+| Ed25519 keypair | libsodium `crypto_sign_keypair` |
+
+## Forbidden
+
+- ❌ AES-GCM with random nonces (nonce reuse risk)
+- ❌ SHA1, MD5, custom crypto
+- ❌ `Math.random()` for any security purpose
+- ❌ Any crypto lib other than libsodium
+
+## Envelope format
+
+Every encrypted record on the server:
+
+```typescript
+type Envelope = { v: 1, ct: string /* b64 */, n: string /* b64 24-byte */ }
+```
+
+## Associated data — REQUIRED on every encrypt/decrypt
+
+```typescript
+const ad = `trominal:v1:${resourceType}:${resourceId}`
+```
+
+This binds ciphertexts to their resource. Without AD, server can swap ciphertexts between hosts.
+
+## Key handling
+
+- **Vault key in memory only.** Never persisted anywhere.
+- **TS:** `Uint8Array`, wipe with `.fill(0)` before drop.
+- **Rust:** `Zeroizing<[u8; 32]>` from `zeroize` crate.
+- **Don't pass keys through React state outside Zustand.** Don't serialize.
+
+## Master password
+
+- **Never sent to server.** Salt and KDF params travel; password stays local.
+- Login password is separate (server-side Argon2id hash).
+- Master password change = bulk re-encrypt all vault items in one transaction.
+
+## Test-first for crypto
+
+1. Write the failing test
+2. Commit the failing test
+3. Implement
+4. Commit the passing implementation
+
+This must be visible in git history for any crypto change.
+
+## Cross-platform parity
+
+`packages/crypto/tests/fixtures/cross-platform.json` — same plaintext/key/nonce/AD must produce byte-identical ciphertext in TS and Rust. CI enforces this.
+
+## Common mistakes to flag
+
+- Passing master password to a fetch/axios/api call → STOP, this is wrong
+- Storing vault key in localStorage/IndexedDB → STOP
+- Encrypting without AD → STOP
+- Reusing a nonce → STOP, generate fresh per encryption
+- Logging ciphertext or plaintext → STOP

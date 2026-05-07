@@ -1,0 +1,77 @@
+---
+description: Laravel 13 backend conventions for Trominal (API + Filament)
+globs:
+  - apps/backend/**/*.php
+  - apps/backend/**/*.yaml
+  - apps/backend/openapi.yaml
+alwaysApply: false
+---
+
+# Trominal Backend (Laravel 13 + Filament 3 + Spatie Permission)
+
+Full skills:
+- [laravel-backend.md](mdc:.ai/skills/laravel-backend.md)
+- [filament-admin.md](mdc:.ai/skills/filament-admin.md) (load when working in `app/Filament/`)
+
+## Two surfaces, one Laravel app
+
+- **API** (`/api/v1/*`) — consumed by the Tauri/React client. Sanctum auth.
+- **Admin panel** (`/admin`) — Filament 3 Blade UI for instance operators. Session auth + `admin` role required.
+
+Same users table, same database. Different auth guards, different middleware, different route files.
+
+## Quick reference
+
+- **Laravel 13**, PHP 8.3+, both API and Filament enabled
+- **Spatie Permission** for roles/permissions — first user gets `admin` + `user`
+- **Larastan level 8**, no `mixed` without comment
+- **Pest** tests, ≥80% coverage
+- **OpenAPI spec** is source of truth for API endpoints
+
+## Roles & permissions
+
+Default seeded roles: `admin`, `user`, `guest`.
+
+API gating:
+```php
+Route::post('/hosts', [HostController::class, 'store'])
+    ->middleware(['auth:sanctum', 'can:hosts.create']);
+```
+
+Filament gating (REQUIRED on every resource):
+```php
+public static function canViewAny(): bool
+{
+    return auth()->user()?->can('admin.users.manage') ?? false;
+}
+```
+
+`/api/v1/me` returns roles + permissions for client UI gating.
+
+## Single-user mode atomic flow
+
+Inside `DB::transaction()` with `LOCK FOR UPDATE` on `app_settings.registration_open`:
+1. Verify open
+2. Create user
+3. If first user, assign `admin` + `user` roles
+4. If `single` mode, set `registration_open=false`
+
+Test with parallel requests — only one user should be created.
+
+## Audit logging — REQUIRED on every admin action
+
+```php
+AuditLog::record(auth()->user(), 'user.suspended', 'user', $record->id);
+```
+
+Cover: login, vault access, host connect, master password change, 2FA toggle, all admin panel state changes, settings updates.
+
+## What NOT to suggest
+
+- ❌ Logic in controllers — move to Services
+- ❌ Validation in controllers — use Form Requests
+- ❌ Filament resources without `canViewAny()` gating
+- ❌ Admin actions without audit log entries
+- ❌ Editing committed migrations
+- ❌ Exposing `password_hash`, `kdf_*`, `private_key_*` in API Resources
+- ❌ Mixing API and Filament routes in the same file

@@ -1,0 +1,19 @@
+{
+  "recommendations": [
+    "esbenp.prettier-vscode",
+    "dbaeumer.vscode-eslint",
+    "bradlc.vscode-tailwindcss",
+    "rust-lang.rust-analyzer",
+    "tauri-apps.tauri-vscode",
+    "bmewburn.vscode-intelephense-client",
+    "calebporzio.better-phpunit",
+    "junstyle.php-cs-fixer",
+    "EditorConfig.EditorConfig",
+    "GitHub.copilot",
+    "GitHub.copilot-chat",
+    "anthropic.claude-code",
+    "anysphere.cursor-vscode",
+    "redhat.vscode-yaml",
+    "mikestead.dotenv"
+  ]
+}
