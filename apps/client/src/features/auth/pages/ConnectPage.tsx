@@ -20,7 +20,7 @@ function normaliseUrl(value: string): string {
 
 export function ConnectPage() {
   const navigate = useNavigate()
-  const [url, setUrl] = useState('http://127.0.0.1:8001')
+  const [url, setUrl] = useState('http://localhost:8000')
   const [probe, setProbe] = useState<ProbeState>({ kind: 'idle' })
 
   const handleProbe = async (e: React.FormEvent): Promise<void> => {

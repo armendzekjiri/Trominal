@@ -16,13 +16,18 @@ import { IdentitiesPlaceholder } from '@/features/app/IdentitiesPlaceholder'
 import { SettingsPlaceholder } from '@/features/app/SettingsPlaceholder'
 
 const router = createBrowserRouter([
+  // /connect must be reachable WITHOUT a configured URL — otherwise the
+  // ConnectGuard would redirect away from the page that's meant to set it.
+  // It's also reachable when the URL is already set, so users can switch
+  // servers from this screen.
+  { path: '/connect', element: <ConnectPage /> },
+
   {
     element: <ConnectGuard />,
     children: [
       {
         element: <GuestGuard />,
         children: [
-          { path: '/connect', element: <ConnectPage /> },
           { path: '/login', element: <LoginPage /> },
           { path: '/register', element: <RegisterPage /> },
           { path: '/2fa', element: <TwoFactorPage /> },
