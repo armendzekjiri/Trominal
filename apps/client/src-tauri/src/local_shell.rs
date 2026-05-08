@@ -446,6 +446,7 @@ fn ssh_command(
     let host = host.trim();
     let username = username.trim();
     let mut temp_paths = Vec::new();
+    let mut rsa_private_key = false;
 
     if host.is_empty() {
         return Err(LocalShellError::Operation("host is required".to_string()).to_string());
@@ -460,6 +461,7 @@ fn ssh_command(
 
     let mut command = CommandBuilder::new("ssh");
     if let Some(mut private_key_pem) = private_key_pem {
+        rsa_private_key = is_rsa_private_key(&private_key_pem);
         let key_path = write_temp_ssh_file(session_id, "key", &private_key_pem);
         private_key_pem.fill(0);
         let key_path = key_path?;
@@ -488,6 +490,9 @@ fn ssh_command(
     command.arg("BatchMode=no");
     command.arg("-o");
     command.arg("PreferredAuthentications=publickey,password,keyboard-interactive");
+    if rsa_private_key {
+        rsa_key_compat_options(&mut command);
+    }
     command.arg(destination);
     command.env("TERM", "xterm-256color");
 
@@ -498,6 +503,7 @@ fn ssh_command(
 }
 
 fn test_private_key_auth(mut request: SshKeyTestRequest) -> Result<bool, String> {
+    let rsa_private_key = is_rsa_private_key(&request.private_key_pem);
     let key_path = write_temp_ssh_file("key-test", "key", &request.private_key_pem);
     request.private_key_pem.fill(0);
     let key_path = key_path?;
@@ -509,7 +515,8 @@ fn test_private_key_auth(mut request: SshKeyTestRequest) -> Result<bool, String>
         }
     };
     let temp_paths = vec![key_path.clone(), config_path.clone()];
-    let status = ProcessCommand::new("ssh")
+    let mut command = ProcessCommand::new("ssh");
+    command
         .arg("-F")
         .arg(&config_path)
         .arg("-i")
@@ -531,13 +538,17 @@ fn test_private_key_auth(mut request: SshKeyTestRequest) -> Result<bool, String>
         .arg("-o")
         .arg("ConnectTimeout=10")
         .arg("-p")
-        .arg(request.port.max(1).to_string())
+        .arg(request.port.max(1).to_string());
+    if rsa_private_key {
+        rsa_key_compat_process_options(&mut command);
+    }
+    command
         .arg(destination(&request.host, &request.username)?)
         .arg("true")
         .stdin(Stdio::null())
         .stdout(Stdio::null())
-        .stderr(Stdio::null())
-        .status();
+        .stderr(Stdio::null());
+    let status = command.status();
     cleanup_temp_paths(&temp_paths);
 
     match status {
@@ -585,6 +596,9 @@ fn run_ssh_copy_id_install(
     command.arg("-p");
     command.arg(request.port.max(1).to_string());
     password_auth_options(&mut command);
+    if public_key.starts_with("ssh-rsa ") {
+        rsa_key_compat_options(&mut command);
+    }
     command.arg(destination(&request.host, &request.username)?);
 
     let result = run_password_pty(command, password);
@@ -602,6 +616,9 @@ fn run_manual_public_key_install(
 ) -> Result<SshKeyInstallResponse, String> {
     let mut command = CommandBuilder::new("ssh");
     password_auth_options(&mut command);
+    if public_key.starts_with("ssh-rsa ") {
+        rsa_key_compat_options(&mut command);
+    }
     command.arg("-p");
     command.arg(request.port.max(1).to_string());
     command.arg(destination(&request.host, &request.username)?);
@@ -626,6 +643,20 @@ fn password_auth_options(command: &mut CommandBuilder) {
     command.arg("IdentityAgent=none");
     command.arg("-o");
     command.arg("StrictHostKeyChecking=accept-new");
+}
+
+fn rsa_key_compat_options(command: &mut CommandBuilder) {
+    command.arg("-o");
+    command.arg("PubkeyAcceptedAlgorithms=+ssh-rsa");
+    command.arg("-o");
+    command.arg("HostkeyAlgorithms=+ssh-rsa");
+}
+
+fn rsa_key_compat_process_options(command: &mut ProcessCommand) {
+    command.arg("-o");
+    command.arg("PubkeyAcceptedAlgorithms=+ssh-rsa");
+    command.arg("-o");
+    command.arg("HostkeyAlgorithms=+ssh-rsa");
 }
 
 fn run_password_pty(command: CommandBuilder, password: &[u8]) -> Result<(), String> {
@@ -693,15 +724,17 @@ fn run_password_pty(command: CommandBuilder, password: &[u8]) -> Result<(), Stri
             return if status.success() {
                 Ok(())
             } else {
-                Err(LocalShellError::Operation("SSH key install failed".to_string()).to_string())
+                Err(LocalShellError::Operation(user_safe_ssh_error(&output, password)).to_string())
             };
         }
 
         if Instant::now() >= deadline {
             let _ = child.kill();
-            return Err(
-                LocalShellError::Operation("SSH key install timed out".to_string()).to_string(),
-            );
+            return Err(LocalShellError::Operation(format!(
+                "SSH key install timed out: {}",
+                user_safe_ssh_output(&output, password)
+            ))
+            .to_string());
         }
 
         thread::sleep(Duration::from_millis(50));
@@ -717,6 +750,49 @@ fn needs_confirmation(output: &str) -> bool {
     output
         .to_ascii_lowercase()
         .contains("are you sure you want to continue connecting")
+}
+
+fn is_rsa_private_key(contents: &[u8]) -> bool {
+    let text = String::from_utf8_lossy(contents);
+    text.contains("-----BEGIN RSA PRIVATE KEY-----") || text.contains("-----BEGIN PRIVATE KEY-----")
+}
+
+fn user_safe_ssh_error(output: &str, password: &[u8]) -> String {
+    let details = user_safe_ssh_output(output, password);
+    if details.is_empty() {
+        "SSH key install failed".to_string()
+    } else {
+        format!("SSH key install failed: {details}")
+    }
+}
+
+fn user_safe_ssh_output(output: &str, password: &[u8]) -> String {
+    let password = std::str::from_utf8(password)
+        .ok()
+        .filter(|value| !value.is_empty());
+    let mut lines = output
+        .lines()
+        .map(strip_control_chars)
+        .filter(|line| !line.trim().is_empty())
+        .map(|line| match password {
+            Some(password) => line.replace(password, "[redacted]"),
+            None => line,
+        })
+        .collect::<Vec<_>>();
+    if lines.len() > 4 {
+        lines = lines.split_off(lines.len() - 4);
+    }
+
+    lines.join(" ")
+}
+
+fn strip_control_chars(value: &str) -> String {
+    value
+        .chars()
+        .filter(|ch| *ch == '\t' || !ch.is_control())
+        .collect::<String>()
+        .trim()
+        .to_string()
 }
 
 fn destination(host: &str, username: &str) -> Result<String, String> {
@@ -825,4 +901,34 @@ fn default_shell() -> String {
 #[cfg(not(windows))]
 fn default_shell() -> String {
     env::var("SHELL").unwrap_or_else(|_| "/bin/sh".to_string())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{is_rsa_private_key, user_safe_ssh_error};
+
+    #[test]
+    fn detects_rsa_private_key_pem_headers() {
+        assert!(is_rsa_private_key(
+            b"-----BEGIN RSA PRIVATE KEY-----\nkey\n-----END RSA PRIVATE KEY-----"
+        ));
+        assert!(is_rsa_private_key(
+            b"-----BEGIN PRIVATE KEY-----\nkey\n-----END PRIVATE KEY-----"
+        ));
+        assert!(!is_rsa_private_key(
+            b"-----BEGIN OPENSSH PRIVATE KEY-----\nkey\n-----END OPENSSH PRIVATE KEY-----"
+        ));
+    }
+
+    #[test]
+    fn sanitizes_password_from_ssh_install_errors() {
+        let error = user_safe_ssh_error(
+            "user@example password: hunter2\nPermission denied",
+            b"hunter2",
+        );
+
+        assert!(error.contains("[redacted]"));
+        assert!(!error.contains("hunter2"));
+        assert!(error.contains("Permission denied"));
+    }
 }

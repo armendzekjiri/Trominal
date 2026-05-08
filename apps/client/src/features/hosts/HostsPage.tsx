@@ -17,6 +17,10 @@ import { TextInput } from '@/components/ui/text-input'
 import { cn } from '@/lib/cn'
 import { isTauri } from '@/lib/platform'
 import {
+  hostCredentialsForHost,
+  latestHostCredentialForHost,
+} from '@/features/vault/host-credentials'
+import {
   useDeleteHost,
   useDeleteHostCredential,
   useGroups,
@@ -128,13 +132,12 @@ export function HostsPage() {
     draft.id === undefined ? null : (hosts.find((host) => host.id === draft.id) ?? null)
 
   const selectedCredential =
-    selected === null
-      ? null
-      : (hostCredentials.find((credential) => credential.hostId === selected.id) ?? null)
+    selected === null ? null : latestHostCredentialForHost(selected.id, hostCredentials)
 
   async function submitHost(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     setKeyStatus(null)
+    setBootstrap(null)
     const host = await saveHost.mutateAsync({
       id: draft.id,
       groupId: draft.groupId,
@@ -145,19 +148,27 @@ export function HostsPage() {
       tags: draft.tags,
       color: draft.color,
     })
+    const savedHost = savedHostFromDraft(String(host.id), draft)
+    const existingCredentials = hostCredentialsForHost(savedHost.id, hostCredentials)
 
     if (draft.identityId !== null) {
-      await saveHostCredential.mutateAsync({
-        id: draft.credentialId,
-        hostId: host.id,
+      const credential = await saveHostCredential.mutateAsync({
+        id: draft.credentialId ?? existingCredentials[0]?.id,
+        hostId: savedHost.id,
         identityId: draft.identityId,
         label: draft.name || draft.hostname,
         username: '',
         password: '',
         privateKeyPassphrase: '',
       })
+      const savedCredentialId = String(credential.id)
+      await deleteDuplicateHostCredentials(savedHost.id, savedCredentialId)
+      setDraft({
+        ...draft,
+        id: savedHost.id,
+        credentialId: savedCredentialId,
+      })
       const identity = identities.find((item) => item.id === draft.identityId)
-      const savedHost = savedHostFromDraft(String(host.id), draft)
       if (identity !== undefined && isTauri) {
         setKeyStatus('Testing attached SSH key...')
         if (await testAttachedKey(savedHost, identity)) {
@@ -174,11 +185,30 @@ export function HostsPage() {
         setKeyStatus('Server password is required to install the attached key.')
         return
       }
-    } else if (draft.credentialId !== undefined) {
-      await deleteHostCredential.mutateAsync(draft.credentialId)
+    } else {
+      await deleteSavedHostCredentials(savedHost.id)
     }
 
     setDraft(EMPTY_HOST)
+  }
+
+  async function deleteDuplicateHostCredentials(hostId: string, keepId: string): Promise<void> {
+    const credentialIds = hostCredentialsForHost(hostId, hostCredentials)
+      .filter((credential) => credential.id !== keepId)
+      .map((credential) => credential.id)
+
+    await Promise.all(credentialIds.map((id) => deleteHostCredential.mutateAsync(id)))
+  }
+
+  async function deleteSavedHostCredentials(hostId: string): Promise<void> {
+    const credentialIds = new Set(
+      hostCredentialsForHost(hostId, hostCredentials).map((credential) => credential.id),
+    )
+    if (draft.credentialId !== undefined) {
+      credentialIds.add(draft.credentialId)
+    }
+
+    await Promise.all(Array.from(credentialIds).map((id) => deleteHostCredential.mutateAsync(id)))
   }
 
   async function submitBootstrap(event: FormEvent<HTMLFormElement>) {
@@ -292,12 +322,7 @@ export function HostsPage() {
                 key={host.id}
                 type="button"
                 onClick={() =>
-                  setDraft(
-                    hostToInput(
-                      host,
-                      hostCredentials.find((credential) => credential.hostId === host.id) ?? null,
-                    ),
-                  )
+                  setDraft(hostToInput(host, latestHostCredentialForHost(host.id, hostCredentials)))
                 }
                 className={cn(
                   'mb-1 w-full rounded-md border-l-2 px-2 py-2 text-left',
