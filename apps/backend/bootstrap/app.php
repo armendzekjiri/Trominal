@@ -16,6 +16,9 @@ return Application::configure(basePath: dirname(__DIR__))
         commands: __DIR__.'/../routes/console.php',
         health: '/up',
     )
+    ->withCommands([
+        __DIR__.'/../app/Console/Commands',
+    ])
     ->withMiddleware(function (Middleware $middleware): void {
         // Trominal's API serves a separate-origin client (Tauri/Vite/web).
         // Laravel 11+ ships HandleCors but doesn't enable it by default —

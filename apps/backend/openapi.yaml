@@ -308,6 +308,28 @@ paths:
           description: Unauthenticated.
         '422':
           description: Validation failed.
+  /api/v1/ws/ssh-token:
+    post:
+      summary: Create a short-lived WebSocket SSH token for an owned host.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SshTokenRequest'
+      responses:
+        '201':
+          description: Single-use SSH WebSocket token.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SshTokenResponse'
+        '403':
+          description: Missing hosts.connect permission or web SSH disabled.
+        '422':
+          description: Host does not belong to the authenticated user.
 components:
   securitySchemes:
     bearerAuth:
@@ -392,6 +414,10 @@ components:
       type: object
       additionalProperties: true
       description: Encrypted client payload. Ciphertext fields carry base64 XChaCha20-Poly1305 ciphertexts; nonce fields carry base64 24-byte nonces.
+      properties:
+        id:
+          type: string
+          description: Optional client-generated ULID used to bind AEAD associated data before create.
       examples:
         - name_ciphertext: 'base64-ciphertext'
           name_nonce: 'base64-nonce'
@@ -472,3 +498,21 @@ components:
                 type: string
               fields:
                 $ref: '#/components/schemas/VaultRecordPayload'
+    SshTokenRequest:
+      type: object
+      required: [host_id]
+      properties:
+        host_id:
+          type: string
+    SshTokenResponse:
+      type: object
+      required: [token, expires_at, websocket_url]
+      properties:
+        token:
+          type: string
+          description: Plain token shown once; server stores only a SHA-256 hash.
+        expires_at:
+          type: string
+          format: date-time
+        websocket_url:
+          type: string

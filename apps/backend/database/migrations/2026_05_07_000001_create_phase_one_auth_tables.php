@@ -138,7 +138,7 @@ return new class extends Migration
                 'mode' => 'single',
                 'open' => true,
                 'instance_name' => 'Trominal',
-                'web_ssh_enabled' => true,
+                'web_ssh_enabled' => false,
             ], JSON_THROW_ON_ERROR),
             'created_at' => now(),
             'updated_at' => now(),

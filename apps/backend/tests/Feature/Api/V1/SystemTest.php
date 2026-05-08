@@ -18,7 +18,7 @@ final class SystemTest extends TestCase
             ->assertJsonPath('instance_name', 'Trominal')
             ->assertJsonPath('registration_mode', 'single')
             ->assertJsonPath('registration_open', true)
-            ->assertJsonPath('web_ssh_enabled', true);
+            ->assertJsonPath('web_ssh_enabled', false);
     }
 
     public function test_returns_basic_health_information(): void

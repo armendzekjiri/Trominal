@@ -9,11 +9,12 @@ import { ForgotPasswordPage } from '@/features/auth/pages/ForgotPasswordPage'
 import { ResetPasswordPage } from '@/features/auth/pages/ResetPasswordPage'
 import { UnlockPage } from '@/features/auth/pages/UnlockPage'
 import { AppShell } from '@/features/app/AppShell'
-import { HostsPlaceholder } from '@/features/app/HostsPlaceholder'
-import { SnippetsPlaceholder } from '@/features/app/SnippetsPlaceholder'
+import { HostsPage } from '@/features/hosts/HostsPage'
+import { SnippetsPage } from '@/features/snippets/SnippetsPage'
 import { TunnelsPlaceholder } from '@/features/app/TunnelsPlaceholder'
-import { IdentitiesPlaceholder } from '@/features/app/IdentitiesPlaceholder'
+import { IdentitiesPage } from '@/features/identities/IdentitiesPage'
 import { SettingsPlaceholder } from '@/features/app/SettingsPlaceholder'
+import { TerminalPage } from '@/features/terminal/TerminalPage'
 
 const router = createBrowserRouter([
   // /connect must be reachable WITHOUT a configured URL — otherwise the
@@ -46,10 +47,11 @@ const router = createBrowserRouter([
               {
                 element: <AppShell />,
                 children: [
-                  { index: true, element: <HostsPlaceholder /> },
-                  { path: 'hosts', element: <HostsPlaceholder /> },
-                  { path: 'snippets', element: <SnippetsPlaceholder /> },
-                  { path: 'identities', element: <IdentitiesPlaceholder /> },
+                  { index: true, element: <HostsPage /> },
+                  { path: 'hosts', element: <HostsPage /> },
+                  { path: 'terminal', element: <TerminalPage /> },
+                  { path: 'snippets', element: <SnippetsPage /> },
+                  { path: 'identities', element: <IdentitiesPage /> },
                   { path: 'tunnels', element: <TunnelsPlaceholder /> },
                   { path: 'settings', element: <SettingsPlaceholder /> },
                 ],

@@ -1,4 +1,5 @@
-import { Lock, LogOut, Settings, Terminal } from 'lucide-react'
+import { Code2, KeyRound, Lock, LogOut, Settings, Server, Terminal, Workflow } from 'lucide-react'
+import type { LucideIcon } from 'lucide-react'
 import { Link, NavLink, Outlet } from 'react-router-dom'
 import { Logo } from '@/components/branding/logo'
 import { cn } from '@/lib/cn'
@@ -9,13 +10,15 @@ type NavItem = {
   to: string
   label: string
   permission: string
+  icon: LucideIcon
 }
 
 const NAV_ITEMS: ReadonlyArray<NavItem> = [
-  { to: '/hosts', label: 'Hosts', permission: 'hosts.read' },
-  { to: '/snippets', label: 'Snippets', permission: 'snippets.read' },
-  { to: '/identities', label: 'Identities', permission: 'identities.read' },
-  { to: '/tunnels', label: 'Tunnels', permission: 'tunnels.read' },
+  { to: '/hosts', label: 'Hosts', permission: 'hosts.read', icon: Server },
+  { to: '/terminal', label: 'Terminal', permission: 'hosts.connect', icon: Terminal },
+  { to: '/snippets', label: 'Snippets', permission: 'snippets.read', icon: Code2 },
+  { to: '/identities', label: 'Identities', permission: 'identities.read', icon: KeyRound },
+  { to: '/tunnels', label: 'Tunnels', permission: 'tunnels.read', icon: Workflow },
 ]
 
 export function AppShell() {
@@ -38,11 +41,12 @@ export function AppShell() {
               to={item.to}
               className={({ isActive }) =>
                 cn(
-                  'rounded-sm px-2.5 py-1.5 text-[13px] text-fg-muted transition-colors',
+                  'flex items-center gap-2 rounded-sm px-2.5 py-1.5 text-[13px] text-fg-muted transition-colors',
                   isActive ? 'bg-surface-3 text-fg' : 'hover:bg-surface-2 hover:text-fg',
                 )
               }
             >
+              <item.icon size={14} />
               {item.label}
             </NavLink>
           ))}

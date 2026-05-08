@@ -24,6 +24,10 @@ final class VaultResourceRequest extends FormRequest
         $partial = $this->isMethod('PATCH');
         $rules = [];
 
+        if ($this->isMethod('POST')) {
+            $rules['id'] = ['sometimes', 'ulid'];
+        }
+
         foreach ($resource['fields'] as $field) {
             $rules[$field] = $this->rulesForField(
                 $field,
@@ -65,6 +69,13 @@ final class VaultResourceRequest extends FormRequest
         $payload = $this->validated();
 
         return $payload;
+    }
+
+    public function recordId(): ?string
+    {
+        $id = $this->validated('id');
+
+        return is_string($id) ? $id : null;
     }
 
     /**

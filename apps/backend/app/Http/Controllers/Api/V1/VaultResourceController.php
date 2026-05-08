@@ -47,14 +47,18 @@ final class VaultResourceController extends Controller
         $resource = $request->vaultResource();
         $modelClass = $resource['model'];
         $payload = $request->payload();
+        $id = $request->recordId();
 
         $this->validateRelationshipsBelongToUser($user, $payload, $resource['relationship_fields']);
 
         /** @var Model $record */
-        $record = $modelClass::query()->create([
+        $record = new $modelClass;
+        $record->forceFill([
             ...$payload,
+            ...($id === null ? [] : ['id' => $id]),
             'user_id' => $user->id,
         ]);
+        $record->save();
 
         AuditLog::record($user, "vault.{$vaultType}.created", $vaultType, (string) $record->getKey());
 

@@ -31,15 +31,19 @@ final class VaultTest extends TestCase
         $headers = $this->bearerHeaders($user);
 
         $payload = self::hostPayload();
-        $create = $this->postJson('/api/v1/vault/hosts', $payload, $headers);
+        $hostId = '01JZ0000000000000000000000';
+        $create = $this->postJson('/api/v1/vault/hosts', [
+            'id' => $hostId,
+            ...$payload,
+        ], $headers);
 
         $create
             ->assertCreated()
+            ->assertJsonPath('data.id', $hostId)
             ->assertJsonPath('data.type', 'hosts')
             ->assertJsonPath('data.name_ciphertext', $payload['name_ciphertext'])
             ->assertJsonPath('data.hostname_ciphertext', $payload['hostname_ciphertext']);
 
-        $hostId = (string) $create->json('data.id');
         $rawCiphertext = DB::table('hosts')->where('id', $hostId)->value('name_ciphertext');
 
         self::assertIsString($rawCiphertext);

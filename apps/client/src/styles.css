@@ -38,6 +38,12 @@
   --color-success: #7dd3a0;
   --color-info: #7aa2f7;
   --color-info-soft: rgba(122, 162, 247, 0.1);
+  --color-ansi-black: #14130f;
+  --color-ansi-red: #f17a7a;
+  --color-ansi-green: #7dd3a0;
+  --color-ansi-yellow: #e0b870;
+  --color-ansi-blue: #7aa2f7;
+  --color-ansi-cyan: #7dd3c0;
 
   /* Radius matching design — re-exposed as Tailwind tokens. */
   --radius-xs: 2px;
