@@ -7,8 +7,11 @@ use std::io::{Read, Write};
 #[cfg(unix)]
 use std::os::unix::fs::OpenOptionsExt;
 use std::path::{Path, PathBuf};
+use std::process::{Command as ProcessCommand, Stdio};
+use std::sync::mpsc;
 use std::sync::{Arc, Mutex};
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::thread;
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 use tauri::{AppHandle, Emitter, State};
 use thiserror::Error;
 
@@ -71,7 +74,36 @@ pub struct SshConnectRequest {
     cols: u16,
     rows: u16,
     private_key_pem: Option<Vec<u8>>,
-    public_key: Option<String>,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SshKeyTestRequest {
+    host: String,
+    port: u16,
+    username: String,
+    private_key_pem: Vec<u8>,
+}
+
+#[derive(Serialize)]
+pub struct SshKeyTestResponse {
+    works: bool,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SshKeyInstallRequest {
+    host: String,
+    port: u16,
+    username: String,
+    public_key: String,
+    password: Vec<u8>,
+}
+
+#[derive(Serialize)]
+pub struct SshKeyInstallResponse {
+    installed: bool,
+    method: String,
 }
 
 #[tauri::command]
@@ -109,7 +141,6 @@ pub fn ssh_connect(
         request.port,
         request.username,
         request.private_key_pem,
-        request.public_key,
     )?;
 
     open_pty_session(
@@ -127,6 +158,17 @@ pub fn ssh_connect(
             closed: "ssh://closed",
         },
     )
+}
+
+#[tauri::command]
+pub fn ssh_key_test(request: SshKeyTestRequest) -> Result<SshKeyTestResponse, String> {
+    let works = test_private_key_auth(request)?;
+    Ok(SshKeyTestResponse { works })
+}
+
+#[tauri::command]
+pub fn ssh_key_install(request: SshKeyInstallRequest) -> Result<SshKeyInstallResponse, String> {
+    install_public_key_auth(request)
 }
 
 fn open_pty_session(
@@ -400,7 +442,6 @@ fn ssh_command(
     port: u16,
     username: String,
     private_key_pem: Option<Vec<u8>>,
-    public_key: Option<String>,
 ) -> Result<PtyCommand, String> {
     let host = host.trim();
     let username = username.trim();
@@ -448,14 +489,256 @@ fn ssh_command(
     command.arg("-o");
     command.arg("PreferredAuthentications=publickey,password,keyboard-interactive");
     command.arg(destination);
-    if let Some(public_key) = public_key_install_value(public_key) {
-        command.arg(install_public_key_command(&public_key));
-    }
     command.env("TERM", "xterm-256color");
 
     Ok(PtyCommand {
         command,
         temp_paths,
+    })
+}
+
+fn test_private_key_auth(mut request: SshKeyTestRequest) -> Result<bool, String> {
+    let key_path = write_temp_ssh_file("key-test", "key", &request.private_key_pem);
+    request.private_key_pem.fill(0);
+    let key_path = key_path?;
+    let config_path = match write_temp_ssh_file("key-test", "config", &[]) {
+        Ok(path) => path,
+        Err(err) => {
+            cleanup_temp_paths(std::slice::from_ref(&key_path));
+            return Err(err);
+        }
+    };
+    let temp_paths = vec![key_path.clone(), config_path.clone()];
+    let status = ProcessCommand::new("ssh")
+        .arg("-F")
+        .arg(&config_path)
+        .arg("-i")
+        .arg(&key_path)
+        .arg("-o")
+        .arg("BatchMode=yes")
+        .arg("-o")
+        .arg("PasswordAuthentication=no")
+        .arg("-o")
+        .arg("KbdInteractiveAuthentication=no")
+        .arg("-o")
+        .arg("PreferredAuthentications=publickey")
+        .arg("-o")
+        .arg("IdentitiesOnly=yes")
+        .arg("-o")
+        .arg("IdentityAgent=none")
+        .arg("-o")
+        .arg("StrictHostKeyChecking=accept-new")
+        .arg("-o")
+        .arg("ConnectTimeout=10")
+        .arg("-p")
+        .arg(request.port.max(1).to_string())
+        .arg(destination(&request.host, &request.username)?)
+        .arg("true")
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .status();
+    cleanup_temp_paths(&temp_paths);
+
+    match status {
+        Ok(status) => Ok(status.success()),
+        Err(err) => Err(LocalShellError::Operation(err.to_string()).to_string()),
+    }
+}
+
+fn install_public_key_auth(
+    mut request: SshKeyInstallRequest,
+) -> Result<SshKeyInstallResponse, String> {
+    let public_key =
+        public_key_install_value(Some(request.public_key.clone())).ok_or_else(|| {
+            LocalShellError::Operation("authorized_keys public key is invalid".to_string())
+                .to_string()
+        })?;
+    if request.password.is_empty() {
+        return Err(
+            LocalShellError::Operation("server password is required".to_string()).to_string(),
+        );
+    }
+
+    let result = if command_exists("ssh-copy-id") {
+        run_ssh_copy_id_install(&request, &public_key, &request.password)
+            .or_else(|_| run_manual_public_key_install(&request, &public_key, &request.password))
+    } else {
+        run_manual_public_key_install(&request, &public_key, &request.password)
+    };
+    request.password.fill(0);
+    result
+}
+
+fn run_ssh_copy_id_install(
+    request: &SshKeyInstallRequest,
+    public_key: &str,
+    password: &[u8],
+) -> Result<SshKeyInstallResponse, String> {
+    let public_key_file = format!("{public_key}\n");
+    let public_key_path =
+        write_temp_ssh_file("key-install", "key.pub", public_key_file.as_bytes())?;
+    let mut command = CommandBuilder::new("ssh-copy-id");
+    command.arg("-f");
+    command.arg("-i");
+    command.arg(path_to_arg(&public_key_path));
+    command.arg("-p");
+    command.arg(request.port.max(1).to_string());
+    password_auth_options(&mut command);
+    command.arg(destination(&request.host, &request.username)?);
+
+    let result = run_password_pty(command, password);
+    cleanup_temp_paths(&[public_key_path]);
+    result.map(|_| SshKeyInstallResponse {
+        installed: true,
+        method: "ssh-copy-id".to_string(),
+    })
+}
+
+fn run_manual_public_key_install(
+    request: &SshKeyInstallRequest,
+    public_key: &str,
+    password: &[u8],
+) -> Result<SshKeyInstallResponse, String> {
+    let mut command = CommandBuilder::new("ssh");
+    password_auth_options(&mut command);
+    command.arg("-p");
+    command.arg(request.port.max(1).to_string());
+    command.arg(destination(&request.host, &request.username)?);
+    command.arg(install_public_key_command(public_key));
+
+    run_password_pty(command, password).map(|_| SshKeyInstallResponse {
+        installed: true,
+        method: "manual".to_string(),
+    })
+}
+
+fn password_auth_options(command: &mut CommandBuilder) {
+    command.arg("-o");
+    command.arg("BatchMode=no");
+    command.arg("-o");
+    command.arg("PreferredAuthentications=password,keyboard-interactive");
+    command.arg("-o");
+    command.arg("PubkeyAuthentication=no");
+    command.arg("-o");
+    command.arg("IdentitiesOnly=yes");
+    command.arg("-o");
+    command.arg("IdentityAgent=none");
+    command.arg("-o");
+    command.arg("StrictHostKeyChecking=accept-new");
+}
+
+fn run_password_pty(command: CommandBuilder, password: &[u8]) -> Result<(), String> {
+    let pty_system = native_pty_system();
+    let pair = pty_system
+        .openpty(PtySize {
+            rows: 24,
+            cols: 80,
+            pixel_width: 0,
+            pixel_height: 0,
+        })
+        .map_err(|err| LocalShellError::Operation(err.to_string()).to_string())?;
+    let mut child = pair
+        .slave
+        .spawn_command(command)
+        .map_err(|err| LocalShellError::Operation(err.to_string()).to_string())?;
+    let mut reader = pair
+        .master
+        .try_clone_reader()
+        .map_err(|err| LocalShellError::Operation(err.to_string()).to_string())?;
+    let mut writer = pair
+        .master
+        .take_writer()
+        .map_err(|err| LocalShellError::Operation(err.to_string()).to_string())?;
+    let (tx, rx) = mpsc::channel::<Vec<u8>>();
+
+    thread::spawn(move || {
+        let mut buffer = [0_u8; 4096];
+        while let Ok(size) = reader.read(&mut buffer) {
+            if size == 0 {
+                break;
+            }
+            if tx.send(buffer[..size].to_vec()).is_err() {
+                break;
+            }
+        }
+    });
+
+    let deadline = Instant::now() + Duration::from_secs(60);
+    let mut output = String::new();
+    let mut password_writes = 0_u8;
+
+    loop {
+        while let Ok(chunk) = rx.try_recv() {
+            output.push_str(&String::from_utf8_lossy(&chunk));
+            if needs_confirmation(&output) {
+                writer
+                    .write_all(b"yes\n")
+                    .map_err(|err| LocalShellError::Operation(err.to_string()).to_string())?;
+                output.clear();
+            } else if needs_password(&output) && password_writes < 3 {
+                writer
+                    .write_all(password)
+                    .and_then(|_| writer.write_all(b"\n"))
+                    .map_err(|err| LocalShellError::Operation(err.to_string()).to_string())?;
+                password_writes += 1;
+                output.clear();
+            }
+        }
+
+        if let Some(status) = child
+            .try_wait()
+            .map_err(|err| LocalShellError::Operation(err.to_string()).to_string())?
+        {
+            return if status.success() {
+                Ok(())
+            } else {
+                Err(LocalShellError::Operation("SSH key install failed".to_string()).to_string())
+            };
+        }
+
+        if Instant::now() >= deadline {
+            let _ = child.kill();
+            return Err(
+                LocalShellError::Operation("SSH key install timed out".to_string()).to_string(),
+            );
+        }
+
+        thread::sleep(Duration::from_millis(50));
+    }
+}
+
+fn needs_password(output: &str) -> bool {
+    let lower = output.to_ascii_lowercase();
+    lower.contains("password:") || lower.contains("verification code:")
+}
+
+fn needs_confirmation(output: &str) -> bool {
+    output
+        .to_ascii_lowercase()
+        .contains("are you sure you want to continue connecting")
+}
+
+fn destination(host: &str, username: &str) -> Result<String, String> {
+    let host = host.trim();
+    let username = username.trim();
+    if host.is_empty() {
+        return Err(LocalShellError::Operation("host is required".to_string()).to_string());
+    }
+
+    Ok(if username.is_empty() {
+        host.to_string()
+    } else {
+        format!("{username}@{host}")
+    })
+}
+
+fn command_exists(name: &str) -> bool {
+    env::var_os("PATH").is_some_and(|paths| {
+        env::split_paths(&paths).any(|path| {
+            let candidate = path.join(name);
+            candidate.is_file() || path.join(format!("{name}.exe")).is_file()
+        })
     })
 }
 
@@ -486,7 +769,7 @@ fn is_authorized_key_type(key_type: &str) -> bool {
 fn install_public_key_command(public_key: &str) -> String {
     let public_key = shell_quote(public_key);
     format!(
-        "umask 077; mkdir -p \"$HOME/.ssh\"; touch \"$HOME/.ssh/authorized_keys\"; grep -qxF {public_key} \"$HOME/.ssh/authorized_keys\" || printf '%s\\n' {public_key} >> \"$HOME/.ssh/authorized_keys\"; chmod 700 \"$HOME/.ssh\"; chmod 600 \"$HOME/.ssh/authorized_keys\"; exec \"${{SHELL:-/bin/sh}}\" -l"
+        "umask 077; mkdir -p \"$HOME/.ssh\"; touch \"$HOME/.ssh/authorized_keys\"; grep -qxF {public_key} \"$HOME/.ssh/authorized_keys\" || printf '%s\\n' {public_key} >> \"$HOME/.ssh/authorized_keys\"; chmod 700 \"$HOME/.ssh\"; chmod 600 \"$HOME/.ssh/authorized_keys\""
     )
 }
 
