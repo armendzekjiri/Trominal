@@ -45,7 +45,8 @@ final class VaultResourceRequest extends FormRequest
      *     permissions: array{read: string, create: string, update: string, delete: string},
      *     fields: list<string>,
      *     required: list<string>,
-     *     relationship_fields: array<string, class-string<Model>>
+     *     relationship_fields: array<string, class-string<Model>>,
+     *     team_scoped: bool
      * }
      */
     public function vaultResource(): array
@@ -92,7 +93,7 @@ final class VaultResourceRequest extends FormRequest
         }
 
         if (str_ends_with($field, '_id')) {
-            return [...$this->presenceRules($required, $partial, nullable: true), 'string'];
+            return [...$this->presenceRules($required, $partial, nullable: true), 'ulid'];
         }
 
         return [...$this->presenceRules($required, $partial, nullable: ! $required), 'string', 'max:65535'];

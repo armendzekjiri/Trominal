@@ -12,6 +12,7 @@ use Illuminate\Database\Eloquent\SoftDeletes;
 
 #[Fillable([
     'user_id',
+    'team_id',
     'name_ciphertext',
     'name_nonce',
     'key_type',

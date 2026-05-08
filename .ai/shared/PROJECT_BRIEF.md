@@ -652,7 +652,14 @@ Tunnels and SFTP are separate product areas because they serve different workflo
 - Team keys are 32-byte symmetric keys. Wrapping uses a random 32-byte wrapping key, XChaCha20-Poly1305 with AD `trominal:v1:team_key:<team_id>:member:<member_id>:v<key_version>`, and libsodium sealed boxes to encrypt the wrapping key for the member's X25519 public key.
 - The server-storable shape stays `{ ciphertext, nonce }`; `ciphertext` contains a versioned payload with the sealed wrapping key plus encrypted team key, while `nonce` is the XChaCha20 nonce.
 - Tests cover round-trip unwrap, wrong-member failure, AD/key-version mismatch failure, fresh nonce/material generation, and team-key length.
-- Still pending in later Phase 8 slices: client team switcher/resource scoping, resource `team_id` scoping, and Filament team management.
+
+#### Phase 8C implementation notes
+
+- Vault resources now support real team scope through nullable `team_id` columns on groups, hosts, snippets, identities, tunnels, and host credentials. AI settings remain personal-only.
+- `GET /api/v1/vault/{resource}` omits `team` for personal records and accepts `?team=<team_id>` for team records. Delta sync includes personal records plus records from every team where the user is a member.
+- Vault policies allow access when the user owns a personal record or belongs to the record's team. Relationship IDs must stay inside the same scope, so a team host cannot point to a personal group and a personal host cannot point to a team group.
+- Master-password rotation explicitly stays personal-only; team-scoped resources are encrypted with team keys and are rejected from `/api/v1/me/master-password/change`.
+- Still pending in later Phase 8 slices: client team switcher/resource filtering UI, client create/share flows that use team keys, and Filament team management.
 
 ### Phase 9 — Polish, Docs, Release
 

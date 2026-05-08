@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Controller;
+use App\Models\TeamMember;
 use App\Models\User;
 use App\Support\Vault\SerializesVaultRecords;
 use App\Support\Vault\VaultResourceRegistry;
@@ -27,6 +28,12 @@ final class VaultSyncController extends Controller
         $since = is_string($cursor) && $cursor !== '' ? Carbon::parse($cursor) : null;
         $serverCursor = now();
         $data = [];
+        /** @var list<string> $teamIds */
+        $teamIds = TeamMember::query()
+            ->where('user_id', $user->id)
+            ->pluck('team_id')
+            ->map(static fn (mixed $teamId): string => (string) $teamId)
+            ->all();
 
         foreach (VaultResourceRegistry::all() as $type => $resource) {
             if (! $user->can($resource['permissions']['read'])) {
@@ -38,7 +45,17 @@ final class VaultSyncController extends Controller
             /** @var Collection<int, Model> $records */
             $records = $modelClass::query()
                 ->withoutGlobalScope(SoftDeletingScope::class)
-                ->where('user_id', $user->id)
+                ->where(function ($query) use ($resource, $teamIds, $user): void {
+                    $query->where(function ($query) use ($user, $resource): void {
+                        $query
+                            ->where('user_id', $user->id)
+                            ->when($resource['team_scoped'], fn ($query) => $query->whereNull('team_id'));
+                    });
+
+                    if ($resource['team_scoped'] && $teamIds !== []) {
+                        $query->orWhereIn('team_id', $teamIds);
+                    }
+                })
                 ->when($since !== null, fn ($query) => $query->where(function ($query) use ($since): void {
                     $query
                         ->where('updated_at', '>', $since)

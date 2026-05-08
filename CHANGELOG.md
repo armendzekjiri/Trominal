@@ -34,6 +34,19 @@ Security-relevant changes are tagged `security:`.
 - Six Vitest cases cover round-trip unwrap, wrong-key failure, AD mismatch,
   fresh wrapping material, and key length validation.
 
+### Added — Phase 8C: Team-scoped vault records
+
+- Nullable `team_id` scope on groups, hosts, snippets, identities, tunnels,
+  and host credentials, with personal records still represented by
+  `team_id = null`.
+- Vault API filtering with `GET /api/v1/vault/{resource}?team=<team_id>`,
+  team-member authorization in vault policies, and delta sync visibility for
+  all teams where the user is a member.
+- Scope-safe relationship validation so linked group/host/identity records
+  cannot cross personal/team boundaries.
+- Master-password rotation now rejects team-scoped resources, keeping team-key
+  encrypted data out of the personal vault rotation flow.
+
 ### Added — Phase 7B: AI inside the terminal & snippet generation
 
 - **Inline command suggestions** in the terminal: `Ctrl+Space` triggers the

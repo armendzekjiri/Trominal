@@ -8,8 +8,11 @@ use App\Models\AuditLog;
 use App\Models\Group;
 use App\Models\Host;
 use App\Models\RefreshToken;
+use App\Models\Team;
+use App\Models\TeamMember;
 use App\Models\User;
 use Database\Seeders\RoleAndPermissionSeeder;
+use Illuminate\Auth\AuthManager;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
@@ -121,6 +124,89 @@ final class VaultTest extends TestCase
             ->assertJsonValidationErrors(['group_id']);
     }
 
+    public function test_team_scoped_vault_records_are_visible_to_team_members_only(): void
+    {
+        $owner = $this->userWithRole('user');
+        $member = $this->userWithRole('user');
+        $outsider = $this->userWithRole('user');
+        $team = $this->createTeam($owner);
+        $this->createMembership($team, $member, TeamMember::ROLE_MEMBER);
+        $headers = $this->bearerHeaders($owner);
+
+        $create = $this->postJson('/api/v1/vault/snippets', [
+            'id' => '01JZ2000000000000000000000',
+            'team_id' => $team->id,
+            ...self::snippetPayload(),
+        ], $headers);
+
+        $create
+            ->assertCreated()
+            ->assertJsonPath('data.team_id', $team->id)
+            ->assertJsonPath('data.title_ciphertext', 'snippet-title-ciphertext');
+
+        $this->getJson('/api/v1/vault/snippets', $headers)
+            ->assertOk()
+            ->assertJsonCount(0, 'data');
+
+        $this->getJson("/api/v1/vault/snippets?team={$team->id}", $this->bearerHeaders($member))
+            ->assertOk()
+            ->assertJsonCount(1, 'data')
+            ->assertJsonPath('data.0.id', '01JZ2000000000000000000000');
+
+        $this->getJson('/api/v1/vault/snippets/01JZ2000000000000000000000', $this->bearerHeaders($member))
+            ->assertOk()
+            ->assertJsonPath('data.team_id', $team->id);
+
+        $this->getJson("/api/v1/vault/snippets?team={$team->id}", $this->bearerHeaders($outsider))
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors(['team_id']);
+
+        $this->getJson('/api/v1/vault/snippets/01JZ2000000000000000000000', $this->bearerHeaders($outsider))
+            ->assertForbidden();
+    }
+
+    public function test_team_scoped_vault_relationships_must_stay_inside_the_same_scope(): void
+    {
+        $owner = $this->userWithRole('user');
+        $team = $this->createTeam($owner);
+        $personalGroup = Group::query()->create([
+            'user_id' => $owner->id,
+            'name_ciphertext' => 'personal-group-ciphertext',
+            'name_nonce' => 'personal-group-nonce',
+        ]);
+        $teamGroup = Group::query()->create([
+            'user_id' => $owner->id,
+            'team_id' => $team->id,
+            'name_ciphertext' => 'team-group-ciphertext',
+            'name_nonce' => 'team-group-nonce',
+        ]);
+        $headers = $this->bearerHeaders($owner);
+
+        $this->postJson('/api/v1/vault/hosts', [
+            'team_id' => $team->id,
+            'group_id' => $personalGroup->id,
+            ...self::hostPayload(),
+        ], $headers)
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors(['group_id']);
+
+        $this->postJson('/api/v1/vault/hosts', [
+            'group_id' => $teamGroup->id,
+            ...self::hostPayload(),
+        ], $headers)
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors(['group_id']);
+
+        $this->postJson('/api/v1/vault/hosts', [
+            'team_id' => $team->id,
+            'group_id' => $teamGroup->id,
+            ...self::hostPayload(),
+        ], $headers)
+            ->assertCreated()
+            ->assertJsonPath('data.team_id', $team->id)
+            ->assertJsonPath('data.group_id', $teamGroup->id);
+    }
+
     public function test_delta_sync_returns_updates_and_soft_delete_tombstones(): void
     {
         $user = $this->userWithRole('user');
@@ -146,6 +232,26 @@ final class VaultTest extends TestCase
             ->assertJsonPath('data.hosts.0.id', $host->id);
 
         self::assertNotNull($tombstone->json('data.hosts.0.deleted_at'));
+    }
+
+    public function test_delta_sync_includes_team_scoped_records_for_team_members(): void
+    {
+        $owner = $this->userWithRole('user');
+        $member = $this->userWithRole('user');
+        $outsider = $this->userWithRole('user');
+        $team = $this->createTeam($owner);
+        $this->createMembership($team, $member, TeamMember::ROLE_MEMBER);
+        $host = $this->createHost($owner, team: $team);
+        $cursor = now()->subMinute()->toIso8601String();
+
+        $this->getJson('/api/v1/vault/sync?cursor='.rawurlencode($cursor), $this->bearerHeaders($member))
+            ->assertOk()
+            ->assertJsonPath('data.hosts.0.id', $host->id)
+            ->assertJsonPath('data.hosts.0.team_id', $team->id);
+
+        $this->getJson('/api/v1/vault/sync?cursor='.rawurlencode($cursor), $this->bearerHeaders($outsider))
+            ->assertOk()
+            ->assertJsonMissingPath('data.hosts.0');
     }
 
     public function test_master_password_change_reencrypts_records_bumps_vault_version_and_revokes_other_sessions(): void
@@ -202,6 +308,36 @@ final class VaultTest extends TestCase
         self::assertTrue(AuditLog::query()->where('action', 'vault.master_password.changed')->exists());
     }
 
+    public function test_master_password_change_rejects_team_scoped_records(): void
+    {
+        $user = $this->userWithRole('user');
+        $team = $this->createTeam($user);
+        $host = $this->createHost($user, team: $team);
+        $headers = $this->bearerHeaders($user);
+
+        $this->postJson('/api/v1/me/master-password/change', [
+            'new_kdf_salt' => base64_encode(str_repeat('r', 16)),
+            'new_kdf_params' => ['version' => 2, 'alg' => 'argon2id'],
+            'current_refresh_token' => 'current-refresh-token',
+            'items' => [
+                [
+                    'type' => 'hosts',
+                    'id' => $host->id,
+                    'fields' => [
+                        'name_ciphertext' => 'rotated-team-name-ciphertext',
+                        'name_nonce' => 'rotated-team-name-nonce',
+                    ],
+                ],
+            ],
+        ], $headers)
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors(['items']);
+
+        $host->refresh();
+
+        self::assertSame('host-name-ciphertext', $host->name_ciphertext);
+    }
+
     public function test_master_password_change_rejects_non_reencryption_fields_and_rolls_back(): void
     {
         $user = $this->userWithRole('user');
@@ -251,15 +387,59 @@ final class VaultTest extends TestCase
         ];
     }
 
-    private function createHost(User $user): Host
+    /**
+     * @return array<string, string>
+     */
+    private static function snippetPayload(): array
+    {
+        return [
+            'title_ciphertext' => 'snippet-title-ciphertext',
+            'title_nonce' => 'snippet-title-nonce',
+            'body_ciphertext' => 'snippet-body-ciphertext',
+            'body_nonce' => 'snippet-body-nonce',
+        ];
+    }
+
+    private function createHost(User $user, ?Team $team = null): Host
     {
         /** @var Host $host */
         $host = Host::query()->create([
             'user_id' => $user->id,
+            'team_id' => $team?->id,
             ...self::hostPayload(),
         ]);
 
         return $host;
+    }
+
+    private function createTeam(User $owner): Team
+    {
+        /** @var Team $team */
+        $team = Team::query()->create([
+            'created_by_user_id' => $owner->id,
+            'name_ciphertext' => 'team-name-ciphertext',
+            'name_nonce' => 'team-name-nonce',
+            'key_version' => 1,
+        ]);
+
+        $this->createMembership($team, $owner, TeamMember::ROLE_OWNER);
+
+        return $team;
+    }
+
+    private function createMembership(Team $team, User $user, string $role): TeamMember
+    {
+        /** @var TeamMember $member */
+        $member = TeamMember::query()->create([
+            'team_id' => $team->id,
+            'user_id' => $user->id,
+            'role' => $role,
+            'wrapped_team_key_ciphertext' => "wrapped-key-{$role}-{$user->id}",
+            'wrapped_team_key_nonce' => "wrapped-nonce-{$role}-{$user->id}",
+            'key_version' => $team->key_version,
+        ]);
+
+        return $member;
     }
 
     /**
@@ -267,6 +447,8 @@ final class VaultTest extends TestCase
      */
     private function bearerHeaders(User $user): array
     {
+        $this->app->make(AuthManager::class)->forgetGuards();
+
         return ['Authorization' => 'Bearer '.$user->createToken('Vault feature test')->plainTextToken];
     }
 }

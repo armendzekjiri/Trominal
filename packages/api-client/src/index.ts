@@ -33,9 +33,15 @@ export type VaultRecordPayload = Record<string, boolean | number | string | null
 export type VaultRecord = VaultRecordPayload & {
   id: string
   type: VaultResourceType
+  team_id?: string | null
   created_at: string | null
   updated_at: string | null
   deleted_at: string | null
+}
+
+/** Optional filters for encrypted vault record lists. */
+export type ListVaultRecordsOptions = {
+  teamId?: string
 }
 
 /** Delta sync payload grouped by vault resource type. */
@@ -387,8 +393,14 @@ export class TrominalApiClient {
   }
 
   /** List encrypted vault records for one resource type. */
-  async listVaultRecords(resource: VaultResourceType): Promise<VaultRecord[]> {
-    const response = await this.request<{ data: VaultRecord[] }>(`/api/v1/vault/${resource}`)
+  async listVaultRecords(
+    resource: VaultResourceType,
+    options: ListVaultRecordsOptions = {},
+  ): Promise<VaultRecord[]> {
+    const query = options.teamId === undefined ? '' : `?team=${encodeURIComponent(options.teamId)}`
+    const response = await this.request<{ data: VaultRecord[] }>(
+      `/api/v1/vault/${resource}${query}`,
+    )
     return response.data
   }
 
