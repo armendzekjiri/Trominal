@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 use App\Http\Controllers\Api\V1\AuthController;
 use App\Http\Controllers\Api\V1\MasterPasswordController;
+use App\Http\Controllers\Api\V1\SshTokenController;
 use App\Http\Controllers\Api\V1\TwoFactorController;
 use App\Http\Controllers\Api\V1\VaultResourceController;
 use App\Http\Controllers\Api\V1\VaultSyncController;
@@ -29,6 +30,8 @@ Route::middleware(['auth:sanctum', 'not_suspended'])->group(function (): void {
     });
 
     Route::get('/vault/sync', VaultSyncController::class);
+    Route::post('/ws/ssh-token', [SshTokenController::class, 'store'])
+        ->middleware('can:hosts.connect');
 
     foreach ([
         'groups' => ['read' => 'hosts.read', 'create' => 'hosts.create', 'update' => 'hosts.update', 'delete' => 'hosts.delete'],

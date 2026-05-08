@@ -1,0 +1,264 @@
+import type { VaultRecord, VaultRecordPayload, VaultResourceType } from '@trominal/api-client'
+import { decryptToString, encrypt, makeAd } from '@trominal/crypto'
+
+type EncryptedVaultResource = Extract<
+  VaultResourceType,
+  'groups' | 'host-credentials' | 'hosts' | 'identities' | 'snippets' | 'tunnels'
+>
+
+const AD_RESOURCE: Record<EncryptedVaultResource, string> = {
+  groups: 'group',
+  hosts: 'host',
+  'host-credentials': 'host_credential',
+  snippets: 'snippet',
+  identities: 'identity',
+  tunnels: 'tunnel',
+}
+
+export type HostItem = {
+  id: string
+  groupId: string | null
+  name: string
+  hostname: string
+  port: string
+  username: string
+  tags: string[]
+  color: string
+  updatedAt: string | null
+}
+
+export type GroupItem = {
+  id: string
+  parentId: string | null
+  name: string
+  color: string
+  sortOrder: number
+}
+
+export type SnippetItem = {
+  id: string
+  title: string
+  body: string
+  tags: string[]
+  updatedAt: string | null
+}
+
+export type IdentityItem = {
+  id: string
+  name: string
+  keyType: string
+  publicKey: string
+  privateKey: string
+  updatedAt: string | null
+}
+
+export type HostInput = {
+  id?: string
+  groupId: string | null
+  name: string
+  hostname: string
+  port: string
+  username: string
+  tags: string[]
+  color: string
+}
+
+export type GroupInput = {
+  id?: string
+  parentId: string | null
+  name: string
+  color: string
+  sortOrder: number
+}
+
+export type SnippetInput = {
+  id?: string
+  title: string
+  body: string
+  tags: string[]
+}
+
+export type IdentityInput = {
+  id?: string
+  name: string
+  keyType: string
+  publicKey: string
+  privateKey: string
+}
+
+function stringField(record: VaultRecord, field: string): string | null {
+  const value = record[field]
+  return typeof value === 'string' ? value : null
+}
+
+function numberField(record: VaultRecord, field: string): number {
+  const value = record[field]
+  return typeof value === 'number' ? value : 0
+}
+
+function relationField(record: VaultRecord, field: string): string | null {
+  const value = record[field]
+  return typeof value === 'string' && value.length > 0 ? value : null
+}
+
+function tagsFromString(value: string): string[] {
+  if (value.trim() === '') {
+    return []
+  }
+  try {
+    const parsed = JSON.parse(value) as unknown
+    return Array.isArray(parsed)
+      ? parsed.filter((item): item is string => typeof item === 'string')
+      : []
+  } catch {
+    return value
+      .split(',')
+      .map((tag) => tag.trim())
+      .filter(Boolean)
+  }
+}
+
+async function decryptText(
+  record: VaultRecord,
+  key: Uint8Array,
+  resource: EncryptedVaultResource,
+  field: string,
+): Promise<string> {
+  const ct = stringField(record, `${field}_ciphertext`)
+  const nonce = stringField(record, `${field}_nonce`)
+  if (ct === null || nonce === null) {
+    return ''
+  }
+  return decryptToString({ v: 1, ct, n: nonce }, key, makeAd(AD_RESOURCE[resource], record.id))
+}
+
+async function encryptText(
+  payload: VaultRecordPayload,
+  key: Uint8Array,
+  resource: EncryptedVaultResource,
+  id: string,
+  field: string,
+  value: string,
+  nullable = true,
+): Promise<void> {
+  if (nullable && value.trim() === '') {
+    payload[`${field}_ciphertext`] = null
+    payload[`${field}_nonce`] = null
+    return
+  }
+
+  const envelope = await encrypt(value, key, makeAd(AD_RESOURCE[resource], id))
+  payload[`${field}_ciphertext`] = envelope.ct
+  payload[`${field}_nonce`] = envelope.n
+}
+
+export async function decryptHost(record: VaultRecord, key: Uint8Array): Promise<HostItem> {
+  return {
+    id: record.id,
+    groupId: relationField(record, 'group_id'),
+    name: await decryptText(record, key, 'hosts', 'name'),
+    hostname: await decryptText(record, key, 'hosts', 'hostname'),
+    port: (await decryptText(record, key, 'hosts', 'port')) || '22',
+    username: await decryptText(record, key, 'hosts', 'username'),
+    tags: tagsFromString(await decryptText(record, key, 'hosts', 'tags')),
+    color: await decryptText(record, key, 'hosts', 'color'),
+    updatedAt: record.updated_at,
+  }
+}
+
+export async function decryptGroup(record: VaultRecord, key: Uint8Array): Promise<GroupItem> {
+  return {
+    id: record.id,
+    parentId: relationField(record, 'parent_id'),
+    name: await decryptText(record, key, 'groups', 'name'),
+    color: await decryptText(record, key, 'groups', 'color'),
+    sortOrder: numberField(record, 'sort_order'),
+  }
+}
+
+export async function decryptSnippet(record: VaultRecord, key: Uint8Array): Promise<SnippetItem> {
+  return {
+    id: record.id,
+    title: await decryptText(record, key, 'snippets', 'title'),
+    body: await decryptText(record, key, 'snippets', 'body'),
+    tags: tagsFromString(await decryptText(record, key, 'snippets', 'tags')),
+    updatedAt: record.updated_at,
+  }
+}
+
+export async function decryptIdentity(record: VaultRecord, key: Uint8Array): Promise<IdentityItem> {
+  return {
+    id: record.id,
+    name: await decryptText(record, key, 'identities', 'name'),
+    keyType: stringField(record, 'key_type') ?? 'ed25519',
+    publicKey: await decryptText(record, key, 'identities', 'public_key'),
+    privateKey: await decryptText(record, key, 'identities', 'private_key'),
+    updatedAt: record.updated_at,
+  }
+}
+
+export async function encryptHostInput(id: string, key: Uint8Array, input: HostInput) {
+  const payload: VaultRecordPayload = { id, group_id: input.groupId }
+  await encryptText(payload, key, 'hosts', id, 'name', input.name, false)
+  await encryptText(payload, key, 'hosts', id, 'hostname', input.hostname, false)
+  await encryptText(payload, key, 'hosts', id, 'port', input.port)
+  await encryptText(payload, key, 'hosts', id, 'username', input.username)
+  await encryptText(payload, key, 'hosts', id, 'tags', JSON.stringify(input.tags))
+  await encryptText(payload, key, 'hosts', id, 'color', input.color)
+  return payload
+}
+
+export async function encryptGroupInput(id: string, key: Uint8Array, input: GroupInput) {
+  const payload: VaultRecordPayload = {
+    id,
+    parent_id: input.parentId,
+    sort_order: input.sortOrder,
+  }
+  await encryptText(payload, key, 'groups', id, 'name', input.name, false)
+  await encryptText(payload, key, 'groups', id, 'color', input.color)
+  return payload
+}
+
+export async function encryptSnippetInput(id: string, key: Uint8Array, input: SnippetInput) {
+  const payload: VaultRecordPayload = { id }
+  await encryptText(payload, key, 'snippets', id, 'title', input.title, false)
+  await encryptText(payload, key, 'snippets', id, 'body', input.body, false)
+  await encryptText(payload, key, 'snippets', id, 'tags', JSON.stringify(input.tags))
+  await encryptText(
+    payload,
+    key,
+    'snippets',
+    id,
+    'variables',
+    JSON.stringify(extractVariables(input.body)),
+  )
+  return payload
+}
+
+export async function encryptIdentityInput(id: string, key: Uint8Array, input: IdentityInput) {
+  const payload: VaultRecordPayload = { id, key_type: input.keyType }
+  await encryptText(payload, key, 'identities', id, 'name', input.name, false)
+  await encryptText(payload, key, 'identities', id, 'public_key', input.publicKey)
+  await encryptText(payload, key, 'identities', id, 'private_key', input.privateKey, false)
+  return payload
+}
+
+export function extractVariables(body: string): string[] {
+  return Array.from(body.matchAll(/\{\{\s*([a-zA-Z_][\w.-]*)\s*\}\}/g))
+    .map((match) => match[1])
+    .filter((value, index, all) => all.indexOf(value) === index)
+}
+
+export function substituteVariables(body: string, values: Record<string, string>): string {
+  return body.replace(
+    /\{\{\s*([a-zA-Z_][\w.-]*)\s*\}\}/g,
+    (_, name: string) => values[name] ?? `{{${name}}}`,
+  )
+}
+
+export function tagsFromInput(value: string): string[] {
+  return value
+    .split(',')
+    .map((tag) => tag.trim())
+    .filter(Boolean)
+}

@@ -162,6 +162,16 @@ export type TwoFactorVerifyRequest = { code: string }
 /** Request body for POST /api/v1/auth/two-factor/disable. */
 export type TwoFactorDisableRequest = { password: string; code: string }
 
+/** Request body for POST /api/v1/ws/ssh-token. */
+export type SshTokenRequest = { host_id: string }
+
+/** Short-lived WebSocket SSH token response. */
+export type SshTokenResponse = {
+  token: string
+  expires_at: string
+  websocket_url: string
+}
+
 /** Error thrown when the Trominal API responds outside the 2xx range. */
 export class TrominalApiError extends Error {
   readonly status: number
@@ -352,6 +362,14 @@ export class TrominalApiClient {
     payload: MasterPasswordChangeRequest,
   ): Promise<{ vault_version: number }> {
     return this.request<{ vault_version: number }>('/api/v1/me/master-password/change', {
+      method: 'POST',
+      body: payload,
+    })
+  }
+
+  /** Create a 30-second, single-use WebSocket SSH token for an owned host. */
+  async createSshToken(payload: SshTokenRequest): Promise<SshTokenResponse> {
+    return this.request<SshTokenResponse>('/api/v1/ws/ssh-token', {
       method: 'POST',
       body: payload,
     })
