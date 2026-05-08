@@ -14,7 +14,7 @@ import { SnippetsPage } from '@/features/snippets/SnippetsPage'
 import { TunnelsPage } from '@/features/tunnels/TunnelsPage'
 import { SftpPage } from '@/features/sftp/SftpPage'
 import { IdentitiesPage } from '@/features/identities/IdentitiesPage'
-import { SettingsPlaceholder } from '@/features/app/SettingsPlaceholder'
+import { SettingsPage } from '@/features/settings/SettingsPage'
 import { TerminalPage } from '@/features/terminal/TerminalPage'
 
 const router = createBrowserRouter([
@@ -55,7 +55,7 @@ const router = createBrowserRouter([
                   { path: 'identities', element: <IdentitiesPage /> },
                   { path: 'tunnels', element: <TunnelsPage /> },
                   { path: 'sftp', element: <SftpPage /> },
-                  { path: 'settings', element: <SettingsPlaceholder /> },
+                  { path: 'settings', element: <SettingsPage /> },
                 ],
               },
             ],

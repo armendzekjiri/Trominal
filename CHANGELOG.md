@@ -9,6 +9,33 @@ Security-relevant changes are tagged `security:`.
 
 ## [Unreleased]
 
+### Added — Phase 7A: AI foundation + Settings + Ask AI panel
+
+- **Vault scaffolding** for the existing `ai_settings` table: `AiSettingsItem`
+  / `AiSettingsInput`, `decryptAiSettings` / `encryptAiSettingsInput`, and
+  `useAiSettings` / `useSaveAiSettings` hooks. Same encryption + AD pattern
+  as host credentials; the singleton row is surfaced as `AiSettingsItem | null`
+  rather than an array. Endpoint and feature toggles ride together inside the
+  encrypted `settings` JSON blob.
+- **Adapter layer** in `apps/client/src/features/ai/adapters/`: `AnthropicAdapter`,
+  `OpenAICompatibleAdapter` (covers OpenAI / Ollama / OpenRouter / vLLM / any
+  OpenAI-compatible server), and `CustomAdapter`. All three implement the
+  same `chat(request, config): AsyncIterable<ChatChunk>` interface and stream
+  via a small SSE parser. Calls go directly from the client to the provider
+  per the BYOK constraint — Trominal's backend never sees the API key.
+- **Settings page** (`/settings`) replaces the placeholder with a sidebar
+  layout (Connection / Account / **AI** / Appearance / Shortcuts /
+  Notifications / Advanced). Only the AI tab is fully implemented in 7A; the
+  others render a "coming in Phase 9" stub. AI tab: 4-button provider grid,
+  endpoint / model fields, masked API key with reveal, four feature toggles,
+  Test connection button.
+- **Ask AI panel** in `TerminalPage`: 380px slide-in with streaming chat,
+  optional last-50-lines terminal context, and `/explain` `/fix` `/diagnose`
+  shortcut prompts. Toggle button gated behind `useAuth().hasPermission('ai.use')`.
+- 14 new Vitest cases (51 total) for the SSE parser, OpenAI/Anthropic
+  adapter request shaping + streaming, AiSettings encrypt/decrypt round-trip,
+  and recent-lines extraction from xterm scrollback.
+
 ### Added — Phase 6B: SFTP
 
 - Dual-pane SFTP browser at `/sftp` matching `.ai/design/screens-tools.jsx`:

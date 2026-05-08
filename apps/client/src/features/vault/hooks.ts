@@ -3,18 +3,22 @@ import { getApiClient } from '@/lib/api-client'
 import { useVault } from '@/stores/vault'
 import { newVaultId } from './ids'
 import {
+  decryptAiSettings,
   decryptGroup,
   decryptHost,
   decryptHostCredential,
   decryptIdentity,
   decryptSnippet,
   decryptTunnel,
+  encryptAiSettingsInput,
   encryptGroupInput,
   encryptHostCredentialInput,
   encryptHostInput,
   encryptIdentityInput,
   encryptSnippetInput,
   encryptTunnelInput,
+  type AiSettingsInput,
+  type AiSettingsItem,
   type GroupInput,
   type HostCredentialInput,
   type HostInput,
@@ -38,6 +42,7 @@ const vaultKeys = {
   identities: ['vault', 'identities'] as const,
   snippets: ['vault', 'snippets'] as const,
   tunnels: ['vault', 'tunnels'] as const,
+  aiSettings: ['vault', 'ai-settings'] as const,
 }
 
 export function useGroups() {
@@ -260,5 +265,46 @@ export function useDeleteTunnel() {
       await api.deleteVaultRecord('tunnels', id)
     },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: vaultKeys.tunnels }),
+  })
+}
+
+/**
+ * AI settings are a singleton per user (the migration enforces UNIQUE(user_id)),
+ * so the list endpoint returns either zero records (never configured) or one.
+ * The hook surfaces that as `AiSettingsItem | null` so consumers can branch
+ * cleanly without reaching into an array.
+ */
+export function useAiSettings() {
+  const key = useVault((s) => s.key)
+  return useQuery({
+    queryKey: vaultKeys.aiSettings,
+    enabled: key !== null,
+    queryFn: async (): Promise<AiSettingsItem | null> => {
+      const api = await getApiClient()
+      const records = await api.listVaultRecords('ai-settings')
+      if (records.length === 0) {
+        return null
+      }
+      const first = records[0]
+      if (first === undefined) {
+        return null
+      }
+      return decryptAiSettings(first, vaultKey())
+    },
+  })
+}
+
+export function useSaveAiSettings() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async (input: AiSettingsInput) => {
+      const id = input.id ?? newVaultId()
+      const api = await getApiClient()
+      const payload = await encryptAiSettingsInput(id, vaultKey(), input)
+      return input.id === undefined
+        ? api.createVaultRecord('ai-settings', payload)
+        : api.updateVaultRecord('ai-settings', id, payload)
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: vaultKeys.aiSettings }),
   })
 }

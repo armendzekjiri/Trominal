@@ -3,7 +3,7 @@ import { decryptToString, encrypt, makeAd } from '@trominal/crypto'
 
 type EncryptedVaultResource = Extract<
   VaultResourceType,
-  'groups' | 'host-credentials' | 'hosts' | 'identities' | 'snippets' | 'tunnels'
+  'ai-settings' | 'groups' | 'host-credentials' | 'hosts' | 'identities' | 'snippets' | 'tunnels'
 >
 
 const AD_RESOURCE: Record<EncryptedVaultResource, string> = {
@@ -13,6 +13,7 @@ const AD_RESOURCE: Record<EncryptedVaultResource, string> = {
   snippets: 'snippet',
   identities: 'identity',
   tunnels: 'tunnel',
+  'ai-settings': 'ai_setting',
 }
 
 export type HostItem = {
@@ -61,6 +62,35 @@ export type HostCredentialItem = {
   password: string
   privateKeyPassphrase: string
   updatedAt: string | null
+}
+
+/** Stable string ids; new providers can be added without bumping a version. */
+export type AiProvider = 'anthropic' | 'openai' | 'ollama' | 'custom'
+
+export type AiFeatureToggles = {
+  inlineSuggestions: boolean
+  askPanel: boolean
+  explainCommand: boolean
+  sendOutputContext: boolean
+}
+
+export type AiSettingsItem = {
+  id: string
+  provider: AiProvider
+  endpoint: string
+  model: string
+  apiKey: string
+  features: AiFeatureToggles
+  updatedAt: string | null
+}
+
+export type AiSettingsInput = {
+  id?: string
+  provider: AiProvider
+  endpoint: string
+  model: string
+  apiKey: string
+  features: AiFeatureToggles
 }
 
 export type TunnelKind = 'local' | 'remote' | 'socks'
@@ -204,6 +234,72 @@ function stringValue(value: unknown): string {
   return typeof value === 'string' ? value : ''
 }
 
+export function defaultAiFeatureToggles(): AiFeatureToggles {
+  return {
+    inlineSuggestions: true,
+    askPanel: true,
+    explainCommand: true,
+    sendOutputContext: false,
+  }
+}
+
+export function defaultAiSettingsInput(): AiSettingsInput {
+  return {
+    provider: 'anthropic',
+    endpoint: '',
+    model: '',
+    apiKey: '',
+    features: defaultAiFeatureToggles(),
+  }
+}
+
+function aiProviderFromString(value: unknown): AiProvider {
+  if (value === 'anthropic' || value === 'openai' || value === 'ollama' || value === 'custom') {
+    return value
+  }
+  return 'anthropic'
+}
+
+function aiFeatureTogglesFromString(value: string): AiFeatureToggles {
+  const fallback = defaultAiFeatureToggles()
+  if (value.trim() === '') {
+    return fallback
+  }
+  try {
+    const parsed = JSON.parse(value) as { features?: Partial<AiFeatureToggles> } | null
+    const features = parsed?.features ?? {}
+    return {
+      inlineSuggestions:
+        typeof features.inlineSuggestions === 'boolean'
+          ? features.inlineSuggestions
+          : fallback.inlineSuggestions,
+      askPanel: typeof features.askPanel === 'boolean' ? features.askPanel : fallback.askPanel,
+      explainCommand:
+        typeof features.explainCommand === 'boolean'
+          ? features.explainCommand
+          : fallback.explainCommand,
+      sendOutputContext:
+        typeof features.sendOutputContext === 'boolean'
+          ? features.sendOutputContext
+          : fallback.sendOutputContext,
+    }
+  } catch {
+    return fallback
+  }
+}
+
+function aiEndpointFromString(value: string): string {
+  if (value.trim() === '') {
+    return ''
+  }
+  try {
+    const parsed = JSON.parse(value) as { endpoint?: string } | null
+    return typeof parsed?.endpoint === 'string' ? parsed.endpoint : ''
+  } catch {
+    return ''
+  }
+}
+
 export function defaultTunnelConfig(): TunnelConfig {
   return {
     kind: 'local',
@@ -314,6 +410,22 @@ export async function decryptHostCredential(
   }
 }
 
+export async function decryptAiSettings(
+  record: VaultRecord,
+  key: Uint8Array,
+): Promise<AiSettingsItem> {
+  const settingsBlob = await decryptText(record, key, 'ai-settings', 'settings')
+  return {
+    id: record.id,
+    provider: aiProviderFromString(await decryptText(record, key, 'ai-settings', 'provider')),
+    endpoint: aiEndpointFromString(settingsBlob),
+    model: await decryptText(record, key, 'ai-settings', 'model'),
+    apiKey: await decryptText(record, key, 'ai-settings', 'api_key'),
+    features: aiFeatureTogglesFromString(settingsBlob),
+    updatedAt: record.updated_at,
+  }
+}
+
 export async function decryptTunnel(record: VaultRecord, key: Uint8Array): Promise<TunnelItem> {
   return {
     id: record.id,
@@ -392,6 +504,20 @@ export async function encryptIdentityInput(id: string, key: Uint8Array, input: I
   await encryptText(payload, key, 'identities', id, 'name', input.name, false)
   await encryptText(payload, key, 'identities', id, 'public_key', input.publicKey)
   await encryptText(payload, key, 'identities', id, 'private_key', input.privateKey, false)
+  return payload
+}
+
+export async function encryptAiSettingsInput(id: string, key: Uint8Array, input: AiSettingsInput) {
+  const payload: VaultRecordPayload = { id }
+  await encryptText(payload, key, 'ai-settings', id, 'provider', input.provider)
+  await encryptText(payload, key, 'ai-settings', id, 'model', input.model)
+  // BYOK: the API key is encrypted client-side and never round-trips through
+  // the server in plaintext. AD binds it to this row.
+  await encryptText(payload, key, 'ai-settings', id, 'api_key', input.apiKey)
+  // The migration only allocates `settings_ciphertext` for non-secret config,
+  // so endpoint + feature toggles ride together inside one JSON blob there.
+  const blob = JSON.stringify({ endpoint: input.endpoint, features: input.features })
+  await encryptText(payload, key, 'ai-settings', id, 'settings', blob)
   return payload
 }
 

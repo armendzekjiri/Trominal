@@ -8,11 +8,17 @@ import type { SshSession } from '@trominal/ssh-transport'
 type XtermPaneProps = {
   session: SshSession | null
   title: string
+  /**
+   * Optional ref the parent can use to peek at the live xterm instance —
+   * needed by the Ask AI panel to read the last N lines of scrollback. The
+   * pane assigns the current Terminal on mount and clears it on unmount.
+   */
+  terminalRef?: { current: Terminal | null }
 }
 
 const encoder = new TextEncoder()
 
-export function XtermPane({ session, title }: XtermPaneProps) {
+export function XtermPane({ session, title, terminalRef: externalRef }: XtermPaneProps) {
   const elementRef = useRef<HTMLDivElement | null>(null)
   const terminalRef = useRef<Terminal | null>(null)
 
@@ -54,6 +60,9 @@ export function XtermPane({ session, title }: XtermPaneProps) {
     terminal.open(element)
     fit.fit()
     terminalRef.current = terminal
+    if (externalRef !== undefined) {
+      externalRef.current = terminal
+    }
 
     const resizeObserver = new ResizeObserver(() => {
       fit.fit()
@@ -74,8 +83,11 @@ export function XtermPane({ session, title }: XtermPaneProps) {
       resizeObserver.disconnect()
       terminal.dispose()
       terminalRef.current = null
+      if (externalRef !== undefined) {
+        externalRef.current = null
+      }
     }
-  }, [session, title])
+  }, [session, title, externalRef])
 
   useEffect(() => {
     const terminal = terminalRef.current
