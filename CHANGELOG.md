@@ -9,6 +9,20 @@ Security-relevant changes are tagged `security:`.
 
 ## [Unreleased]
 
+### Added — Phase 8A: Teams backend foundation
+
+- Backend `teams` / `team_members` schema with ULIDs, encrypted ciphertext
+  casts, member-specific wrapped team keys, team roles, and `key_version`
+  tracking for rotation.
+- Team API endpoints for team CRUD, user public-key lookup, member add/list,
+  role changes, and removal with mandatory wrapped-key rotation payloads for
+  every remaining member.
+- Typed `@trominal/api-client` team DTOs and methods, plus OpenAPI schemas for
+  encrypted team metadata and wrapped team-key membership records.
+- Pest coverage for encrypted-at-rest storage, permission failures, team role
+  authorization, final-owner protection, audit logs, and member-removal key
+  rotation validation.
+
 ### Added — Phase 7B: AI inside the terminal & snippet generation
 
 - **Inline command suggestions** in the terminal: `Ctrl+Space` triggers the
