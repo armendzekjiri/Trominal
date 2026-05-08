@@ -23,6 +23,12 @@ export type SshConnectOptions = {
   sessionName?: string
 }
 
+export type LocalShellOptions = {
+  cols?: number
+  rows?: number
+  sessionName?: string
+}
+
 export type SshSessionState = 'closed' | 'connected' | 'connecting'
 
 export interface SshSession {

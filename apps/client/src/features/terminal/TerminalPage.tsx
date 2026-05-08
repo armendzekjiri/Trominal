@@ -1,21 +1,40 @@
-import { createSshSession, type SshSession } from '@trominal/ssh-transport'
-import { Loader2, Plus, Power, RotateCcw, Server, SplitSquareHorizontal, X } from 'lucide-react'
+import { createLocalShellSession, createSshSession, type SshSession } from '@trominal/ssh-transport'
+import {
+  Laptop,
+  Loader2,
+  Plus,
+  Power,
+  RotateCcw,
+  Server,
+  SplitSquareHorizontal,
+  X,
+} from 'lucide-react'
 import { useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
 import { Dot } from '@/components/ui/dot'
 import { getApiClient } from '@/lib/api-client'
 import { cn } from '@/lib/cn'
+import { isTauri } from '@/lib/platform'
 import { useHosts } from '@/features/vault/hooks'
 import type { HostItem } from '@/features/vault/model'
 import { XtermPane } from './XtermPane'
 
-type TerminalTab = {
+type BaseTerminalTab = {
   id: string
-  host: HostItem
   status: 'closed' | 'connected' | 'connecting'
   session: SshSession | null
 }
+
+type TerminalTab =
+  | (BaseTerminalTab & {
+      kind: 'host'
+      host: HostItem
+    })
+  | (BaseTerminalTab & {
+      kind: 'local'
+      title: string
+    })
 
 function statusToDot(status: TerminalTab['status']) {
   if (status === 'connected') {
@@ -28,6 +47,29 @@ function statusToDot(status: TerminalTab['status']) {
 }
 
 export function TerminalPage() {
+  if (!isTauri) {
+    return <WebTerminalUnavailable />
+  }
+
+  return <DesktopTerminalPage />
+}
+
+function tabTitle(tab: TerminalTab): string {
+  return tab.kind === 'local' ? tab.title : tab.host.name || tab.host.hostname
+}
+
+function WebTerminalUnavailable() {
+  return (
+    <div className="flex h-full min-h-0 items-center justify-center bg-bg">
+      <div className="max-w-sm text-center">
+        <div className="mb-3 text-[14px] font-medium">Terminal is desktop-only in v0.1</div>
+        <div className="text-[12px] text-fg-faint">Web terminal support is deferred.</div>
+      </div>
+    </div>
+  )
+}
+
+function DesktopTerminalPage() {
   const [searchParams] = useSearchParams()
   const hostsQuery = useHosts()
   const hosts = hostsQuery.data ?? []
@@ -37,13 +79,29 @@ export function TerminalPage() {
   const [activeId, setActiveId] = useState<string | null>(null)
   const active = tabs.find((tab) => tab.id === activeId) ?? tabs[0] ?? null
 
-  function addTab(host: HostItem): void {
+  function addHostTab(host: HostItem): void {
     const id = crypto.randomUUID()
     setTabs((current) => [
       ...current,
       {
         id,
+        kind: 'host',
         host,
+        status: 'closed',
+        session: null,
+      },
+    ])
+    setActiveId(id)
+  }
+
+  function addLocalTab(): void {
+    const id = crypto.randomUUID()
+    setTabs((current) => [
+      ...current,
+      {
+        id,
+        kind: 'local',
+        title: 'Local shell',
         status: 'closed',
         session: null,
       },
@@ -56,16 +114,10 @@ export function TerminalPage() {
       current.map((item) => (item.id === tab.id ? { ...item, status: 'connecting' } : item)),
     )
     try {
-      const api = await getApiClient()
-      const token = await api.createSshToken({ host_id: tab.host.id })
-      const session = createSshSession({
-        hostId: tab.host.id,
-        host: tab.host.hostname,
-        port: Number.parseInt(tab.host.port || '22', 10),
-        username: tab.host.username,
-        websocketUrl: token.websocket_url,
-        sessionName: tab.host.name,
-      })
+      const session =
+        tab.kind === 'local'
+          ? createLocalShellSession({ sessionName: tab.title })
+          : await hostSession(tab.host)
       setTabs((current) =>
         current.map((item) => (item.id === tab.id ? { ...item, session } : item)),
       )
@@ -82,6 +134,30 @@ export function TerminalPage() {
         ),
       )
     }
+  }
+
+  async function hostSession(host: HostItem): Promise<SshSession> {
+    if (isTauri) {
+      return createSshSession({
+        hostId: host.id,
+        host: host.hostname,
+        port: Number.parseInt(host.port || '22', 10),
+        username: host.username,
+        sessionName: host.name,
+      })
+    }
+
+    const api = await getApiClient()
+    const token = await api.createSshToken({ host_id: host.id })
+
+    return createSshSession({
+      hostId: host.id,
+      host: host.hostname,
+      port: Number.parseInt(host.port || '22', 10),
+      username: host.username,
+      websocketUrl: token.websocket_url,
+      sessionName: host.name,
+    })
   }
 
   async function disconnect(tab: TerminalTab): Promise<void> {
@@ -115,7 +191,7 @@ export function TerminalPage() {
             )}
           >
             <Dot state={statusToDot(tab.status)} />
-            <span>{tab.host.name || tab.host.hostname}</span>
+            <span>{tabTitle(tab)}</span>
             <X
               size={12}
               className="text-fg-faint"
@@ -130,8 +206,17 @@ export function TerminalPage() {
           <Button
             size="sm"
             variant="ghost"
+            onClick={() => addLocalTab()}
+            aria-label="New local shell"
+          >
+            <Laptop size={13} />
+          </Button>
+          <Button
+            size="sm"
+            variant="ghost"
             disabled={requestedHost === null}
-            onClick={() => requestedHost !== null && addTab(requestedHost)}
+            onClick={() => requestedHost !== null && addHostTab(requestedHost)}
+            aria-label="New SSH tab"
           >
             <Plus size={13} />
           </Button>
@@ -151,15 +236,9 @@ export function TerminalPage() {
         <div className="flex flex-1 items-center justify-center">
           <div className="max-w-sm text-center">
             <div className="mb-3 text-[14px] font-medium">No terminal tabs</div>
-            <div className="mb-4 text-[12px] text-fg-faint">
-              Open a host from the Hosts screen, or start a tab from the first available host.
-            </div>
-            <Button
-              disabled={requestedHost === null}
-              onClick={() => requestedHost !== null && addTab(requestedHost)}
-            >
-              <Plus size={13} />
-              New session
+            <Button onClick={() => addLocalTab()}>
+              <Laptop size={13} />
+              Local shell
             </Button>
           </div>
         </div>
@@ -167,13 +246,17 @@ export function TerminalPage() {
         <>
           <div className="flex h-10 items-center gap-2 border-b border-border px-3">
             <div className="font-mono text-[12px] text-fg-muted">
-              ssh {active.host.username || 'user'}@{active.host.hostname}:{active.host.port || '22'}
+              {active.kind === 'local'
+                ? active.title
+                : `ssh ${active.host.username || 'user'}@${active.host.hostname}:${
+                    active.host.port || '22'
+                  }`}
             </div>
             <div className="ml-auto flex gap-2">
               <Button
                 size="sm"
                 variant="outline"
-                disabled={active.status === 'connecting'}
+                disabled={active.status === 'connecting' || active.kind === 'host'}
                 onClick={() => void connect(active)}
               >
                 {active.status === 'connecting' ? (
@@ -183,7 +266,12 @@ export function TerminalPage() {
                 )}
                 Connect
               </Button>
-              <Button size="sm" variant="outline" onClick={() => void connect(active)}>
+              <Button
+                size="sm"
+                variant="outline"
+                disabled={active.kind === 'host'}
+                onClick={() => void connect(active)}
+              >
                 <RotateCcw size={13} />
                 Reconnect
               </Button>
@@ -193,13 +281,13 @@ export function TerminalPage() {
             </div>
           </div>
           <div className="min-h-0 flex-1">
-            <XtermPane session={active.session} title={active.host.name || active.host.hostname} />
+            <XtermPane session={active.session} title={tabTitle(active)} />
           </div>
           <div className="flex h-6 items-center gap-4 border-t border-border bg-bg-elev px-3 font-mono text-[11px] text-fg-faint">
             <span>{active.status}</span>
             <span>UTF-8</span>
             <span>xterm-256color</span>
-            <span>copy/paste enabled by browser and xterm selection</span>
+            <span>{active.kind === 'local' ? 'local' : 'ssh'}</span>
           </div>
         </>
       )}

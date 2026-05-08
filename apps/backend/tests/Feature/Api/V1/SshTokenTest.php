@@ -23,6 +23,7 @@ final class SshTokenTest extends TestCase
         parent::setUp();
 
         $this->seed(RoleAndPermissionSeeder::class);
+        $this->enableWebSsh();
     }
 
     public function test_creates_short_lived_ip_bound_web_ssh_tokens_for_owned_hosts(): void
@@ -150,6 +151,18 @@ final class SshTokenTest extends TestCase
         $user->assignRole($role);
 
         return $user;
+    }
+
+    private function enableWebSsh(): void
+    {
+        AppSetting::registration()->update([
+            'value' => [
+                'mode' => 'single',
+                'open' => false,
+                'instance_name' => 'Trominal',
+                'web_ssh_enabled' => true,
+            ],
+        ]);
     }
 
     private function createHost(User $user): Host

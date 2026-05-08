@@ -62,7 +62,7 @@ final class AppSetting extends Model
             'mode' => 'single',
             'open' => true,
             'instance_name' => 'Trominal',
-            'web_ssh_enabled' => true,
+            'web_ssh_enabled' => false,
         ];
     }
 }
