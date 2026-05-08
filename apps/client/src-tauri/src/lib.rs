@@ -20,6 +20,9 @@ pub fn run() {
             local_shell::ssh_close,
             local_shell::ssh_key_test,
             local_shell::ssh_key_install,
+            local_shell::ssh_tunnel_open,
+            local_shell::ssh_tunnel_close,
+            local_shell::ssh_tunnel_status,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

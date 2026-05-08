@@ -63,6 +63,25 @@ export type HostCredentialItem = {
   updatedAt: string | null
 }
 
+export type TunnelKind = 'local' | 'remote' | 'socks'
+
+export type TunnelConfig = {
+  kind: TunnelKind
+  bindHost: string
+  bindPort: string
+  targetHost: string
+  targetPort: string
+}
+
+export type TunnelItem = {
+  id: string
+  hostId: string | null
+  name: string
+  config: TunnelConfig
+  enabled: boolean
+  updatedAt: string | null
+}
+
 export type HostInput = {
   id?: string
   groupId: string | null
@@ -107,9 +126,22 @@ export type HostCredentialInput = {
   privateKeyPassphrase: string
 }
 
+export type TunnelInput = {
+  id?: string
+  hostId: string | null
+  name: string
+  config: TunnelConfig
+  enabled: boolean
+}
+
 function stringField(record: VaultRecord, field: string): string | null {
   const value = record[field]
   return typeof value === 'string' ? value : null
+}
+
+function booleanField(record: VaultRecord, field: string): boolean {
+  const value = record[field]
+  return typeof value === 'boolean' ? value : false
 }
 
 function numberField(record: VaultRecord, field: string): number {
@@ -136,6 +168,49 @@ function tagsFromString(value: string): string[] {
       .split(',')
       .map((tag) => tag.trim())
       .filter(Boolean)
+  }
+}
+
+function tunnelConfigFromString(value: string): TunnelConfig {
+  if (value.trim() === '') {
+    return defaultTunnelConfig()
+  }
+
+  try {
+    const parsed = JSON.parse(value) as unknown
+    if (typeof parsed !== 'object' || parsed === null) {
+      return defaultTunnelConfig()
+    }
+
+    const config = parsed as Record<string, unknown>
+    const kind = tunnelKind(config.kind)
+    return {
+      kind,
+      bindHost: stringValue(config.bindHost) || '127.0.0.1',
+      bindPort: stringValue(config.bindPort),
+      targetHost: stringValue(config.targetHost),
+      targetPort: stringValue(config.targetPort),
+    }
+  } catch {
+    return defaultTunnelConfig()
+  }
+}
+
+function tunnelKind(value: unknown): TunnelKind {
+  return value === 'remote' || value === 'socks' ? value : 'local'
+}
+
+function stringValue(value: unknown): string {
+  return typeof value === 'string' ? value : ''
+}
+
+export function defaultTunnelConfig(): TunnelConfig {
+  return {
+    kind: 'local',
+    bindHost: '127.0.0.1',
+    bindPort: '',
+    targetHost: '',
+    targetPort: '',
   }
 }
 
@@ -239,6 +314,17 @@ export async function decryptHostCredential(
   }
 }
 
+export async function decryptTunnel(record: VaultRecord, key: Uint8Array): Promise<TunnelItem> {
+  return {
+    id: record.id,
+    hostId: relationField(record, 'host_id'),
+    name: await decryptText(record, key, 'tunnels', 'name'),
+    config: tunnelConfigFromString(await decryptText(record, key, 'tunnels', 'config')),
+    enabled: booleanField(record, 'enabled'),
+    updatedAt: record.updated_at,
+  }
+}
+
 export async function encryptHostInput(id: string, key: Uint8Array, input: HostInput) {
   const payload: VaultRecordPayload = { id, group_id: input.groupId }
   await encryptText(payload, key, 'hosts', id, 'name', input.name, false)
@@ -306,6 +392,17 @@ export async function encryptIdentityInput(id: string, key: Uint8Array, input: I
   await encryptText(payload, key, 'identities', id, 'name', input.name, false)
   await encryptText(payload, key, 'identities', id, 'public_key', input.publicKey)
   await encryptText(payload, key, 'identities', id, 'private_key', input.privateKey, false)
+  return payload
+}
+
+export async function encryptTunnelInput(id: string, key: Uint8Array, input: TunnelInput) {
+  const payload: VaultRecordPayload = {
+    id,
+    host_id: input.hostId,
+    enabled: input.enabled,
+  }
+  await encryptText(payload, key, 'tunnels', id, 'name', input.name, false)
+  await encryptText(payload, key, 'tunnels', id, 'config', JSON.stringify(input.config), false)
   return payload
 }
 

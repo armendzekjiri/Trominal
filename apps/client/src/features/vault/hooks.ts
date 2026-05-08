@@ -8,16 +8,19 @@ import {
   decryptHostCredential,
   decryptIdentity,
   decryptSnippet,
+  decryptTunnel,
   encryptGroupInput,
   encryptHostCredentialInput,
   encryptHostInput,
   encryptIdentityInput,
   encryptSnippetInput,
+  encryptTunnelInput,
   type GroupInput,
   type HostCredentialInput,
   type HostInput,
   type IdentityInput,
   type SnippetInput,
+  type TunnelInput,
 } from './model'
 
 function vaultKey(): Uint8Array {
@@ -34,6 +37,7 @@ const vaultKeys = {
   hosts: ['vault', 'hosts'] as const,
   identities: ['vault', 'identities'] as const,
   snippets: ['vault', 'snippets'] as const,
+  tunnels: ['vault', 'tunnels'] as const,
 }
 
 export function useGroups() {
@@ -97,6 +101,19 @@ export function useIdentities() {
       const api = await getApiClient()
       const records = await api.listVaultRecords('identities')
       return Promise.all(records.map((record) => decryptIdentity(record, vaultKey())))
+    },
+  })
+}
+
+export function useTunnels() {
+  const key = useVault((s) => s.key)
+  return useQuery({
+    queryKey: vaultKeys.tunnels,
+    enabled: key !== null,
+    queryFn: async () => {
+      const api = await getApiClient()
+      const records = await api.listVaultRecords('tunnels')
+      return Promise.all(records.map((record) => decryptTunnel(record, vaultKey())))
     },
   })
 }
@@ -217,5 +234,31 @@ export function useDeleteIdentity() {
       await api.deleteVaultRecord('identities', id)
     },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: vaultKeys.identities }),
+  })
+}
+
+export function useSaveTunnel() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async (input: TunnelInput) => {
+      const id = input.id ?? newVaultId()
+      const api = await getApiClient()
+      const payload = await encryptTunnelInput(id, vaultKey(), input)
+      return input.id === undefined
+        ? api.createVaultRecord('tunnels', payload)
+        : api.updateVaultRecord('tunnels', id, payload)
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: vaultKeys.tunnels }),
+  })
+}
+
+export function useDeleteTunnel() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const api = await getApiClient()
+      await api.deleteVaultRecord('tunnels', id)
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: vaultKeys.tunnels }),
   })
 }
