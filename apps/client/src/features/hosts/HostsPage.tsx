@@ -15,6 +15,7 @@ import { Link } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
 import { TextInput } from '@/components/ui/text-input'
 import { cn } from '@/lib/cn'
+import { isTauri } from '@/lib/platform'
 import {
   useDeleteHost,
   useDeleteHostCredential,
@@ -31,7 +32,35 @@ import {
   type HostCredentialItem,
   type HostInput,
   type HostItem,
+  type IdentityItem,
 } from '@/features/vault/model'
+import { authForIdentity } from '@/features/vault/ssh-auth'
+
+type TauriCore = {
+  invoke: <T>(command: string, args?: Record<string, unknown>) => Promise<T>
+}
+
+type SavedHost = {
+  id: string
+  name: string
+  hostname: string
+  port: string
+  username: string
+}
+
+type BootstrapPrompt = {
+  host: SavedHost
+  identity: IdentityItem
+  password: string
+  status: 'installing' | 'password'
+  error?: string
+}
+
+type SshKeyTestResponse = {
+  works: boolean
+}
+
+const passwordEncoder = new TextEncoder()
 
 type HostDraft = HostInput & {
   credentialId?: string
@@ -82,6 +111,8 @@ export function HostsPage() {
   const [groupFilter, setGroupFilter] = useState<string | null>(null)
   const [draft, setDraft] = useState<HostDraft>(EMPTY_HOST)
   const [groupName, setGroupName] = useState('')
+  const [keyStatus, setKeyStatus] = useState<string | null>(null)
+  const [bootstrap, setBootstrap] = useState<BootstrapPrompt | null>(null)
 
   const visibleHosts = hosts.filter((host) => {
     const haystack = [host.name, host.hostname, host.username, host.tags.join(' ')]
@@ -103,6 +134,7 @@ export function HostsPage() {
 
   async function submitHost(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
+    setKeyStatus(null)
     const host = await saveHost.mutateAsync({
       id: draft.id,
       groupId: draft.groupId,
@@ -124,11 +156,56 @@ export function HostsPage() {
         password: '',
         privateKeyPassphrase: '',
       })
+      const identity = identities.find((item) => item.id === draft.identityId)
+      const savedHost = savedHostFromDraft(String(host.id), draft)
+      if (identity !== undefined && isTauri) {
+        setKeyStatus('Testing attached SSH key...')
+        if (await testAttachedKey(savedHost, identity)) {
+          setKeyStatus('Attached SSH key already works.')
+          setDraft(EMPTY_HOST)
+          return
+        }
+        setBootstrap({
+          host: savedHost,
+          identity,
+          password: '',
+          status: 'password',
+        })
+        setKeyStatus('Server password is required to install the attached key.')
+        return
+      }
     } else if (draft.credentialId !== undefined) {
       await deleteHostCredential.mutateAsync(draft.credentialId)
     }
 
     setDraft(EMPTY_HOST)
+  }
+
+  async function submitBootstrap(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    if (bootstrap === null || bootstrap.password === '') {
+      return
+    }
+
+    setBootstrap({ ...bootstrap, status: 'installing', error: undefined })
+    setKeyStatus('Installing public key on the server...')
+    try {
+      await installAttachedKey(bootstrap.host, bootstrap.identity, bootstrap.password)
+      if (!(await testAttachedKey(bootstrap.host, bootstrap.identity))) {
+        throw new Error('Key install finished, but key authentication still failed.')
+      }
+      setBootstrap(null)
+      setDraft(EMPTY_HOST)
+      setKeyStatus('Attached SSH key installed and verified.')
+    } catch (error) {
+      setBootstrap({
+        ...bootstrap,
+        password: '',
+        status: 'password',
+        error: error instanceof Error ? error.message : 'SSH key install failed.',
+      })
+      setKeyStatus('SSH key install failed.')
+    }
   }
 
   async function submitGroup(event: FormEvent<HTMLFormElement>) {
@@ -405,12 +482,146 @@ export function HostsPage() {
         <div className="rounded-md border border-border bg-surface p-3">
           <div className="font-mono text-[12px] text-fg">{hosts.length} hosts</div>
           <div className="mt-1 text-[12px] text-fg-muted">{groups.length} encrypted groups</div>
+          {keyStatus !== null && (
+            <div className="mt-3 rounded-md border border-border-subtle bg-bg-elev p-2 text-[11px] text-fg-muted">
+              {keyStatus}
+            </div>
+          )}
           <div className="mt-3 text-[11px] leading-5 text-fg-faint">
             Host labels, addresses, ports, usernames, tags, and colors are decrypted only after
             unlock and re-encrypted before every API write.
           </div>
         </div>
       </aside>
+
+      {bootstrap !== null && (
+        <div className="fixed inset-0 z-40 flex items-center justify-center bg-bg/80 p-4">
+          <form
+            onSubmit={(event) => void submitBootstrap(event)}
+            className="grid w-full max-w-md gap-4 rounded-md border border-border-strong bg-bg-elev p-4 shadow-2xl"
+          >
+            <div className="flex items-center gap-3 border-b border-border pb-3">
+              <KeyRound size={16} className="text-accent" />
+              <div className="min-w-0">
+                <div className="text-[14px] font-medium">Install attached SSH key</div>
+                <div className="truncate font-mono text-[11px] text-fg-faint">
+                  {bootstrap.host.username ? `${bootstrap.host.username}@` : ''}
+                  {bootstrap.host.hostname}:{bootstrap.host.port || '22'}
+                </div>
+              </div>
+            </div>
+            <TextInput
+              label="Server password"
+              type="password"
+              value={bootstrap.password}
+              disabled={bootstrap.status === 'installing'}
+              error={bootstrap.error}
+              onChange={(event) =>
+                setBootstrap({
+                  ...bootstrap,
+                  password: event.target.value,
+                  error: undefined,
+                })
+              }
+              autoFocus
+              required
+            />
+            <div className="text-[11px] leading-5 text-fg-faint">
+              Trominal will try `ssh-copy-id` first. If it is not available on this machine, it
+              falls back to the same authorized_keys install command over SSH.
+            </div>
+            <div className="flex justify-end gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                disabled={bootstrap.status === 'installing'}
+                onClick={() => setBootstrap(null)}
+              >
+                Cancel
+              </Button>
+              <Button disabled={bootstrap.status === 'installing'}>
+                {bootstrap.status === 'installing' ? (
+                  <Loader2 size={13} className="animate-spin" />
+                ) : null}
+                Install key
+              </Button>
+            </div>
+          </form>
+        </div>
+      )}
     </div>
   )
+}
+
+function savedHostFromDraft(id: string, draft: HostDraft): SavedHost {
+  return {
+    id,
+    name: draft.name,
+    hostname: draft.hostname,
+    port: draft.port || '22',
+    username: draft.username,
+  }
+}
+
+async function testAttachedKey(host: SavedHost, identity: IdentityItem): Promise<boolean> {
+  const auth = await authForIdentity(identity)
+  if (auth.kind !== 'private-key') {
+    return false
+  }
+
+  try {
+    const { invoke } = await tauriCore()
+    const response = await invoke<SshKeyTestResponse>('ssh_key_test', {
+      request: {
+        host: host.hostname,
+        port: sshPort(host.port),
+        username: host.username,
+        privateKeyPem: Array.from(auth.privateKeyPem),
+      },
+    })
+    return response.works
+  } finally {
+    auth.privateKeyPem.fill(0)
+  }
+}
+
+async function installAttachedKey(
+  host: SavedHost,
+  identity: IdentityItem,
+  password: string,
+): Promise<void> {
+  const auth = await authForIdentity(identity)
+  if (auth.kind !== 'private-key') {
+    throw new Error('The selected identity is not a private key.')
+  }
+  if (auth.publicKey === undefined || auth.publicKey === '') {
+    auth.privateKeyPem.fill(0)
+    throw new Error('The selected identity does not have an authorized_keys public key.')
+  }
+
+  const passwordBytes = passwordEncoder.encode(password)
+  try {
+    auth.privateKeyPem.fill(0)
+    const { invoke } = await tauriCore()
+    await invoke('ssh_key_install', {
+      request: {
+        host: host.hostname,
+        port: sshPort(host.port),
+        username: host.username,
+        publicKey: auth.publicKey,
+        password: Array.from(passwordBytes),
+      },
+    })
+  } finally {
+    passwordBytes.fill(0)
+  }
+}
+
+async function tauriCore(): Promise<TauriCore> {
+  return import('@tauri-apps/api/core') as Promise<TauriCore>
+}
+
+function sshPort(value: string): number {
+  const parsed = Number.parseInt(value || '22', 10)
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : 22
 }

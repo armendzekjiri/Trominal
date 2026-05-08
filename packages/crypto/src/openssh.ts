@@ -73,6 +73,45 @@ export async function rsaPublicJwkToAuthorizedKey(
   return `${RSA_KEY_TYPE} ${await toBase64(publicBlob)} ${comment}`.trim()
 }
 
+/** Convert an RSA private JWK into a traditional PKCS#1 PEM key accepted by OpenSSH. */
+export async function rsaPrivateJwkToPem(jwk: JsonWebKey): Promise<string> {
+  if (
+    jwk.kty !== 'RSA' ||
+    jwk.n === undefined ||
+    jwk.e === undefined ||
+    jwk.d === undefined ||
+    jwk.p === undefined ||
+    jwk.q === undefined ||
+    jwk.dp === undefined ||
+    jwk.dq === undefined ||
+    jwk.qi === undefined
+  ) {
+    throw new Error('RSA private key export requires an RSA private JWK with CRT parameters.')
+  }
+
+  if (jwk.oth !== undefined && jwk.oth.length > 0) {
+    throw new Error('RSA private key export does not support multi-prime RSA keys.')
+  }
+
+  const sequence = derSequence([
+    derInteger(new Uint8Array([0])),
+    derInteger(base64UrlToBytes(jwk.n)),
+    derInteger(base64UrlToBytes(jwk.e)),
+    derInteger(base64UrlToBytes(jwk.d)),
+    derInteger(base64UrlToBytes(jwk.p)),
+    derInteger(base64UrlToBytes(jwk.q)),
+    derInteger(base64UrlToBytes(jwk.dp)),
+    derInteger(base64UrlToBytes(jwk.dq)),
+    derInteger(base64UrlToBytes(jwk.qi)),
+  ])
+
+  return [
+    '-----BEGIN RSA PRIVATE KEY-----',
+    wrapBase64(await toBase64(sequence), 64),
+    '-----END RSA PRIVATE KEY-----',
+  ].join('\n')
+}
+
 function sshString(value: string | Uint8Array): Uint8Array {
   const bytes = typeof value === 'string' ? encoder.encode(value) : value
   return concat([uint32(bytes.length), bytes])
@@ -133,6 +172,43 @@ function padToBlockSize(bytes: Uint8Array, blockSize: number): Uint8Array {
   return concat([bytes, padding])
 }
 
-function wrapBase64(value: string): string {
-  return value.match(/.{1,70}/g)?.join('\n') ?? value
+function derSequence(parts: Uint8Array[]): Uint8Array {
+  return derValue(0x30, concat(parts))
+}
+
+function derInteger(bytes: Uint8Array): Uint8Array {
+  const normalized = trimLeadingZeros(bytes)
+  const unsigned =
+    normalized.length > 0 && (normalized[0] & 0x80) !== 0
+      ? concat([new Uint8Array([0]), normalized])
+      : normalized
+
+  return derValue(0x02, unsigned)
+}
+
+function derValue(tag: number, value: Uint8Array): Uint8Array {
+  return concat([new Uint8Array([tag]), derLength(value.length), value])
+}
+
+function derLength(length: number): Uint8Array {
+  if (length < 0) {
+    throw new Error('DER length cannot be negative.')
+  }
+
+  if (length < 0x80) {
+    return new Uint8Array([length])
+  }
+
+  const bytes: number[] = []
+  let remaining = length
+  while (remaining > 0) {
+    bytes.unshift(remaining & 0xff)
+    remaining = Math.floor(remaining / 256)
+  }
+
+  return new Uint8Array([0x80 | bytes.length, ...bytes])
+}
+
+function wrapBase64(value: string, lineLength = 70): string {
+  return value.match(new RegExp(`.{1,${lineLength}}`, 'g'))?.join('\n') ?? value
 }

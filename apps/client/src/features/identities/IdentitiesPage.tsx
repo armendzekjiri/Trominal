@@ -8,6 +8,7 @@ import { type IdentityInput, type IdentityItem } from '@/features/vault/model'
 import {
   ed25519KeyPairToOpenSsh,
   generateEd25519KeyPair,
+  rsaPrivateJwkToPem,
   rsaPublicJwkToAuthorizedKey,
 } from '@trominal/crypto'
 
@@ -26,15 +27,6 @@ function identityToInput(identity: IdentityItem): IdentityInput {
     publicKey: identity.publicKey,
     privateKey: identity.privateKey,
   }
-}
-
-function pem(label: string, bytes: ArrayBuffer): string {
-  const binary = String.fromCharCode(...new Uint8Array(bytes))
-  const base64 =
-    btoa(binary)
-      .match(/.{1,64}/g)
-      ?.join('\n') ?? ''
-  return `-----BEGIN ${label}-----\n${base64}\n-----END ${label}-----`
 }
 
 export function IdentitiesPage() {
@@ -73,12 +65,12 @@ export function IdentitiesPage() {
       ['sign', 'verify'],
     )
     const publicJwk = await crypto.subtle.exportKey('jwk', pair.publicKey)
-    const privateKey = await crypto.subtle.exportKey('pkcs8', pair.privateKey)
+    const privateJwk = await crypto.subtle.exportKey('jwk', pair.privateKey)
     setDraft({
       ...draft,
       keyType: 'rsa-4096',
       publicKey: await rsaPublicJwkToAuthorizedKey(publicJwk, draft.name || 'trominal'),
-      privateKey: pem('PRIVATE KEY', privateKey),
+      privateKey: await rsaPrivateJwkToPem(privateJwk),
     })
   }
 
