@@ -52,6 +52,17 @@ export type IdentityItem = {
   updatedAt: string | null
 }
 
+export type HostCredentialItem = {
+  id: string
+  hostId: string | null
+  identityId: string | null
+  label: string
+  username: string
+  password: string
+  privateKeyPassphrase: string
+  updatedAt: string | null
+}
+
 export type HostInput = {
   id?: string
   groupId: string | null
@@ -84,6 +95,16 @@ export type IdentityInput = {
   keyType: string
   publicKey: string
   privateKey: string
+}
+
+export type HostCredentialInput = {
+  id?: string
+  hostId: string | null
+  identityId: string | null
+  label: string
+  username: string
+  password: string
+  privateKeyPassphrase: string
 }
 
 function stringField(record: VaultRecord, field: string): string | null {
@@ -197,6 +218,27 @@ export async function decryptIdentity(record: VaultRecord, key: Uint8Array): Pro
   }
 }
 
+export async function decryptHostCredential(
+  record: VaultRecord,
+  key: Uint8Array,
+): Promise<HostCredentialItem> {
+  return {
+    id: record.id,
+    hostId: relationField(record, 'host_id'),
+    identityId: relationField(record, 'identity_id'),
+    label: await decryptText(record, key, 'host-credentials', 'label'),
+    username: await decryptText(record, key, 'host-credentials', 'username'),
+    password: await decryptText(record, key, 'host-credentials', 'password'),
+    privateKeyPassphrase: await decryptText(
+      record,
+      key,
+      'host-credentials',
+      'private_key_passphrase',
+    ),
+    updatedAt: record.updated_at,
+  }
+}
+
 export async function encryptHostInput(id: string, key: Uint8Array, input: HostInput) {
   const payload: VaultRecordPayload = { id, group_id: input.groupId }
   await encryptText(payload, key, 'hosts', id, 'name', input.name, false)
@@ -205,6 +247,30 @@ export async function encryptHostInput(id: string, key: Uint8Array, input: HostI
   await encryptText(payload, key, 'hosts', id, 'username', input.username)
   await encryptText(payload, key, 'hosts', id, 'tags', JSON.stringify(input.tags))
   await encryptText(payload, key, 'hosts', id, 'color', input.color)
+  return payload
+}
+
+export async function encryptHostCredentialInput(
+  id: string,
+  key: Uint8Array,
+  input: HostCredentialInput,
+) {
+  const payload: VaultRecordPayload = {
+    id,
+    host_id: input.hostId,
+    identity_id: input.identityId,
+  }
+  await encryptText(payload, key, 'host-credentials', id, 'label', input.label, false)
+  await encryptText(payload, key, 'host-credentials', id, 'username', input.username)
+  await encryptText(payload, key, 'host-credentials', id, 'password', input.password)
+  await encryptText(
+    payload,
+    key,
+    'host-credentials',
+    id,
+    'private_key_passphrase',
+    input.privateKeyPassphrase,
+  )
   return payload
 }
 

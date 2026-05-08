@@ -2,8 +2,13 @@ use portable_pty::{native_pty_system, Child, CommandBuilder, MasterPty, PtySize}
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::env;
+use std::fs::{self, OpenOptions};
 use std::io::{Read, Write};
+#[cfg(unix)]
+use std::os::unix::fs::OpenOptionsExt;
+use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
+use std::time::{SystemTime, UNIX_EPOCH};
 use tauri::{AppHandle, Emitter, State};
 use thiserror::Error;
 
@@ -16,6 +21,7 @@ struct LocalShellSession {
     master: Box<dyn MasterPty + Send>,
     writer: Box<dyn Write + Send>,
     child: Box<dyn Child + Send + Sync>,
+    temp_paths: Vec<PathBuf>,
 }
 
 #[derive(Debug, Error)]
@@ -50,6 +56,11 @@ struct PtyEvents {
     closed: &'static str,
 }
 
+struct PtyCommand {
+    command: CommandBuilder,
+    temp_paths: Vec<PathBuf>,
+}
+
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SshConnectRequest {
@@ -59,6 +70,8 @@ pub struct SshConnectRequest {
     username: String,
     cols: u16,
     rows: u16,
+    private_key_pem: Option<Vec<u8>>,
+    public_key: Option<String>,
 }
 
 #[tauri::command]
@@ -74,6 +87,7 @@ pub fn local_shell_open(
         state,
         session_id,
         shell_command(),
+        Vec::new(),
         PtyGeometry { cols, rows },
         PtyEvents {
             data: "local-shell://data",
@@ -88,11 +102,22 @@ pub fn ssh_connect(
     state: State<'_, Arc<LocalShellState>>,
     request: SshConnectRequest,
 ) -> Result<String, String> {
+    let session_id = require_session_id(request.session_id)?;
+    let pty_command = ssh_command(
+        &session_id,
+        request.host,
+        request.port,
+        request.username,
+        request.private_key_pem,
+        request.public_key,
+    )?;
+
     open_pty_session(
         app,
         state,
-        request.session_id,
-        ssh_command(request.host, request.port, request.username)?,
+        session_id,
+        pty_command.command,
+        pty_command.temp_paths,
         PtyGeometry {
             cols: request.cols,
             rows: request.rows,
@@ -109,6 +134,7 @@ fn open_pty_session(
     state: State<'_, Arc<LocalShellState>>,
     session_id: String,
     command: CommandBuilder,
+    temp_paths: Vec<PathBuf>,
     geometry: PtyGeometry,
     events: PtyEvents,
 ) -> Result<String, String> {
@@ -123,38 +149,52 @@ fn open_pty_session(
             pixel_width: 0,
             pixel_height: 0,
         })
-        .map_err(|err| LocalShellError::Operation(err.to_string()))
-        .map_err(|err| err.to_string())?;
+        .map_err(|err| {
+            cleanup_temp_paths(&temp_paths);
+            LocalShellError::Operation(err.to_string()).to_string()
+        })?;
 
-    let child = pair
-        .slave
-        .spawn_command(command)
-        .map_err(|err| LocalShellError::Operation(err.to_string()))
-        .map_err(|err| err.to_string())?;
-    let reader = pair
-        .master
-        .try_clone_reader()
-        .map_err(|err| LocalShellError::Operation(err.to_string()))
-        .map_err(|err| err.to_string())?;
-    let writer = pair
-        .master
-        .take_writer()
-        .map_err(|err| LocalShellError::Operation(err.to_string()))
-        .map_err(|err| err.to_string())?;
+    let mut child = pair.slave.spawn_command(command).map_err(|err| {
+        cleanup_temp_paths(&temp_paths);
+        LocalShellError::Operation(err.to_string()).to_string()
+    })?;
+
+    let reader = match pair.master.try_clone_reader() {
+        Ok(reader) => reader,
+        Err(err) => {
+            let _ = child.kill();
+            cleanup_temp_paths(&temp_paths);
+            return Err(LocalShellError::Operation(err.to_string()).to_string());
+        }
+    };
+    let writer = match pair.master.take_writer() {
+        Ok(writer) => writer,
+        Err(err) => {
+            let _ = child.kill();
+            cleanup_temp_paths(&temp_paths);
+            return Err(LocalShellError::Operation(err.to_string()).to_string());
+        }
+    };
     let state_for_reader = Arc::clone(state.inner());
 
-    state
-        .sessions
-        .lock()
-        .map_err(|_| LocalShellError::Locked.to_string())?
-        .insert(
-            id.clone(),
-            LocalShellSession {
-                master: pair.master,
-                writer,
-                child,
-            },
-        );
+    let mut sessions = match state.sessions.lock() {
+        Ok(sessions) => sessions,
+        Err(_) => {
+            let _ = child.kill();
+            cleanup_temp_paths(&temp_paths);
+            return Err(LocalShellError::Locked.to_string());
+        }
+    };
+    sessions.insert(
+        id.clone(),
+        LocalShellSession {
+            master: pair.master,
+            writer,
+            child,
+            temp_paths,
+        },
+    );
+    drop(sessions);
 
     spawn_reader(app, state_for_reader, id.clone(), reader, events);
 
@@ -267,11 +307,13 @@ fn close_session(state: State<'_, Arc<LocalShellState>>, session_id: String) -> 
         .remove(&session_id);
 
     if let Some(mut session) = session {
-        session
+        let kill_result = session
             .child
             .kill()
             .map_err(|err| LocalShellError::Operation(err.to_string()))
-            .map_err(|err| err.to_string())?;
+            .map_err(|err| err.to_string());
+        cleanup_temp_paths(&session.temp_paths);
+        kill_result?;
     }
 
     Ok(())
@@ -325,7 +367,15 @@ fn emit_closed(app: &AppHandle, event: &'static str, session_id: &str, reason: S
 
 fn remove_session(state: &LocalShellState, session_id: &str) {
     if let Ok(mut sessions) = state.sessions.lock() {
-        sessions.remove(session_id);
+        if let Some(session) = sessions.remove(session_id) {
+            cleanup_temp_paths(&session.temp_paths);
+        }
+    }
+}
+
+fn cleanup_temp_paths(paths: &[PathBuf]) {
+    for path in paths {
+        let _ = fs::remove_file(path);
     }
 }
 
@@ -344,9 +394,17 @@ fn shell_command() -> CommandBuilder {
     command
 }
 
-fn ssh_command(host: String, port: u16, username: String) -> Result<CommandBuilder, String> {
+fn ssh_command(
+    session_id: &str,
+    host: String,
+    port: u16,
+    username: String,
+    private_key_pem: Option<Vec<u8>>,
+    public_key: Option<String>,
+) -> Result<PtyCommand, String> {
     let host = host.trim();
     let username = username.trim();
+    let mut temp_paths = Vec::new();
 
     if host.is_empty() {
         return Err(LocalShellError::Operation("host is required".to_string()).to_string());
@@ -360,6 +418,28 @@ fn ssh_command(host: String, port: u16, username: String) -> Result<CommandBuild
     let port = port.max(1).to_string();
 
     let mut command = CommandBuilder::new("ssh");
+    if let Some(mut private_key_pem) = private_key_pem {
+        let key_path = write_temp_ssh_file(session_id, "key", &private_key_pem);
+        private_key_pem.fill(0);
+        let key_path = key_path?;
+        let config_path = match write_temp_ssh_file(session_id, "config", &[]) {
+            Ok(path) => path,
+            Err(err) => {
+                cleanup_temp_paths(std::slice::from_ref(&key_path));
+                return Err(err);
+            }
+        };
+        command.arg("-F");
+        command.arg(path_to_arg(&config_path));
+        command.arg("-i");
+        command.arg(path_to_arg(&key_path));
+        command.arg("-o");
+        command.arg("IdentitiesOnly=yes");
+        command.arg("-o");
+        command.arg("IdentityAgent=none");
+        temp_paths.push(key_path);
+        temp_paths.push(config_path);
+    }
     command.arg("-tt");
     command.arg("-p");
     command.arg(port);
@@ -368,9 +448,90 @@ fn ssh_command(host: String, port: u16, username: String) -> Result<CommandBuild
     command.arg("-o");
     command.arg("PreferredAuthentications=publickey,password,keyboard-interactive");
     command.arg(destination);
+    if let Some(public_key) = public_key_install_value(public_key) {
+        command.arg(install_public_key_command(&public_key));
+    }
     command.env("TERM", "xterm-256color");
 
-    Ok(command)
+    Ok(PtyCommand {
+        command,
+        temp_paths,
+    })
+}
+
+fn public_key_install_value(public_key: Option<String>) -> Option<String> {
+    let public_key = public_key?;
+    let public_key = public_key.trim();
+    if public_key.is_empty() {
+        return None;
+    }
+    if public_key.contains('\r') || public_key.contains('\n') {
+        return None;
+    }
+
+    let mut parts = public_key.split_whitespace();
+    let key_type = parts.next()?;
+    parts.next()?;
+    if !is_authorized_key_type(key_type) {
+        return None;
+    }
+
+    Some(public_key.to_string())
+}
+
+fn is_authorized_key_type(key_type: &str) -> bool {
+    key_type.starts_with("ssh-") || key_type.starts_with("ecdsa-") || key_type.starts_with("sk-")
+}
+
+fn install_public_key_command(public_key: &str) -> String {
+    let public_key = shell_quote(public_key);
+    format!(
+        "umask 077; mkdir -p \"$HOME/.ssh\"; touch \"$HOME/.ssh/authorized_keys\"; grep -qxF {public_key} \"$HOME/.ssh/authorized_keys\" || printf '%s\\n' {public_key} >> \"$HOME/.ssh/authorized_keys\"; chmod 700 \"$HOME/.ssh\"; chmod 600 \"$HOME/.ssh/authorized_keys\"; exec \"${{SHELL:-/bin/sh}}\" -l"
+    )
+}
+
+fn shell_quote(value: &str) -> String {
+    format!("'{}'", value.replace('\'', "'\\''"))
+}
+
+fn write_temp_ssh_file(session_id: &str, suffix: &str, contents: &[u8]) -> Result<PathBuf, String> {
+    let safe_id = sanitize_session_id(session_id)?;
+    let timestamp = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|duration| duration.as_nanos())
+        .unwrap_or(0);
+    let path = env::temp_dir().join(format!("trominal-{safe_id}-{suffix}-{timestamp}"));
+    let mut options = OpenOptions::new();
+    options.write(true).create_new(true);
+    #[cfg(unix)]
+    options.mode(0o600);
+
+    let mut file = options
+        .open(&path)
+        .map_err(|err| LocalShellError::Operation(err.to_string()).to_string())?;
+    if let Err(err) = file.write_all(contents) {
+        let _ = fs::remove_file(&path);
+        return Err(LocalShellError::Operation(err.to_string()).to_string());
+    }
+
+    Ok(path)
+}
+
+fn sanitize_session_id(session_id: &str) -> Result<String, String> {
+    let safe: String = session_id
+        .chars()
+        .filter(|ch| ch.is_ascii_alphanumeric() || *ch == '-' || *ch == '_')
+        .collect();
+
+    if safe.is_empty() {
+        return Err(LocalShellError::Operation("session id is required".to_string()).to_string());
+    }
+
+    Ok(safe)
+}
+
+fn path_to_arg(path: &Path) -> String {
+    path.to_string_lossy().into_owned()
 }
 
 #[cfg(windows)]

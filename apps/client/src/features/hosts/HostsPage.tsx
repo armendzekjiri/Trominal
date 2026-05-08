@@ -1,4 +1,15 @@
-import { Folder, Loader2, Monitor, Plus, Search, Server, Tag, Terminal, Trash2 } from 'lucide-react'
+import {
+  Folder,
+  KeyRound,
+  Loader2,
+  Monitor,
+  Plus,
+  Search,
+  Server,
+  Tag,
+  Terminal,
+  Trash2,
+} from 'lucide-react'
 import { useState, type FormEvent } from 'react'
 import { Link } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
@@ -6,14 +17,28 @@ import { TextInput } from '@/components/ui/text-input'
 import { cn } from '@/lib/cn'
 import {
   useDeleteHost,
+  useDeleteHostCredential,
   useGroups,
+  useHostCredentials,
   useHosts,
+  useIdentities,
   useSaveGroup,
   useSaveHost,
+  useSaveHostCredential,
 } from '@/features/vault/hooks'
-import { tagsFromInput, type HostInput, type HostItem } from '@/features/vault/model'
+import {
+  tagsFromInput,
+  type HostCredentialItem,
+  type HostInput,
+  type HostItem,
+} from '@/features/vault/model'
 
-const EMPTY_HOST: HostInput = {
+type HostDraft = HostInput & {
+  credentialId?: string
+  identityId: string | null
+}
+
+const EMPTY_HOST: HostDraft = {
   groupId: null,
   name: '',
   hostname: '',
@@ -21,9 +46,10 @@ const EMPTY_HOST: HostInput = {
   username: '',
   tags: [],
   color: '#7dd3a0',
+  identityId: null,
 }
 
-function hostToInput(host: HostItem): HostInput {
+function hostToInput(host: HostItem, credential: HostCredentialItem | null): HostDraft {
   return {
     id: host.id,
     groupId: host.groupId,
@@ -33,20 +59,28 @@ function hostToInput(host: HostItem): HostInput {
     username: host.username,
     tags: host.tags,
     color: host.color || '#7dd3a0',
+    credentialId: credential?.id,
+    identityId: credential?.identityId ?? null,
   }
 }
 
 export function HostsPage() {
   const hostsQuery = useHosts()
   const groupsQuery = useGroups()
+  const identitiesQuery = useIdentities()
+  const hostCredentialsQuery = useHostCredentials()
   const saveHost = useSaveHost()
   const deleteHost = useDeleteHost()
+  const saveHostCredential = useSaveHostCredential()
+  const deleteHostCredential = useDeleteHostCredential()
   const saveGroup = useSaveGroup()
   const hosts = hostsQuery.data ?? []
   const groups = groupsQuery.data ?? []
+  const identities = identitiesQuery.data ?? []
+  const hostCredentials = hostCredentialsQuery.data ?? []
   const [search, setSearch] = useState('')
   const [groupFilter, setGroupFilter] = useState<string | null>(null)
-  const [draft, setDraft] = useState<HostInput>(EMPTY_HOST)
+  const [draft, setDraft] = useState<HostDraft>(EMPTY_HOST)
   const [groupName, setGroupName] = useState('')
 
   const visibleHosts = hosts.filter((host) => {
@@ -62,9 +96,38 @@ export function HostsPage() {
   const selected =
     draft.id === undefined ? null : (hosts.find((host) => host.id === draft.id) ?? null)
 
+  const selectedCredential =
+    selected === null
+      ? null
+      : (hostCredentials.find((credential) => credential.hostId === selected.id) ?? null)
+
   async function submitHost(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
-    await saveHost.mutateAsync(draft)
+    const host = await saveHost.mutateAsync({
+      id: draft.id,
+      groupId: draft.groupId,
+      name: draft.name,
+      hostname: draft.hostname,
+      port: draft.port,
+      username: draft.username,
+      tags: draft.tags,
+      color: draft.color,
+    })
+
+    if (draft.identityId !== null) {
+      await saveHostCredential.mutateAsync({
+        id: draft.credentialId,
+        hostId: host.id,
+        identityId: draft.identityId,
+        label: draft.name || draft.hostname,
+        username: '',
+        password: '',
+        privateKeyPassphrase: '',
+      })
+    } else if (draft.credentialId !== undefined) {
+      await deleteHostCredential.mutateAsync(draft.credentialId)
+    }
+
     setDraft(EMPTY_HOST)
   }
 
@@ -139,7 +202,7 @@ export function HostsPage() {
         </div>
 
         <div className="min-h-0 flex-1 overflow-auto p-2">
-          {hostsQuery.isLoading ? (
+          {hostsQuery.isLoading || hostCredentialsQuery.isLoading ? (
             <div className="flex items-center gap-2 px-2 py-3 text-[12px] text-fg-faint">
               <Loader2 size={13} className="animate-spin" />
               Loading vault
@@ -151,7 +214,14 @@ export function HostsPage() {
               <button
                 key={host.id}
                 type="button"
-                onClick={() => setDraft(hostToInput(host))}
+                onClick={() =>
+                  setDraft(
+                    hostToInput(
+                      host,
+                      hostCredentials.find((credential) => credential.hostId === host.id) ?? null,
+                    ),
+                  )
+                }
                 className={cn(
                   'mb-1 w-full rounded-md border-l-2 px-2 py-2 text-left',
                   selected?.id === host.id
@@ -169,6 +239,12 @@ export function HostsPage() {
                   {host.username ? `${host.username}@` : ''}
                   {host.hostname}:{host.port || '22'}
                 </div>
+                {hostCredentials.some((credential) => credential.hostId === host.id) && (
+                  <div className="mt-2 flex items-center gap-1 pl-5 font-mono text-[10px] text-accent">
+                    <KeyRound size={11} />
+                    <span>identity</span>
+                  </div>
+                )}
                 {host.tags.length > 0 && (
                   <div className="mt-2 flex flex-wrap gap-1 pl-5">
                     {host.tags.map((tag) => (
@@ -263,6 +339,29 @@ export function HostsPage() {
                 ))}
               </select>
             </label>
+            <label className="flex flex-col gap-1.5">
+              <span className="text-[11px] font-medium uppercase tracking-wide text-fg-muted">
+                SSH identity
+              </span>
+              <select
+                value={draft.identityId ?? ''}
+                onChange={(event) =>
+                  setDraft({
+                    ...draft,
+                    credentialId: selectedCredential?.id ?? draft.credentialId,
+                    identityId: event.target.value === '' ? null : event.target.value,
+                  })
+                }
+                className="h-10 rounded-md border border-border-strong bg-surface px-3 text-[13px] outline-none focus:border-accent"
+              >
+                <option value="">Prompt / local SSH defaults</option>
+                {identities.map((identity) => (
+                  <option key={identity.id} value={identity.id}>
+                    {identity.name || identity.keyType}
+                  </option>
+                ))}
+              </select>
+            </label>
             <TextInput
               label="Color"
               value={draft.color}
@@ -280,7 +379,9 @@ export function HostsPage() {
           />
           <div className="flex gap-2">
             <Button disabled={saveHost.isPending}>
-              {saveHost.isPending ? <Loader2 size={13} className="animate-spin" /> : null}
+              {saveHost.isPending || saveHostCredential.isPending ? (
+                <Loader2 size={13} className="animate-spin" />
+              ) : null}
               Save encrypted host
             </Button>
             {draft.id !== undefined && (
