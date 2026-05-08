@@ -23,6 +23,17 @@ Security-relevant changes are tagged `security:`.
   authorization, final-owner protection, audit logs, and member-removal key
   rotation validation.
 
+### Added — Phase 8B: Team-key crypto helpers
+
+- `@trominal/crypto` team-key helpers for generating 32-byte team keys,
+  wrapping them for X25519 member public keys, unwrapping with member keypairs,
+  and binding wrapped keys to team/member/key-version associated data.
+- Wrapped team keys use XChaCha20-Poly1305 for the team key and libsodium
+  sealed boxes for the random wrapping key, keeping the backend storage shape
+  as ciphertext plus nonce.
+- Six Vitest cases cover round-trip unwrap, wrong-key failure, AD mismatch,
+  fresh wrapping material, and key length validation.
+
 ### Added — Phase 7B: AI inside the terminal & snippet generation
 
 - **Inline command suggestions** in the terminal: `Ctrl+Space` triggers the

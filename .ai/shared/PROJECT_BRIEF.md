@@ -645,7 +645,14 @@ Tunnels and SFTP are separate product areas because they serve different workflo
 - Team role rules are enforced in `TeamService`: owners/admins can manage members, only owners can create another owner or delete a team, and the final owner cannot be demoted or removed.
 - Removing a member requires the client to submit a new wrapped team key for every remaining member. The server never sees the plaintext team key and only stores wrapped ciphertexts.
 - Every state-changing team action writes an audit log entry. `TeamsTest` covers encrypted-at-rest assertions, membership authorization, owner preservation, and rotation validation.
-- Still pending in later Phase 8 slices: client team switcher/resource scoping, TS crypto team-key wrap/unwrap helpers, resource `team_id` scoping, and Filament team management.
+
+#### Phase 8B implementation notes
+
+- `packages/crypto` provides team-key helpers: `generateTeamKey`, `wrapTeamKey`, `unwrapTeamKey`, and `makeTeamKeyAd`.
+- Team keys are 32-byte symmetric keys. Wrapping uses a random 32-byte wrapping key, XChaCha20-Poly1305 with AD `trominal:v1:team_key:<team_id>:member:<member_id>:v<key_version>`, and libsodium sealed boxes to encrypt the wrapping key for the member's X25519 public key.
+- The server-storable shape stays `{ ciphertext, nonce }`; `ciphertext` contains a versioned payload with the sealed wrapping key plus encrypted team key, while `nonce` is the XChaCha20 nonce.
+- Tests cover round-trip unwrap, wrong-member failure, AD/key-version mismatch failure, fresh nonce/material generation, and team-key length.
+- Still pending in later Phase 8 slices: client team switcher/resource scoping, resource `team_id` scoping, and Filament team management.
 
 ### Phase 9 — Polish, Docs, Release
 
