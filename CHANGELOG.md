@@ -9,6 +9,22 @@ Security-relevant changes are tagged `security:`.
 
 ## [Unreleased]
 
+### Added — Phase 6B: SFTP
+
+- Dual-pane SFTP browser at `/sftp` matching `.ai/design/screens-tools.jsx`:
+  local file pane on the left, remote pane on the right, transfer queue
+  pinned to the bottom.
+- Tauri commands `sftp_list / sftp_mkdir / sftp_remove / sftp_rename /
+sftp_upload / sftp_download / sftp_cancel / sftp_local_list /
+sftp_local_home`. Implementation shells out to the system `sftp` binary
+  in batch mode (`sftp -b -`) so the same OpenSSH config / auth chain that
+  Phase 5 negotiates is reused — no parallel Rust SSH library introduced.
+- Transfer queue with started/done/error events streamed over
+  `sftp://transfer`. Cancelling a transfer kills the in-flight `sftp`
+  child process.
+- Web build shows a "Desktop only for v0.1" placeholder; the web SFTP
+  proxy lands alongside the wider browser SSH stack in a follow-up phase.
+
 ### Added — Phase 4: client foundation
 
 - `@trominal/crypto` package with libsodium-backed Argon2id KDF and

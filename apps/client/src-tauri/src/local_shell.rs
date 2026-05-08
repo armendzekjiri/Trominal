@@ -544,7 +544,7 @@ fn remove_session(state: &LocalShellState, session_id: &str) {
     }
 }
 
-fn cleanup_temp_paths(paths: &[PathBuf]) {
+pub(crate) fn cleanup_temp_paths(paths: &[PathBuf]) {
     for path in paths {
         let _ = fs::remove_file(path);
     }
@@ -880,7 +880,7 @@ fn rsa_key_compat_options(command: &mut CommandBuilder) {
     command.arg("HostkeyAlgorithms=+ssh-rsa");
 }
 
-fn rsa_key_compat_process_options(command: &mut ProcessCommand) {
+pub(crate) fn rsa_key_compat_process_options(command: &mut ProcessCommand) {
     command.arg("-o");
     command.arg("PubkeyAcceptedAlgorithms=+ssh-rsa");
     command.arg("-o");
@@ -964,7 +964,7 @@ fn valid_port(port: u16) -> Result<u16, String> {
     Ok(port)
 }
 
-fn read_child_stderr(child: &mut ProcessChild) -> String {
+pub(crate) fn read_child_stderr(child: &mut ProcessChild) -> String {
     let mut output = String::new();
     if let Some(mut stderr) = child.stderr.take() {
         let _ = stderr.read_to_string(&mut output);
@@ -1079,12 +1079,12 @@ fn needs_confirmation(output: &str) -> bool {
         .contains("are you sure you want to continue connecting")
 }
 
-fn is_rsa_private_key(contents: &[u8]) -> bool {
+pub(crate) fn is_rsa_private_key(contents: &[u8]) -> bool {
     let text = String::from_utf8_lossy(contents);
     text.contains("-----BEGIN RSA PRIVATE KEY-----") || text.contains("-----BEGIN PRIVATE KEY-----")
 }
 
-fn user_safe_ssh_error(output: &str, password: &[u8]) -> String {
+pub(crate) fn user_safe_ssh_error(output: &str, password: &[u8]) -> String {
     let details = user_safe_ssh_output(output, password);
     if details.is_empty() {
         "SSH key install failed".to_string()
@@ -1093,7 +1093,7 @@ fn user_safe_ssh_error(output: &str, password: &[u8]) -> String {
     }
 }
 
-fn user_safe_ssh_output(output: &str, password: &[u8]) -> String {
+pub(crate) fn user_safe_ssh_output(output: &str, password: &[u8]) -> String {
     let password = std::str::from_utf8(password)
         .ok()
         .filter(|value| !value.is_empty());
@@ -1122,7 +1122,7 @@ fn strip_control_chars(value: &str) -> String {
         .to_string()
 }
 
-fn destination(host: &str, username: &str) -> Result<String, String> {
+pub(crate) fn destination(host: &str, username: &str) -> Result<String, String> {
     let host = host.trim();
     let username = username.trim();
     if host.is_empty() {
@@ -1180,7 +1180,11 @@ fn shell_quote(value: &str) -> String {
     format!("'{}'", value.replace('\'', "'\\''"))
 }
 
-fn write_temp_ssh_file(session_id: &str, suffix: &str, contents: &[u8]) -> Result<PathBuf, String> {
+pub(crate) fn write_temp_ssh_file(
+    session_id: &str,
+    suffix: &str,
+    contents: &[u8],
+) -> Result<PathBuf, String> {
     let safe_id = sanitize_session_id(session_id)?;
     let timestamp = SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -1216,7 +1220,7 @@ fn sanitize_session_id(session_id: &str) -> Result<String, String> {
     Ok(safe)
 }
 
-fn path_to_arg(path: &Path) -> String {
+pub(crate) fn path_to_arg(path: &Path) -> String {
     path.to_string_lossy().into_owned()
 }
 
