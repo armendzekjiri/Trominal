@@ -68,6 +68,9 @@ export class NativeSshSession implements SshSession {
       if (privateKeyPem !== undefined) {
         request.privateKeyPem = privateKeyPem
       }
+      if (this.options.auth?.kind === 'private-key' && this.options.auth.publicKey !== undefined) {
+        request.publicKey = this.options.auth.publicKey
+      }
 
       await invoke<string>('ssh_connect', {
         request,

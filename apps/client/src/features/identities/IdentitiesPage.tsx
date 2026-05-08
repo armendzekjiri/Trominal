@@ -5,7 +5,11 @@ import { TextInput } from '@/components/ui/text-input'
 import { cn } from '@/lib/cn'
 import { useDeleteIdentity, useIdentities, useSaveIdentity } from '@/features/vault/hooks'
 import { type IdentityInput, type IdentityItem } from '@/features/vault/model'
-import { ed25519KeyPairToOpenSsh, generateEd25519KeyPair } from '@trominal/crypto'
+import {
+  ed25519KeyPairToOpenSsh,
+  generateEd25519KeyPair,
+  rsaPublicJwkToAuthorizedKey,
+} from '@trominal/crypto'
 
 const EMPTY_IDENTITY: IdentityInput = {
   name: '',
@@ -68,12 +72,12 @@ export function IdentitiesPage() {
       true,
       ['sign', 'verify'],
     )
-    const publicKey = await crypto.subtle.exportKey('spki', pair.publicKey)
+    const publicJwk = await crypto.subtle.exportKey('jwk', pair.publicKey)
     const privateKey = await crypto.subtle.exportKey('pkcs8', pair.privateKey)
     setDraft({
       ...draft,
       keyType: 'rsa-4096',
-      publicKey: pem('PUBLIC KEY', publicKey),
+      publicKey: await rsaPublicJwkToAuthorizedKey(publicJwk, draft.name || 'trominal'),
       privateKey: pem('PRIVATE KEY', privateKey),
     })
   }

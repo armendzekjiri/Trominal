@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { fromBase64 } from '../src/encoding'
 import { generateEd25519KeyPair } from '../src/keys'
-import { ed25519KeyPairToOpenSsh } from '../src/openssh'
+import { ed25519KeyPairToOpenSsh, rsaPublicJwkToAuthorizedKey } from '../src/openssh'
 
 describe('OpenSSH key export', () => {
   it('exports Ed25519 keys in OpenSSH-compatible text formats', async () => {
@@ -26,6 +26,25 @@ describe('OpenSSH key export', () => {
         privateKey: new Uint8Array(64),
       }),
     ).rejects.toThrow(/32-byte public key/)
+  })
+
+  it('exports RSA public JWKs in authorized_keys format', async () => {
+    const pair = await crypto.subtle.generateKey(
+      {
+        name: 'RSASSA-PKCS1-v1_5',
+        modulusLength: 2048,
+        publicExponent: new Uint8Array([1, 0, 1]),
+        hash: 'SHA-256',
+      },
+      true,
+      ['sign', 'verify'],
+    )
+    const jwk = await crypto.subtle.exportKey('jwk', pair.publicKey)
+    const publicKey = await rsaPublicJwkToAuthorizedKey(jwk, 'rsa@example.test')
+
+    expect(publicKey).toMatch(/^ssh-rsa [A-Za-z0-9+/=]+ rsa@example\.test$/)
+    const publicBlob = await fromBase64(publicKey.split(' ')[1] ?? '')
+    expect(readSshString(publicBlob, 0).value).toBe('ssh-rsa')
   })
 })
 

@@ -323,35 +323,40 @@ async function authForHost(
     return undefined
   }
 
-  const privateKey = await normalizePrivateKey(identity)
+  const key = await normalizeIdentityKey(identity)
 
   return {
     kind: 'private-key',
-    privateKeyPem: keyEncoder.encode(privateKey),
+    privateKeyPem: keyEncoder.encode(key.privateKey),
+    publicKey: key.publicKey,
     passphrase: credential?.privateKeyPassphrase || undefined,
   }
 }
 
-async function normalizePrivateKey(identity: IdentityItem): Promise<string> {
+async function normalizeIdentityKey(identity: IdentityItem): Promise<{
+  privateKey: string
+  publicKey: string
+}> {
   const privateKey = identity.privateKey.trim()
 
   if (privateKey.startsWith('ed25519:') && identity.publicKey.startsWith('ed25519:')) {
     const publicKey = await fromBase64(identity.publicKey.slice('ed25519:'.length))
     const secretKey = await fromBase64(privateKey.slice('ed25519:'.length))
     try {
-      return (
-        await ed25519KeyPairToOpenSsh(
-          {
-            publicKey,
-            privateKey: secretKey,
-          },
-          identity.name || 'trominal',
-        )
-      ).privateKey
+      return await ed25519KeyPairToOpenSsh(
+        {
+          publicKey,
+          privateKey: secretKey,
+        },
+        identity.name || 'trominal',
+      )
     } finally {
       secretKey.fill(0)
     }
   }
 
-  return privateKey.endsWith('\n') ? privateKey : `${privateKey}\n`
+  return {
+    privateKey: privateKey.endsWith('\n') ? privateKey : `${privateKey}\n`,
+    publicKey: identity.publicKey.trim(),
+  }
 }

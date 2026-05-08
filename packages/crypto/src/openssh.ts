@@ -10,6 +10,7 @@ export type OpenSshKeyPair = {
 const encoder = new TextEncoder()
 const OPENSSH_AUTH_MAGIC = encoder.encode('openssh-key-v1\0')
 const ED25519_KEY_TYPE = 'ssh-ed25519'
+const RSA_KEY_TYPE = 'ssh-rsa'
 
 /** Convert a libsodium Ed25519 keypair into OpenSSH private and authorized_keys public text. */
 export async function ed25519KeyPairToOpenSsh(
@@ -54,9 +55,55 @@ export async function ed25519KeyPairToOpenSsh(
   return { publicKey, privateKey }
 }
 
+/** Convert an RSA public JWK into authorized_keys text. */
+export async function rsaPublicJwkToAuthorizedKey(
+  jwk: JsonWebKey,
+  comment = 'trominal',
+): Promise<string> {
+  if (jwk.kty !== 'RSA' || jwk.n === undefined || jwk.e === undefined) {
+    throw new Error('RSA OpenSSH export requires an RSA public JWK with n and e parameters.')
+  }
+
+  const publicBlob = concat([
+    sshString(RSA_KEY_TYPE),
+    sshMpint(base64UrlToBytes(jwk.e)),
+    sshMpint(base64UrlToBytes(jwk.n)),
+  ])
+
+  return `${RSA_KEY_TYPE} ${await toBase64(publicBlob)} ${comment}`.trim()
+}
+
 function sshString(value: string | Uint8Array): Uint8Array {
   const bytes = typeof value === 'string' ? encoder.encode(value) : value
   return concat([uint32(bytes.length), bytes])
+}
+
+function sshMpint(bytes: Uint8Array): Uint8Array {
+  const normalized = trimLeadingZeros(bytes)
+  if (normalized.length > 0 && (normalized[0] & 0x80) !== 0) {
+    return sshString(concat([new Uint8Array([0]), normalized]))
+  }
+
+  return sshString(normalized)
+}
+
+function trimLeadingZeros(bytes: Uint8Array): Uint8Array {
+  let offset = 0
+  while (offset < bytes.length - 1 && bytes[offset] === 0) {
+    offset += 1
+  }
+  return bytes.slice(offset)
+}
+
+function base64UrlToBytes(value: string): Uint8Array {
+  const base64 = value.replace(/-/g, '+').replace(/_/g, '/')
+  const padded = base64.padEnd(Math.ceil(base64.length / 4) * 4, '=')
+  const binary = atob(padded)
+  const bytes = new Uint8Array(binary.length)
+  for (let index = 0; index < binary.length; index += 1) {
+    bytes[index] = binary.charCodeAt(index)
+  }
+  return bytes
 }
 
 function uint32(value: number): Uint8Array {

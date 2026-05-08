@@ -8,6 +8,7 @@ export type SshAuth =
   | {
       kind: 'private-key'
       privateKeyPem: Uint8Array
+      publicKey?: string
       passphrase?: string
     }
 

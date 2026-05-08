@@ -71,6 +71,7 @@ pub struct SshConnectRequest {
     cols: u16,
     rows: u16,
     private_key_pem: Option<Vec<u8>>,
+    public_key: Option<String>,
 }
 
 #[tauri::command]
@@ -108,6 +109,7 @@ pub fn ssh_connect(
         request.port,
         request.username,
         request.private_key_pem,
+        request.public_key,
     )?;
 
     open_pty_session(
@@ -398,6 +400,7 @@ fn ssh_command(
     port: u16,
     username: String,
     private_key_pem: Option<Vec<u8>>,
+    public_key: Option<String>,
 ) -> Result<PtyCommand, String> {
     let host = host.trim();
     let username = username.trim();
@@ -445,12 +448,50 @@ fn ssh_command(
     command.arg("-o");
     command.arg("PreferredAuthentications=publickey,password,keyboard-interactive");
     command.arg(destination);
+    if let Some(public_key) = public_key_install_value(public_key) {
+        command.arg(install_public_key_command(&public_key));
+    }
     command.env("TERM", "xterm-256color");
 
     Ok(PtyCommand {
         command,
         temp_paths,
     })
+}
+
+fn public_key_install_value(public_key: Option<String>) -> Option<String> {
+    let public_key = public_key?;
+    let public_key = public_key.trim();
+    if public_key.is_empty() {
+        return None;
+    }
+    if public_key.contains('\r') || public_key.contains('\n') {
+        return None;
+    }
+
+    let mut parts = public_key.split_whitespace();
+    let key_type = parts.next()?;
+    parts.next()?;
+    if !is_authorized_key_type(key_type) {
+        return None;
+    }
+
+    Some(public_key.to_string())
+}
+
+fn is_authorized_key_type(key_type: &str) -> bool {
+    key_type.starts_with("ssh-") || key_type.starts_with("ecdsa-") || key_type.starts_with("sk-")
+}
+
+fn install_public_key_command(public_key: &str) -> String {
+    let public_key = shell_quote(public_key);
+    format!(
+        "umask 077; mkdir -p \"$HOME/.ssh\"; touch \"$HOME/.ssh/authorized_keys\"; grep -qxF {public_key} \"$HOME/.ssh/authorized_keys\" || printf '%s\\n' {public_key} >> \"$HOME/.ssh/authorized_keys\"; chmod 700 \"$HOME/.ssh\"; chmod 600 \"$HOME/.ssh/authorized_keys\"; exec \"${{SHELL:-/bin/sh}}\" -l"
+    )
+}
+
+fn shell_quote(value: &str) -> String {
+    format!("'{}'", value.replace('\'', "'\\''"))
 }
 
 fn write_temp_ssh_file(session_id: &str, suffix: &str, contents: &[u8]) -> Result<PathBuf, String> {
