@@ -12,6 +12,8 @@ import {
 import { cn } from '@/lib/cn'
 import { useAuth } from '@/stores/auth'
 import { AiSettingsTab } from './AiSettingsTab'
+import { AccountTab } from './AccountTab'
+import { ConnectionTab } from './ConnectionTab'
 import { StubTab } from './StubTab'
 
 type SettingsTabId =
@@ -39,15 +41,15 @@ const TABS: ReadonlyArray<SettingsTab> = [
     id: 'connection',
     label: 'Connection',
     icon: LinkIcon,
-    description: 'Server URL, sync status, certificate fingerprints — Phase 9.',
-    ready: false,
+    description: 'Server URL and reachability checks.',
+    ready: true,
   },
   {
     id: 'account',
     label: 'Account',
     icon: ShieldCheck,
-    description: '2FA, devices, master password rotation — Phase 9.',
-    ready: false,
+    description: 'Two-factor authentication and master password rotation.',
+    ready: true,
   },
   {
     id: 'ai',
@@ -61,34 +63,34 @@ const TABS: ReadonlyArray<SettingsTab> = [
     id: 'appearance',
     label: 'Appearance',
     icon: Palette,
-    description: 'Theme, fonts, terminal palette — Phase 9.',
+    description: 'Theme, fonts, terminal palette - Phase 9.',
     ready: false,
   },
   {
     id: 'keys',
     label: 'Shortcuts',
     icon: KeyRound,
-    description: 'Keybindings — Phase 9.',
+    description: 'Keybindings - Phase 9.',
     ready: false,
   },
   {
     id: 'notifications',
     label: 'Notifications',
     icon: Bell,
-    description: 'Desktop + audit-log notifications — Phase 9.',
+    description: 'Desktop + audit-log notifications - Phase 9.',
     ready: false,
   },
   {
     id: 'advanced',
     label: 'Advanced',
     icon: SettingsIcon,
-    description: 'Diagnostics, telemetry, experimental flags — Phase 9.',
+    description: 'Diagnostics, telemetry, experimental flags - Phase 9.',
     ready: false,
   },
 ]
 
 export function SettingsPage() {
-  const [active, setActive] = useState<SettingsTabId>('ai')
+  const [active, setActive] = useState<SettingsTabId>('connection')
   const hasPermission = useAuth((s) => s.hasPermission)
 
   const visibleTabs = TABS.filter(
@@ -131,6 +133,10 @@ export function SettingsPage() {
 
 function ActiveTabContent({ id }: { id: SettingsTabId }) {
   switch (id) {
+    case 'connection':
+      return <ConnectionTab />
+    case 'account':
+      return <AccountTab />
     case 'ai':
       return <AiSettingsTab />
     default:
