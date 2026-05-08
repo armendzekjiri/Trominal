@@ -75,6 +75,7 @@ $user->givePermissionTo([
     'snippets.create', 'snippets.read', 'snippets.update', 'snippets.delete',
     'identities.create', 'identities.read', 'identities.update', 'identities.delete',
     'tunnels.create', 'tunnels.read', 'tunnels.update', 'tunnels.delete',
+    'sftp.connect', 'sftp.read', 'sftp.upload', 'sftp.download', 'sftp.delete',
     'ai.use',
     'audit.read.own',
 ]);

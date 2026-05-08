@@ -8,10 +8,10 @@
 ┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐    ┌──────────────────┐
 │  Desktop client │    │   Web client    │    │  Mobile client  │    │  Admin's browser │
 │  (Tauri+React)  │    │     (React)     │    │   (Tauri 2)     │    │     (any)        │
-│                 │    │                 │    │   [Phase 6]     │    │                  │
+│                 │    │                 │    │    [future]     │    │                  │
 │  ┌───────────┐  │    │                 │    │                 │    │  Filament panel  │
-│  │ Rust SSH  │  │    │                 │    │                 │    │   /admin (Blade) │
-│  │ (russh)   │──┼────┼─────────────────┼────┼─────► target    │    │                  │
+│  │ PTY ssh   │  │    │                 │    │                 │    │   /admin (Blade) │
+│  │ v0.1      │──┼────┼─────────────────┼────┼─────► target    │    │                  │
 │  └───────────┘  │    │                 │    │      hosts      │    │                  │
 └────────┬────────┘    └────────┬────────┘    └────────┬────────┘    └────────┬─────────┘
          │ HTTPS+WSS            │ HTTPS+WSS            │ HTTPS+WSS            │ HTTPS
@@ -136,14 +136,14 @@ React: invoke Tauri command `ssh_connect`
 Rust: zeroize JS-side buffer reference (drop)
   │
   ▼
-Rust: russh.connect → authenticate → open PTY channel
+Rust: spawn system `ssh` in a PTY → authenticate → open remote shell
   │
   ▼
 Bidirectional pipe:
   xterm.js  ◀──Tauri events──▶  Rust  ◀──TCP──▶  remote sshd
   │
   ▼
-On disconnect: russh closes, zeroize key bytes, channel dropped
+On disconnect: PTY child exits, temporary key files are removed, key bytes are zeroized
 ```
 
 ## Data flow: web SSH connect

@@ -2,7 +2,10 @@ import { describe, expect, it } from 'vitest'
 import { newVaultId } from './ids'
 import {
   decryptHostCredential,
+  decryptTunnel,
+  defaultTunnelConfig,
   encryptHostCredentialInput,
+  encryptTunnelInput,
   extractVariables,
   substituteVariables,
   tagsFromInput,
@@ -59,6 +62,44 @@ describe('vault model helpers', () => {
       hostId: 'host_01',
       identityId: 'identity_01',
       label: 'prod identity',
+    })
+  })
+
+  it('round-trips encrypted tunnel config', async () => {
+    const key = new Uint8Array(32).fill(8)
+    const id = newVaultId(1_778_200_000_001)
+    const config = {
+      ...defaultTunnelConfig(),
+      kind: 'local' as const,
+      bindPort: '15432',
+      targetHost: 'db.internal',
+      targetPort: '5432',
+    }
+    const payload = await encryptTunnelInput(id, key, {
+      hostId: 'host_01',
+      name: 'prod postgres',
+      config,
+      enabled: true,
+    })
+
+    const decrypted = await decryptTunnel(
+      {
+        ...payload,
+        id,
+        type: 'tunnels',
+        created_at: null,
+        updated_at: '2026-05-08T00:00:00Z',
+        deleted_at: null,
+      },
+      key,
+    )
+
+    expect(decrypted).toMatchObject({
+      id,
+      hostId: 'host_01',
+      name: 'prod postgres',
+      config,
+      enabled: true,
     })
   })
 })

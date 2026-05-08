@@ -1,4 +1,14 @@
-import { Code2, KeyRound, Lock, LogOut, Settings, Server, Terminal, Workflow } from 'lucide-react'
+import {
+  Code2,
+  FolderSync,
+  KeyRound,
+  Lock,
+  LogOut,
+  Settings,
+  Server,
+  Terminal,
+  Workflow,
+} from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import { Link, NavLink, Outlet } from 'react-router-dom'
 import { Logo } from '@/components/branding/logo'
@@ -19,6 +29,7 @@ const NAV_ITEMS: ReadonlyArray<NavItem> = [
   { to: '/snippets', label: 'Snippets', permission: 'snippets.read', icon: Code2 },
   { to: '/identities', label: 'Identities', permission: 'identities.read', icon: KeyRound },
   { to: '/tunnels', label: 'Tunnels', permission: 'tunnels.read', icon: Workflow },
+  { to: '/sftp', label: 'SFTP', permission: 'sftp.read', icon: FolderSync },
 ]
 
 export function AppShell() {

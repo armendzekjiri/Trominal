@@ -1,4 +1,4 @@
-use portable_pty::{native_pty_system, Child, CommandBuilder, MasterPty, PtySize};
+use portable_pty::{native_pty_system, Child as PtyChild, CommandBuilder, MasterPty, PtySize};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::env;
@@ -7,7 +7,7 @@ use std::io::{Read, Write};
 #[cfg(unix)]
 use std::os::unix::fs::OpenOptionsExt;
 use std::path::{Path, PathBuf};
-use std::process::{Command as ProcessCommand, Stdio};
+use std::process::{Child as ProcessChild, Command as ProcessCommand, Stdio};
 use std::sync::mpsc;
 use std::sync::{Arc, Mutex};
 use std::thread;
@@ -18,12 +18,18 @@ use thiserror::Error;
 #[derive(Default)]
 pub struct LocalShellState {
     sessions: Mutex<HashMap<String, LocalShellSession>>,
+    tunnels: Mutex<HashMap<String, TunnelSession>>,
 }
 
 struct LocalShellSession {
     master: Box<dyn MasterPty + Send>,
     writer: Box<dyn Write + Send>,
-    child: Box<dyn Child + Send + Sync>,
+    child: Box<dyn PtyChild + Send + Sync>,
+    temp_paths: Vec<PathBuf>,
+}
+
+struct TunnelSession {
+    child: ProcessChild,
     temp_paths: Vec<PathBuf>,
 }
 
@@ -106,6 +112,54 @@ pub struct SshKeyInstallResponse {
     method: String,
 }
 
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SshTunnelOpenRequest {
+    session_id: String,
+    host: String,
+    port: u16,
+    username: String,
+    private_key_pem: Vec<u8>,
+    tunnel: SshTunnelSpec,
+}
+
+#[derive(Deserialize)]
+#[serde(
+    tag = "kind",
+    rename_all = "kebab-case",
+    rename_all_fields = "camelCase"
+)]
+pub enum SshTunnelSpec {
+    Local {
+        bind_host: String,
+        bind_port: u16,
+        target_host: String,
+        target_port: u16,
+    },
+    Remote {
+        bind_host: String,
+        bind_port: u16,
+        target_host: String,
+        target_port: u16,
+    },
+    Socks {
+        bind_host: String,
+        bind_port: u16,
+    },
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SshTunnelOpenResponse {
+    session_id: String,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SshTunnelStatusResponse {
+    running: bool,
+}
+
 #[tauri::command]
 pub fn local_shell_open(
     app: AppHandle,
@@ -169,6 +223,81 @@ pub fn ssh_key_test(request: SshKeyTestRequest) -> Result<SshKeyTestResponse, St
 #[tauri::command]
 pub fn ssh_key_install(request: SshKeyInstallRequest) -> Result<SshKeyInstallResponse, String> {
     install_public_key_auth(request)
+}
+
+#[tauri::command]
+pub fn ssh_tunnel_open(
+    state: State<'_, Arc<LocalShellState>>,
+    request: SshTunnelOpenRequest,
+) -> Result<SshTunnelOpenResponse, String> {
+    let session_id = require_session_id(request.session_id.clone())?;
+    let tunnel = open_ssh_tunnel(&session_id, request)?;
+    let mut tunnels = state
+        .tunnels
+        .lock()
+        .map_err(|_| LocalShellError::Locked.to_string())?;
+    if let Some(mut previous) = tunnels.remove(&session_id) {
+        let _ = previous.child.kill();
+        cleanup_temp_paths(&previous.temp_paths);
+    }
+    tunnels.insert(session_id.clone(), tunnel);
+
+    Ok(SshTunnelOpenResponse { session_id })
+}
+
+#[tauri::command]
+pub fn ssh_tunnel_close(
+    state: State<'_, Arc<LocalShellState>>,
+    session_id: String,
+) -> Result<(), String> {
+    let session_id = require_session_id(session_id)?;
+    let session = state
+        .tunnels
+        .lock()
+        .map_err(|_| LocalShellError::Locked.to_string())?
+        .remove(&session_id);
+
+    if let Some(mut session) = session {
+        if session
+            .child
+            .try_wait()
+            .map_err(|err| LocalShellError::Operation(err.to_string()).to_string())?
+            .is_none()
+        {
+            let _ = session.child.kill();
+        }
+        cleanup_temp_paths(&session.temp_paths);
+    }
+
+    Ok(())
+}
+
+#[tauri::command]
+pub fn ssh_tunnel_status(
+    state: State<'_, Arc<LocalShellState>>,
+    session_id: String,
+) -> Result<SshTunnelStatusResponse, String> {
+    let session_id = require_session_id(session_id)?;
+    let mut tunnels = state
+        .tunnels
+        .lock()
+        .map_err(|_| LocalShellError::Locked.to_string())?;
+    let Some(session) = tunnels.get_mut(&session_id) else {
+        return Ok(SshTunnelStatusResponse { running: false });
+    };
+    let exited = session
+        .child
+        .try_wait()
+        .map_err(|err| LocalShellError::Operation(err.to_string()).to_string())?
+        .is_some();
+    if !exited {
+        return Ok(SshTunnelStatusResponse { running: true });
+    }
+
+    if let Some(session) = tunnels.remove(&session_id) {
+        cleanup_temp_paths(&session.temp_paths);
+    }
+    Ok(SshTunnelStatusResponse { running: false })
 }
 
 fn open_pty_session(
@@ -502,6 +631,105 @@ fn ssh_command(
     })
 }
 
+fn open_ssh_tunnel(
+    session_id: &str,
+    mut request: SshTunnelOpenRequest,
+) -> Result<TunnelSession, String> {
+    let host = request.host.trim();
+    let username = request.username.trim();
+    if host.is_empty() {
+        request.private_key_pem.fill(0);
+        return Err(LocalShellError::Operation("host is required".to_string()).to_string());
+    }
+    if request.private_key_pem.is_empty() {
+        return Err(
+            LocalShellError::Operation("attached SSH identity is required".to_string()).to_string(),
+        );
+    }
+
+    let rsa_private_key = is_rsa_private_key(&request.private_key_pem);
+    let key_path = write_temp_ssh_file(session_id, "tunnel-key", &request.private_key_pem);
+    request.private_key_pem.fill(0);
+    let key_path = key_path?;
+    let config_path = match write_temp_ssh_file(session_id, "tunnel-config", &[]) {
+        Ok(path) => path,
+        Err(err) => {
+            cleanup_temp_paths(std::slice::from_ref(&key_path));
+            return Err(err);
+        }
+    };
+    let temp_paths = vec![key_path.clone(), config_path.clone()];
+    let forward_args = match tunnel_forward_args(&request.tunnel) {
+        Ok(args) => args,
+        Err(err) => {
+            cleanup_temp_paths(&temp_paths);
+            return Err(err);
+        }
+    };
+    let mut command = ProcessCommand::new("ssh");
+    command
+        .arg("-F")
+        .arg(&config_path)
+        .arg("-i")
+        .arg(&key_path)
+        .arg("-N")
+        .arg("-T")
+        .arg("-o")
+        .arg("ExitOnForwardFailure=yes")
+        .arg("-o")
+        .arg("BatchMode=yes")
+        .arg("-o")
+        .arg("PreferredAuthentications=publickey")
+        .arg("-o")
+        .arg("PasswordAuthentication=no")
+        .arg("-o")
+        .arg("KbdInteractiveAuthentication=no")
+        .arg("-o")
+        .arg("IdentitiesOnly=yes")
+        .arg("-o")
+        .arg("IdentityAgent=none")
+        .arg("-o")
+        .arg("StrictHostKeyChecking=accept-new")
+        .arg("-o")
+        .arg("ServerAliveInterval=30")
+        .arg("-o")
+        .arg("ServerAliveCountMax=3")
+        .arg("-p")
+        .arg(request.port.max(1).to_string());
+    if rsa_private_key {
+        rsa_key_compat_process_options(&mut command);
+    }
+    for arg in forward_args {
+        command.arg(arg);
+    }
+    command
+        .arg(destination(host, username)?)
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::piped());
+
+    let mut child = command.spawn().map_err(|err| {
+        cleanup_temp_paths(&temp_paths);
+        LocalShellError::Operation(err.to_string()).to_string()
+    })?;
+    thread::sleep(Duration::from_millis(500));
+    if let Some(status) = child
+        .try_wait()
+        .map_err(|err| LocalShellError::Operation(err.to_string()).to_string())?
+    {
+        let stderr = read_child_stderr(&mut child);
+        cleanup_temp_paths(&temp_paths);
+        return if status.success() {
+            Err(LocalShellError::Operation("SSH tunnel exited early".to_string()).to_string())
+        } else {
+            Err(LocalShellError::Operation(user_safe_ssh_error(&stderr, &[])).to_string())
+        };
+    }
+
+    drain_child_stderr(child.stderr.take());
+    Ok(TunnelSession { child, temp_paths })
+}
+
 fn test_private_key_auth(mut request: SshKeyTestRequest) -> Result<bool, String> {
     let rsa_private_key = is_rsa_private_key(&request.private_key_pem);
     let key_path = write_temp_ssh_file("key-test", "key", &request.private_key_pem);
@@ -657,6 +885,105 @@ fn rsa_key_compat_process_options(command: &mut ProcessCommand) {
     command.arg("PubkeyAcceptedAlgorithms=+ssh-rsa");
     command.arg("-o");
     command.arg("HostkeyAlgorithms=+ssh-rsa");
+}
+
+fn tunnel_forward_args(spec: &SshTunnelSpec) -> Result<Vec<String>, String> {
+    match spec {
+        SshTunnelSpec::Local {
+            bind_host,
+            bind_port,
+            target_host,
+            target_port,
+        } => Ok(vec![
+            "-L".to_string(),
+            forward_address(bind_host, *bind_port, target_host, *target_port)?,
+        ]),
+        SshTunnelSpec::Remote {
+            bind_host,
+            bind_port,
+            target_host,
+            target_port,
+        } => Ok(vec![
+            "-R".to_string(),
+            forward_address(bind_host, *bind_port, target_host, *target_port)?,
+        ]),
+        SshTunnelSpec::Socks {
+            bind_host,
+            bind_port,
+        } => Ok(vec!["-D".to_string(), bind_address(bind_host, *bind_port)?]),
+    }
+}
+
+fn forward_address(
+    bind_host: &str,
+    bind_port: u16,
+    target_host: &str,
+    target_port: u16,
+) -> Result<String, String> {
+    let target_host = target_host.trim();
+    if target_host.is_empty() {
+        return Err(
+            LocalShellError::Operation("tunnel target host is required".to_string()).to_string(),
+        );
+    }
+
+    Ok(format!(
+        "{}:{}:{}:{}",
+        bind_host_value(bind_host),
+        valid_port(bind_port)?,
+        target_host,
+        valid_port(target_port)?
+    ))
+}
+
+fn bind_address(bind_host: &str, bind_port: u16) -> Result<String, String> {
+    Ok(format!(
+        "{}:{}",
+        bind_host_value(bind_host),
+        valid_port(bind_port)?
+    ))
+}
+
+fn bind_host_value(bind_host: &str) -> String {
+    let bind_host = bind_host.trim();
+    if bind_host.is_empty() {
+        "127.0.0.1".to_string()
+    } else {
+        bind_host.to_string()
+    }
+}
+
+fn valid_port(port: u16) -> Result<u16, String> {
+    if port == 0 {
+        return Err(
+            LocalShellError::Operation("tunnel port must be greater than 0".to_string())
+                .to_string(),
+        );
+    }
+
+    Ok(port)
+}
+
+fn read_child_stderr(child: &mut ProcessChild) -> String {
+    let mut output = String::new();
+    if let Some(mut stderr) = child.stderr.take() {
+        let _ = stderr.read_to_string(&mut output);
+    }
+
+    output
+}
+
+fn drain_child_stderr(stderr: Option<std::process::ChildStderr>) {
+    if let Some(mut stderr) = stderr {
+        thread::spawn(move || {
+            let mut sink = [0_u8; 4096];
+            while let Ok(size) = stderr.read(&mut sink) {
+                if size == 0 {
+                    break;
+                }
+            }
+        });
+    }
 }
 
 fn run_password_pty(command: CommandBuilder, password: &[u8]) -> Result<(), String> {
@@ -905,7 +1232,7 @@ fn default_shell() -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::{is_rsa_private_key, user_safe_ssh_error};
+    use super::{is_rsa_private_key, tunnel_forward_args, user_safe_ssh_error, SshTunnelSpec};
 
     #[test]
     fn detects_rsa_private_key_pem_headers() {
@@ -930,5 +1257,42 @@ mod tests {
         assert!(error.contains("[redacted]"));
         assert!(!error.contains("hunter2"));
         assert!(error.contains("Permission denied"));
+    }
+
+    #[test]
+    fn builds_local_tunnel_forward_args() {
+        let args = tunnel_forward_args(&SshTunnelSpec::Local {
+            bind_host: "127.0.0.1".to_string(),
+            bind_port: 15432,
+            target_host: "db.internal".to_string(),
+            target_port: 5432,
+        })
+        .expect("local tunnel args");
+
+        assert_eq!(args, vec!["-L", "127.0.0.1:15432:db.internal:5432"]);
+    }
+
+    #[test]
+    fn builds_remote_tunnel_forward_args() {
+        let args = tunnel_forward_args(&SshTunnelSpec::Remote {
+            bind_host: "0.0.0.0".to_string(),
+            bind_port: 9000,
+            target_host: "localhost".to_string(),
+            target_port: 9000,
+        })
+        .expect("remote tunnel args");
+
+        assert_eq!(args, vec!["-R", "0.0.0.0:9000:localhost:9000"]);
+    }
+
+    #[test]
+    fn builds_socks_tunnel_forward_args() {
+        let args = tunnel_forward_args(&SshTunnelSpec::Socks {
+            bind_host: "".to_string(),
+            bind_port: 1080,
+        })
+        .expect("socks tunnel args");
+
+        assert_eq!(args, vec!["-D", "127.0.0.1:1080"]);
     }
 }
