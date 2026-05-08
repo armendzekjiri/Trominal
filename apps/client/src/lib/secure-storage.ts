@@ -5,9 +5,11 @@ import { isTauri } from './platform'
  * Platform-agnostic secret store used for the refresh token and the persisted
  * server URL.
  *
- * - Desktop (Tauri): refresh tokens proxy to the OS keychain via the `keyring`
- *   crate. The API base URL uses normal webview storage because it is not
- *   confidential and should not trigger a Keychain prompt at startup.
+ * - Desktop (Tauri): production refresh tokens proxy to the OS keychain via
+ *   the `keyring` crate. Dev builds use sessionStorage because macOS can
+ *   repeatedly re-prompt unsigned/rebuilt dev binaries. The API base URL uses
+ *   normal webview storage because it is not confidential and should not
+ *   trigger a Keychain prompt at startup.
  * - Web: `sessionStorage` for genuinely sensitive values (refresh token) so
  *   they're cleared on tab close, `localStorage` for non-secret values like
  *   the server URL. We do not pretend to encrypt at rest in the browser —
@@ -26,20 +28,20 @@ export type SecureStorage = {
 
 const tauriBackend: SecureStorage = {
   async get(key) {
-    if (key === 'api_base_url') {
+    if (usesWebStorageInTauri(key)) {
       return webStorageFor(key).getItem(`trominal:${key}`)
     }
     return await invoke<string | null>('secure_get', { key })
   },
   async set(key, value) {
-    if (key === 'api_base_url') {
+    if (usesWebStorageInTauri(key)) {
       webStorageFor(key).setItem(`trominal:${key}`, value)
       return
     }
     await invoke<void>('secure_set', { key, value })
   },
   async delete(key) {
-    if (key === 'api_base_url') {
+    if (usesWebStorageInTauri(key)) {
       webStorageFor(key).removeItem(`trominal:${key}`)
       return
     }
@@ -48,6 +50,10 @@ const tauriBackend: SecureStorage = {
 }
 
 const SESSION_KEYS: ReadonlyArray<SecureKey> = ['refresh_token']
+
+function usesWebStorageInTauri(key: SecureKey): boolean {
+  return key === 'api_base_url' || import.meta.env.DEV
+}
 
 function webStorageFor(key: SecureKey): Storage {
   // sessionStorage clears on tab close — right place for the refresh token on
