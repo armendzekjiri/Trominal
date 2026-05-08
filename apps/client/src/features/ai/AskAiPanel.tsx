@@ -1,5 +1,5 @@
 import { CornerDownLeft, Loader2, Sparkles, X } from 'lucide-react'
-import { useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import type { Terminal } from '@xterm/xterm'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/cn'
@@ -8,6 +8,16 @@ import { useAiSettings } from '@/features/vault/hooks'
 import { adapterFor, type AdapterConfig, type ChatMessage } from './adapters'
 import { readRecentLines } from './recentLines'
 
+export type PendingPrompt = {
+  /** Prompt text to send (a slash-command + context, typically). */
+  text: string
+  /**
+   * Monotonically increasing token. The panel ignores prompts whose nonce
+   * matches the last one it handled, so re-renders never re-submit.
+   */
+  nonce: number
+}
+
 type AskAiPanelProps = {
   open: boolean
   onClose: () => void
@@ -15,6 +25,12 @@ type AskAiPanelProps = {
   terminalRef: { current: Terminal | null }
   /** Friendly label shown next to the model badge. */
   sessionLabel: string
+  /**
+   * When this changes (new nonce), the panel auto-submits the supplied text.
+   * Used by the "Explain command" right-click flow to dispatch a chat
+   * without the user having to type or press Enter.
+   */
+  pendingPrompt?: PendingPrompt | null
 }
 
 type ChatBubble = {
@@ -31,7 +47,13 @@ const SLASH_COMMANDS: ReadonlyArray<{ prefix: string; description: string }> = [
   { prefix: '/diagnose', description: 'Diagnose what went wrong from the recent output' },
 ]
 
-export function AskAiPanel({ open, onClose, terminalRef, sessionLabel }: AskAiPanelProps) {
+export function AskAiPanel({
+  open,
+  onClose,
+  terminalRef,
+  sessionLabel,
+  pendingPrompt = null,
+}: AskAiPanelProps) {
   const hasPermission = useAuth((s) => s.hasPermission)
   const settingsQuery = useAiSettings()
   const settings = settingsQuery.data ?? null
@@ -48,18 +70,38 @@ export function AskAiPanel({ open, onClose, terminalRef, sessionLabel }: AskAiPa
   const enabled = settings !== null && settings.features.askPanel
   const userHasPermission = hasPermission('ai.use')
 
+  // We store the live history in a ref alongside React state so the
+  // pendingPrompt effect can compose messages from the latest history
+  // without depending on (and therefore restarting on) every bubble change.
+  const bubblesRef = useRef<ChatBubble[]>(bubbles)
+  bubblesRef.current = bubbles
+
+  // Auto-submit any prompt the parent queues. The handledNonce ref means
+  // re-renders never re-fire the effect for the same nonce.
+  const handledNonceRef = useRef<number | null>(null)
+  useEffect(() => {
+    if (!open || pendingPrompt === null) return
+    if (settings === null || adapter === null) return
+    if (handledNonceRef.current === pendingPrompt.nonce) return
+    handledNonceRef.current = pendingPrompt.nonce
+    void sendText(pendingPrompt.text)
+    // sendText is defined inside the component but doesn't change identity
+    // relevant to this effect; we intentionally only depend on the nonce.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, pendingPrompt, settings, adapter])
+
   if (!open) return null
 
-  async function send(): Promise<void> {
+  async function sendText(text: string): Promise<void> {
     if (settings === null || adapter === null) return
-    const text = draft.trim()
-    if (text === '') return
+    const trimmed = text.trim()
+    if (trimmed === '') return
 
     abortRef.current?.abort()
     const controller = new AbortController()
     abortRef.current = controller
 
-    const userBubble: ChatBubble = { id: makeId(), role: 'user', content: text }
+    const userBubble: ChatBubble = { id: makeId(), role: 'user', content: trimmed }
     const assistantBubble: ChatBubble = {
       id: makeId(),
       role: 'assistant',
@@ -73,7 +115,7 @@ export function AskAiPanel({ open, onClose, terminalRef, sessionLabel }: AskAiPa
     const recent = settings.features.sendOutputContext
       ? readRecentLines(terminalRef.current, 50)
       : []
-    const messages = composeMessages([...bubbles, userBubble], recent, sessionLabel)
+    const messages = composeMessages([...bubblesRef.current, userBubble], recent, sessionLabel)
     const config: AdapterConfig = {
       endpoint: settings.endpoint || adapter.defaultEndpoint,
       model: settings.model || adapter.defaultModel,
@@ -120,6 +162,10 @@ export function AskAiPanel({ open, onClose, terminalRef, sessionLabel }: AskAiPa
       setSubmitting(false)
       abortRef.current = null
     }
+  }
+
+  async function send(): Promise<void> {
+    await sendText(draft)
   }
 
   function applySlashCommand(prefix: string): void {

@@ -1,8 +1,9 @@
-import { Code2, Copy, Loader2, Play, Plus, Search, Trash2 } from 'lucide-react'
+import { Code2, Copy, Loader2, Play, Plus, Search, Sparkles, Trash2 } from 'lucide-react'
 import { useState, type FormEvent } from 'react'
 import { Button } from '@/components/ui/button'
 import { TextInput } from '@/components/ui/text-input'
 import { cn } from '@/lib/cn'
+import { useAuth } from '@/stores/auth'
 import { useDeleteSnippet, useSaveSnippet, useSnippets } from '@/features/vault/hooks'
 import {
   extractVariables,
@@ -11,6 +12,7 @@ import {
   type SnippetInput,
   type SnippetItem,
 } from '@/features/vault/model'
+import { SnippetGenerator } from './SnippetGenerator'
 
 const EMPTY_SNIPPET: SnippetInput = {
   title: '',
@@ -68,6 +70,8 @@ export function SnippetsPage() {
   const [search, setSearch] = useState('')
   const [draft, setDraft] = useState<SnippetInput>(EMPTY_SNIPPET)
   const [variables, setVariables] = useState<Record<string, string>>({})
+  const [generatorOpen, setGeneratorOpen] = useState(false)
+  const canUseAi = useAuth((s) => s.hasPermission('ai.use'))
 
   const visible = snippets.filter((snippet) =>
     [snippet.title, snippet.body, snippet.tags.join(' ')]
@@ -148,7 +152,7 @@ export function SnippetsPage() {
         </div>
       </aside>
 
-      <section className="grid min-h-0 grid-rows-[auto_1fr]">
+      <section className="relative grid min-h-0 grid-rows-[auto_1fr]">
         <form
           onSubmit={(event) => void submit(event)}
           className="flex items-center gap-3 border-b border-border px-4 py-3"
@@ -161,6 +165,18 @@ export function SnippetsPage() {
             required
             className="min-w-0 flex-1 bg-transparent text-[14px] font-medium outline-none placeholder:text-fg-faint"
           />
+          {canUseAi && (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => setGeneratorOpen((open) => !open)}
+              aria-pressed={generatorOpen}
+            >
+              <Sparkles size={13} />
+              Generate
+            </Button>
+          )}
           <Button
             type="button"
             variant="outline"
@@ -190,6 +206,16 @@ export function SnippetsPage() {
             </Button>
           )}
         </form>
+
+        {generatorOpen && (
+          <SnippetGenerator
+            onApply={(input) => {
+              setDraft({ ...input, id: undefined })
+              setVariables({})
+            }}
+            onClose={() => setGeneratorOpen(false)}
+          />
+        )}
 
         <div className="grid min-h-0 grid-cols-2">
           <div className="flex min-h-0 flex-col border-r border-border">
