@@ -1,4 +1,5 @@
 import { createLocalShellSession, createSshSession, type SshSession } from '@trominal/ssh-transport'
+import type { Terminal } from '@xterm/xterm'
 import {
   Laptop,
   Loader2,
@@ -6,19 +7,22 @@ import {
   Power,
   RotateCcw,
   Server,
+  Sparkles,
   SplitSquareHorizontal,
   X,
 } from 'lucide-react'
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
 import { Dot } from '@/components/ui/dot'
 import { getApiClient } from '@/lib/api-client'
 import { cn } from '@/lib/cn'
 import { isTauri } from '@/lib/platform'
+import { useAuth } from '@/stores/auth'
 import { useHostCredentials, useHosts, useIdentities } from '@/features/vault/hooks'
 import type { HostItem } from '@/features/vault/model'
 import { authForHost } from '@/features/vault/ssh-auth'
+import { AskAiPanel } from '@/features/ai/AskAiPanel'
 import { XtermPane } from './XtermPane'
 
 type BaseTerminalTab = {
@@ -83,6 +87,9 @@ function DesktopTerminalPage() {
   const [tabs, setTabs] = useState<TerminalTab[]>([])
   const [activeId, setActiveId] = useState<string | null>(null)
   const active = tabs.find((tab) => tab.id === activeId) ?? tabs[0] ?? null
+  const [askAiOpen, setAskAiOpen] = useState(false)
+  const terminalRef = useRef<Terminal | null>(null)
+  const canUseAi = useAuth((s) => s.hasPermission('ai.use'))
 
   function addHostTab(host: HostItem): void {
     const id = crypto.randomUUID()
@@ -287,10 +294,35 @@ function DesktopTerminalPage() {
               <Button size="sm" variant="outline" onClick={() => void disconnect(active)}>
                 Disconnect
               </Button>
+              {canUseAi && (
+                <Button
+                  size="sm"
+                  variant={askAiOpen ? 'primary' : 'outline'}
+                  onClick={() => setAskAiOpen((value) => !value)}
+                  aria-pressed={askAiOpen}
+                >
+                  <Sparkles size={13} />
+                  Ask AI
+                </Button>
+              )}
             </div>
           </div>
-          <div className="min-h-0 flex-1">
-            <XtermPane session={active.session} title={tabTitle(active)} />
+          <div className="grid min-h-0 flex-1 grid-cols-[minmax(0,1fr)_auto]">
+            <div className="min-h-0">
+              <XtermPane
+                session={active.session}
+                title={tabTitle(active)}
+                terminalRef={terminalRef}
+              />
+            </div>
+            {canUseAi && askAiOpen && (
+              <AskAiPanel
+                open={askAiOpen}
+                onClose={() => setAskAiOpen(false)}
+                terminalRef={terminalRef}
+                sessionLabel={tabTitle(active)}
+              />
+            )}
           </div>
           <div className="flex h-6 items-center gap-4 border-t border-border bg-bg-elev px-3 font-mono text-[11px] text-fg-faint">
             <span>{active.status}</span>
