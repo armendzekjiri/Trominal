@@ -18,6 +18,7 @@ export type SftpHostArgs = {
 export type SftpListResponse = { entries: SftpEntry[] }
 export type SftpLocalListResponse = { path: string; entries: SftpEntry[] }
 export type SftpLocalHomeResponse = { path: string }
+export type SftpRemoteHomeResponse = { path: string }
 
 export type SftpTransferStartResponse = { transferId: string }
 

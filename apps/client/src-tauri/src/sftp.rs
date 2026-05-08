@@ -69,6 +69,18 @@ pub struct SftpListRequest {
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
+pub struct SftpHomeRequest {
+    host: SftpHostArgs,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SftpHomeResponse {
+    path: String,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct SftpPathRequest {
     host: SftpHostArgs,
     remote_path: String,
@@ -135,10 +147,26 @@ struct SftpTransferEvent {
 pub fn sftp_list(request: SftpListRequest) -> Result<SftpListResponse, String> {
     let SftpListRequest { host, remote_path } = request;
     let path = clean_remote_path(&remote_path);
-    let batch = format!("ls -la {}\n", quote_remote(&path));
+    // OpenSSH `sftp` returns absolute names from `ls /path`, so a click on a
+    // child folder would join `/home` + `/home/ubuntu` = `/home//home/ubuntu`.
+    // `cd` first, then a bare `ls -la`, gives plain relative names that the
+    // joinPath helper on the frontend can compose without surprises.
+    let batch = format!("cd {}\nls -la\n", quote_remote(&path));
     let stdout = run_sftp_batch(&host, "list", batch.as_bytes())?;
     let entries = parse_sftp_listing(&stdout);
     Ok(SftpListResponse { entries })
+}
+
+#[tauri::command]
+pub fn sftp_remote_home(request: SftpHomeRequest) -> Result<SftpHomeResponse, String> {
+    let SftpHomeRequest { host } = request;
+    // `pwd` after a fresh sftp connection reports the user's default working
+    // directory, which on every common server (OpenSSH, AWS Transfer, etc.)
+    // is the user's home unless the admin chrooted or pinned it.
+    let stdout = run_sftp_batch(&host, "home", b"pwd\n")?;
+    let path = extract_pwd_path(&stdout)
+        .ok_or_else(|| SftpError::Operation("could not parse pwd output".to_string()).to_string())?;
+    Ok(SftpHomeResponse { path })
 }
 
 #[tauri::command]
@@ -515,6 +543,28 @@ fn clean_remote_path(path: &str) -> String {
     }
 }
 
+/// Pluck the path out of OpenSSH `sftp` `pwd` output. The line looks like
+/// `Remote working directory: /home/ubuntu` (modulo translations and casing).
+pub(crate) fn extract_pwd_path(stdout: &str) -> Option<String> {
+    for line in stdout.lines() {
+        let trimmed = line.trim_end_matches('\r').trim();
+        if trimmed.is_empty() || trimmed.starts_with("sftp>") {
+            continue;
+        }
+        if let Some(rest) = trimmed.split_once(':') {
+            let candidate = rest.1.trim();
+            if candidate.starts_with('/') {
+                return Some(candidate.to_string());
+            }
+        }
+        if trimmed.starts_with('/') {
+            // Some servers print just the absolute path with no prefix.
+            return Some(trimmed.to_string());
+        }
+    }
+    None
+}
+
 // ---------- Local filesystem (for the dual-pane left side) ----------
 
 #[derive(Deserialize)]
@@ -777,7 +827,25 @@ fn entry_kind_from_perms(perms: &str) -> &'static str {
 
 #[cfg(test)]
 mod tests {
-    use super::{parse_sftp_listing, quote_remote};
+    use super::{extract_pwd_path, parse_sftp_listing, quote_remote};
+
+    #[test]
+    fn extracts_pwd_path_from_openssh_output() {
+        let raw = "sftp> pwd\nRemote working directory: /home/ubuntu\n";
+        assert_eq!(extract_pwd_path(raw).as_deref(), Some("/home/ubuntu"));
+    }
+
+    #[test]
+    fn extracts_bare_pwd_path() {
+        let raw = "sftp> pwd\n/srv/app\n";
+        assert_eq!(extract_pwd_path(raw).as_deref(), Some("/srv/app"));
+    }
+
+    #[test]
+    fn extract_pwd_path_returns_none_for_garbage() {
+        assert_eq!(extract_pwd_path("sftp> pwd\n"), None);
+    }
+
 
     #[test]
     fn parses_ls_la_output() {

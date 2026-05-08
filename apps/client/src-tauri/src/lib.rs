@@ -34,6 +34,7 @@ pub fn run() {
             sftp::sftp_cancel,
             sftp::sftp_local_list,
             sftp::sftp_local_home,
+            sftp::sftp_remote_home,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

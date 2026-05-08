@@ -15,9 +15,11 @@ import {
   sftpLocalHome,
   sftpLocalList,
   sftpMkdir,
+  sftpRemoteHome,
   sftpRemove,
   sftpUpload,
 } from './sftpApi'
+import { joinPath, parentPath } from './paths'
 import { summarizeTransfers, useTransfers } from './transfersStore'
 import { useTransferEvents } from './useTransferEvents'
 import type { SftpEntry, SftpHostArgs } from './types'
@@ -69,6 +71,7 @@ function SftpPageDesktop() {
 
   // Local pane state.
   const [localPath, setLocalPath] = useState('')
+  const [localHomePath, setLocalHomePath] = useState<string | null>(null)
   const [localEntries, setLocalEntries] = useState<SftpEntry[]>([])
   const [localLoading, setLocalLoading] = useState(false)
   const [localError, setLocalError] = useState<string | null>(null)
@@ -76,6 +79,9 @@ function SftpPageDesktop() {
 
   // Remote pane state.
   const [remotePath, setRemotePath] = useState(REMOTE_ROOT)
+  // The user's reported home directory on the active host. Cached so the
+  // Home button in the path bar can jump back to it without another roundtrip.
+  const [remoteHomePath, setRemoteHomePath] = useState<string | null>(null)
   const [remoteEntries, setRemoteEntries] = useState<SftpEntry[]>([])
   const [remoteLoading, setRemoteLoading] = useState(false)
   const [remoteError, setRemoteError] = useState<string | null>(null)
@@ -96,6 +102,7 @@ function SftpPageDesktop() {
         setLocalLoading(true)
         const home = await sftpLocalHome()
         if (cancelled) return
+        setLocalHomePath(home.path)
         setLocalPath(home.path)
       } catch (err) {
         if (cancelled) return
@@ -137,17 +144,20 @@ function SftpPageDesktop() {
   useEffect(() => {
     let cancelled = false
     async function resolveHost(): Promise<void> {
+      // Switching hosts: clear the previous session immediately so the user
+      // sees the "select host" stub instead of stale entries from the old
+      // host while we (re)resolve identity + home directory.
+      setHostArgs(null)
+      setRemoteHomePath(null)
+      setHostError(null)
       if (selectedHost === null) {
-        setHostArgs(null)
         return
       }
       setResolvingHost(true)
-      setHostError(null)
       try {
         const auth = await authForHost(selectedHost, credentials, identities)
         if (cancelled) return
         if (auth?.kind !== 'private-key') {
-          setHostArgs(null)
           setHostError('Attach an SSH identity to this host before using SFTP.')
           return
         }
@@ -159,11 +169,31 @@ function SftpPageDesktop() {
         }
         // Wipe the original byte buffer once we've copied it for IPC.
         auth.privateKeyPem.fill(0)
+
+        // Resolve the user's home directory before flipping the page into
+        // "connected" mode so the very first listing already lands on
+        // /home/<user> rather than the root, and so the Home button has a
+        // target.
+        let home: string | null = null
+        try {
+          const response = await sftpRemoteHome(args)
+          if (cancelled) return
+          home = response.path
+        } catch (homeErr) {
+          // Home lookup is best-effort: if the server doesn't speak `pwd`
+          // sensibly, we still let the user browse from `/`.
+          if (import.meta.env.DEV) {
+            console.warn('sftp_remote_home failed:', homeErr)
+          }
+        }
+
+        if (cancelled) return
+        setRemoteHomePath(home)
+        setRemotePath(home ?? REMOTE_ROOT)
         setHostArgs(args)
       } catch (err) {
         if (cancelled) return
         setHostError(err instanceof Error ? err.message : 'Could not resolve SSH identity.')
-        setHostArgs(null)
       } finally {
         if (!cancelled) setResolvingHost(false)
       }
@@ -336,8 +366,10 @@ function SftpPageDesktop() {
             hosts={hosts}
             selectedHostId={selectedHostId}
             onChange={(id) => {
+              // Don't reset remotePath here — the resolveHost effect picks
+              // the home directory once the new identity resolves. Clearing
+              // it would just flicker the path bar through "/".
               setSelectedHostId(id)
-              setRemotePath(REMOTE_ROOT)
               setRemoteSelected(null)
             }}
             connected={hostArgs !== null}
@@ -387,7 +419,7 @@ function SftpPageDesktop() {
       <div className="grid min-h-0 grid-cols-[minmax(0,1fr)_1px_minmax(0,1fr)]">
         <FilePane
           side="local"
-          title={selectedHost?.name ?? 'Local files'}
+          title="Local files"
           path={localPath}
           entries={localEntries}
           isLoading={localLoading}
@@ -400,6 +432,11 @@ function SftpPageDesktop() {
           onTransfer={(entry) => void uploadEntry(entry)}
           transferLabel="Upload →"
           emptyMessage="No files in this directory"
+          homePath={localHomePath}
+          onSubmitPath={(next) => {
+            setLocalSelected(null)
+            setLocalPath(next)
+          }}
         />
         <div className="bg-border" aria-hidden />
         {hostArgs === null ? (
@@ -426,6 +463,11 @@ function SftpPageDesktop() {
             onTransfer={(entry) => void downloadEntry(entry)}
             transferLabel="← Download"
             emptyMessage="No files at this remote path"
+            homePath={remoteHomePath}
+            onSubmitPath={(next) => {
+              setRemoteSelected(null)
+              setRemotePath(next)
+            }}
           />
         )}
       </div>
@@ -561,22 +603,6 @@ function transferStatusLabel(status: string, errorMessage: string | null): strin
     default:
       return status
   }
-}
-
-function joinPath(base: string, name: string): string {
-  if (name === '..') return parentPath(base)
-  if (name === '.' || name === '') return base
-  if (base === '' || base === '/') return `/${name.replace(/^\/+/, '')}`
-  if (base.endsWith('/')) return `${base}${name}`
-  return `${base}/${name}`
-}
-
-function parentPath(path: string): string {
-  if (path === '' || path === '/') return '/'
-  const stripped = path.replace(/\/+$/, '')
-  const idx = stripped.lastIndexOf('/')
-  if (idx <= 0) return '/'
-  return stripped.slice(0, idx) || '/'
 }
 
 function parsePort(value: string): number {

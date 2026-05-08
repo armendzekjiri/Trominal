@@ -5,6 +5,7 @@ import type {
   SftpListResponse,
   SftpLocalHomeResponse,
   SftpLocalListResponse,
+  SftpRemoteHomeResponse,
   SftpTransferStartResponse,
 } from './types'
 
@@ -76,4 +77,8 @@ export async function sftpLocalList(path: string): Promise<SftpLocalListResponse
 
 export async function sftpLocalHome(): Promise<SftpLocalHomeResponse> {
   return invoke<SftpLocalHomeResponse>('sftp_local_home')
+}
+
+export async function sftpRemoteHome(host: SftpHostArgs): Promise<SftpRemoteHomeResponse> {
+  return invoke<SftpRemoteHomeResponse>('sftp_remote_home', { request: { host } })
 }
