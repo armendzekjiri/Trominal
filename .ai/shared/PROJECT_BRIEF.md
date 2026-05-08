@@ -659,7 +659,12 @@ Tunnels and SFTP are separate product areas because they serve different workflo
 - `GET /api/v1/vault/{resource}` omits `team` for personal records and accepts `?team=<team_id>` for team records. Delta sync includes personal records plus records from every team where the user is a member.
 - Vault policies allow access when the user owns a personal record or belongs to the record's team. Relationship IDs must stay inside the same scope, so a team host cannot point to a personal group and a personal host cannot point to a team group.
 - Master-password rotation explicitly stays personal-only; team-scoped resources are encrypted with team keys and are rejected from `/api/v1/me/master-password/change`.
-- Still pending in later Phase 8 slices: client team switcher/resource filtering UI, client create/share flows that use team keys, and Filament team management.
+
+#### Phase 8D implementation notes
+
+- Filament now has `TeamResource` under Administration. Admins with `admin.teams.manage` can list teams, view team metadata, inspect member rows, and delete teams with an `admin.team.deleted` audit log entry.
+- Filament intentionally does not create or edit teams. A valid zero-knowledge team requires a client-generated team key plus per-member wrapped keys, which the server-side admin panel cannot produce without breaking the encryption model.
+- Still pending in later Phase 8 slices: client team switcher/resource filtering UI and client create/share flows that use team keys.
 
 ### Phase 9 — Polish, Docs, Release
 

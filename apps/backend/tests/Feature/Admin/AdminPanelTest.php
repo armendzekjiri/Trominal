@@ -6,7 +6,10 @@ namespace Tests\Feature\Admin;
 
 use App\Filament\Resources\AuditLogs\AuditLogResource;
 use App\Filament\Resources\Permissions\PermissionResource;
+use App\Filament\Resources\Teams\TeamResource;
 use App\Filament\Resources\Users\UserResource;
+use App\Models\Team;
+use App\Models\TeamMember;
 use App\Models\User;
 use Database\Seeders\RoleAndPermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -65,6 +68,7 @@ final class AdminPanelTest extends TestCase
             '/admin/roles',
             '/admin/permissions',
             '/admin/invites',
+            '/admin/teams',
             '/admin/audit-logs',
             '/admin/settings',
             '/admin/system-health',
@@ -101,6 +105,33 @@ final class AdminPanelTest extends TestCase
         self::assertFalse(UserResource::canDelete($admin));
     }
 
+    public function test_team_resource_is_gated_read_only_and_can_show_membership(): void
+    {
+        $admin = $this->createUser(role: 'admin', twoFactor: true);
+        $user = $this->createUser(role: 'user', twoFactor: true);
+        $team = $this->createTeam($admin);
+        $this->createMembership($team, $user, TeamMember::ROLE_MEMBER);
+
+        $this->actingAs($user)
+            ->get('/admin/teams')
+            ->assertForbidden();
+
+        $this->actingAs($admin)
+            ->get('/admin/teams')
+            ->assertOk();
+
+        $this->actingAs($admin)
+            ->get("/admin/teams/{$team->id}")
+            ->assertOk();
+
+        $this->actingAs($admin);
+
+        self::assertTrue(TeamResource::canViewAny());
+        self::assertFalse(TeamResource::canCreate());
+        self::assertFalse(TeamResource::canEdit($team));
+        self::assertTrue(TeamResource::canDelete($team));
+    }
+
     private function createUser(string $role, bool $twoFactor = false): User
     {
         /** @var User $user */
@@ -112,5 +143,35 @@ final class AdminPanelTest extends TestCase
         $user->assignRole($role);
 
         return $user;
+    }
+
+    private function createTeam(User $owner): Team
+    {
+        /** @var Team $team */
+        $team = Team::query()->create([
+            'created_by_user_id' => $owner->id,
+            'name_ciphertext' => 'team-name-ciphertext',
+            'name_nonce' => 'team-name-nonce',
+            'key_version' => 1,
+        ]);
+
+        $this->createMembership($team, $owner, TeamMember::ROLE_OWNER);
+
+        return $team;
+    }
+
+    private function createMembership(Team $team, User $user, string $role): TeamMember
+    {
+        /** @var TeamMember $member */
+        $member = TeamMember::query()->create([
+            'team_id' => $team->id,
+            'user_id' => $user->id,
+            'role' => $role,
+            'wrapped_team_key_ciphertext' => "wrapped-key-{$role}-{$user->id}",
+            'wrapped_team_key_nonce' => "wrapped-nonce-{$role}-{$user->id}",
+            'key_version' => $team->key_version,
+        ]);
+
+        return $member;
     }
 }

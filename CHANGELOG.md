@@ -47,6 +47,15 @@ Security-relevant changes are tagged `security:`.
 - Master-password rotation now rejects team-scoped resources, keeping team-key
   encrypted data out of the personal vault rotation flow.
 
+### Added — Phase 8D: Filament team management
+
+- Filament `TeamResource` under Administration for admins with
+  `admin.teams.manage`, including team list, team detail, member metadata,
+  member counts, key versions, and creator email.
+- Team deletion from Filament writes an `admin.team.deleted` audit log entry.
+- Admin-side team create/edit remains disabled because valid teams require
+  client-generated encrypted names and wrapped team keys.
+
 ### Added — Phase 7B: AI inside the terminal & snippet generation
 
 - **Inline command suggestions** in the terminal: `Ctrl+Space` triggers the
