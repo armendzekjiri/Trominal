@@ -2,6 +2,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { useEffect, useState, type ReactNode } from 'react'
 import { useAuth } from '@/stores/auth'
 import { useIdleResetEffect } from '@/lib/idle'
+import { useAppearanceDocumentEffect } from '@/stores/appearance'
 
 function makeQueryClient(): QueryClient {
   return new QueryClient({
@@ -22,6 +23,7 @@ export function Providers({ children }: { children: ReactNode }) {
     void hydrate()
   }, [hydrate])
   useIdleResetEffect()
+  useAppearanceDocumentEffect()
 
   return <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
 }

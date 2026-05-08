@@ -2,8 +2,9 @@ import '@xterm/xterm/css/xterm.css'
 
 import { FitAddon } from '@xterm/addon-fit'
 import { Terminal } from '@xterm/xterm'
-import { useEffect, useRef } from 'react'
+import { useEffect, useMemo, useRef } from 'react'
 import type { SshSession } from '@trominal/ssh-transport'
+import { terminalThemeFor, useAppearance } from '@/stores/appearance'
 
 type XtermPaneProps = {
   session: SshSession | null
@@ -32,6 +33,9 @@ export function XtermPane({
 }: XtermPaneProps) {
   const elementRef = useRef<HTMLDivElement | null>(null)
   const terminalRef = useRef<Terminal | null>(null)
+  const terminalFontSize = useAppearance((state) => state.terminalFontSize)
+  const terminalPalette = useAppearance((state) => state.terminalPalette)
+  const terminalTheme = useMemo(() => terminalThemeFor(terminalPalette), [terminalPalette])
 
   useEffect(() => {
     const element = elementRef.current
@@ -43,28 +47,8 @@ export function XtermPane({
       cursorBlink: true,
       convertEol: true,
       fontFamily: '"JetBrains Mono", ui-monospace, monospace',
-      fontSize: 13,
-      theme: {
-        background: '#14130f',
-        foreground: '#c8c2b0',
-        cursor: '#7dd3a0',
-        black: '#14130f',
-        red: '#f17a7a',
-        green: '#7dd3a0',
-        yellow: '#e0b870',
-        blue: '#7aa2f7',
-        magenta: '#c897e0',
-        cyan: '#7dd3c0',
-        white: '#c8c2b0',
-        brightBlack: '#4a463a',
-        brightRed: '#ff8f8f',
-        brightGreen: '#92dfb1',
-        brightYellow: '#ecc78a',
-        brightBlue: '#93b4f8',
-        brightMagenta: '#d3aae6',
-        brightCyan: '#92dccc',
-        brightWhite: '#e7e2d4',
-      },
+      fontSize: terminalFontSize,
+      theme: terminalTheme,
     })
     const fit = new FitAddon()
     terminal.loadAddon(fit)
@@ -101,7 +85,7 @@ export function XtermPane({
         externalRef.current = null
       }
     }
-  }, [session, title, externalRef, onTerminalReady])
+  }, [session, title, externalRef, onTerminalReady, terminalFontSize, terminalTheme])
 
   useEffect(() => {
     const terminal = terminalRef.current

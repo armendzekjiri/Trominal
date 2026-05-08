@@ -13,6 +13,7 @@ import { cn } from '@/lib/cn'
 import { useAuth } from '@/stores/auth'
 import { AiSettingsTab } from './AiSettingsTab'
 import { AccountTab } from './AccountTab'
+import { AppearanceTab } from './AppearanceTab'
 import { ConnectionTab } from './ConnectionTab'
 import { StubTab } from './StubTab'
 
@@ -63,8 +64,8 @@ const TABS: ReadonlyArray<SettingsTab> = [
     id: 'appearance',
     label: 'Appearance',
     icon: Palette,
-    description: 'Theme, fonts, terminal palette - Phase 9.',
-    ready: false,
+    description: 'Theme, fonts, terminal palette.',
+    ready: true,
   },
   {
     id: 'keys',
@@ -139,6 +140,8 @@ function ActiveTabContent({ id }: { id: SettingsTabId }) {
       return <AccountTab />
     case 'ai':
       return <AiSettingsTab />
+    case 'appearance':
+      return <AppearanceTab />
     default:
       return null
   }
