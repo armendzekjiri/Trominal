@@ -256,7 +256,7 @@ function DesktopTerminalPage() {
               <Button
                 size="sm"
                 variant="outline"
-                disabled={active.status === 'connecting' || active.kind === 'host'}
+                disabled={active.status === 'connecting'}
                 onClick={() => void connect(active)}
               >
                 {active.status === 'connecting' ? (
@@ -269,7 +269,7 @@ function DesktopTerminalPage() {
               <Button
                 size="sm"
                 variant="outline"
-                disabled={active.kind === 'host'}
+                disabled={active.status === 'connecting'}
                 onClick={() => void connect(active)}
               >
                 <RotateCcw size={13} />

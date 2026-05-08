@@ -14,6 +14,10 @@ pub fn run() {
             local_shell::local_shell_write,
             local_shell::local_shell_resize,
             local_shell::local_shell_close,
+            local_shell::ssh_connect,
+            local_shell::ssh_write,
+            local_shell::ssh_resize,
+            local_shell::ssh_close,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
