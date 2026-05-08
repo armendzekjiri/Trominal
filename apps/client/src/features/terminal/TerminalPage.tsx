@@ -22,7 +22,9 @@ import { useAuth } from '@/stores/auth'
 import { useHostCredentials, useHosts, useIdentities } from '@/features/vault/hooks'
 import type { HostItem } from '@/features/vault/model'
 import { authForHost } from '@/features/vault/ssh-auth'
-import { AskAiPanel } from '@/features/ai/AskAiPanel'
+import { AskAiPanel, type PendingPrompt } from '@/features/ai/AskAiPanel'
+import { InlineSuggestion } from '@/features/ai/InlineSuggestion'
+import { TerminalContextMenu } from '@/features/ai/TerminalContextMenu'
 import { XtermPane } from './XtermPane'
 
 type BaseTerminalTab = {
@@ -90,6 +92,12 @@ function DesktopTerminalPage() {
   const [askAiOpen, setAskAiOpen] = useState(false)
   const terminalRef = useRef<Terminal | null>(null)
   const canUseAi = useAuth((s) => s.hasPermission('ai.use'))
+  // Track the live xterm + its host element in state so the inline-suggestion
+  // and context-menu overlays (mounted as siblings of XtermPane) re-render
+  // when tabs are switched. The ref above is for late-binding consumers.
+  const [activeTerminal, setActiveTerminal] = useState<Terminal | null>(null)
+  const [terminalElement, setTerminalElement] = useState<HTMLDivElement | null>(null)
+  const [pendingPrompt, setPendingPrompt] = useState<PendingPrompt | null>(null)
 
   function addHostTab(host: HostItem): void {
     const id = crypto.randomUUID()
@@ -308,12 +316,33 @@ function DesktopTerminalPage() {
             </div>
           </div>
           <div className="grid min-h-0 flex-1 grid-cols-[minmax(0,1fr)_auto]">
-            <div className="min-h-0">
+            <div className="relative min-h-0">
               <XtermPane
                 session={active.session}
                 title={tabTitle(active)}
                 terminalRef={terminalRef}
+                onTerminalReady={(terminal, element) => {
+                  setActiveTerminal(terminal)
+                  setTerminalElement(element)
+                  return () => {
+                    setActiveTerminal(null)
+                    setTerminalElement(null)
+                  }
+                }}
               />
+              {canUseAi && activeTerminal !== null && (
+                <InlineSuggestion terminal={activeTerminal} session={active.session} />
+              )}
+              {canUseAi && activeTerminal !== null && terminalElement !== null && (
+                <TerminalContextMenu
+                  terminal={activeTerminal}
+                  element={terminalElement}
+                  onExplain={(text) => {
+                    setAskAiOpen(true)
+                    setPendingPrompt({ text: `/explain ${text}`, nonce: Date.now() })
+                  }}
+                />
+              )}
             </div>
             {canUseAi && askAiOpen && (
               <AskAiPanel
@@ -321,6 +350,7 @@ function DesktopTerminalPage() {
                 onClose={() => setAskAiOpen(false)}
                 terminalRef={terminalRef}
                 sessionLabel={tabTitle(active)}
+                pendingPrompt={pendingPrompt}
               />
             )}
           </div>

@@ -9,6 +9,30 @@ Security-relevant changes are tagged `security:`.
 
 ## [Unreleased]
 
+### Added — Phase 7B: AI inside the terminal & snippet generation
+
+- **Inline command suggestions** in the terminal: `Ctrl+Space` triggers the
+  configured AI provider to suggest the next shell command. The result is
+  rendered as a floating overlay positioned at the xterm cursor; **Tab**
+  accepts (writes through the SSH session), **Esc** dismisses. Manual
+  trigger keeps us out of conflicts with `vim`/`tmux`/sudo prompts that an
+  auto-debounced strategy would lose. Gated by `features.inlineSuggestions`
+  - the `ai.use` permission.
+- **Right-click "Explain command"** context menu over the terminal pane.
+  Uses the active selection (or falls back to the last visible non-blank
+  line). Choosing it opens the Ask AI panel pre-loaded with `/explain
+<text>` and auto-submits via a new `pendingPrompt` prop on `AskAiPanel`.
+  Gated by `features.explainCommand`.
+- **AI-generated snippets**: a Generate button in `SnippetsPage` opens a
+  popover, asks the configured provider for a `{title, body, tags}` JSON
+  response (with `{{variable}}` placeholders), and pre-fills the form for
+  user review. The parser tolerates fenced blocks, missing fields, and
+  free-form responses; the user always confirms before saving.
+- 18 new Vitest cases (69 total) cover snippet-prompt JSON parsing
+  (clean / fenced / fallback / malformed), suggestion sanitisation (code
+  fence stripping, prompt-token removal, multi-line collapse), and the
+  `lastCommandLine` fallback for context-menu Explain.
+
 ### Added — Phase 7A: AI foundation + Settings + Ask AI panel
 
 - **Vault scaffolding** for the existing `ai_settings` table: `AiSettingsItem`

@@ -14,11 +14,22 @@ type XtermPaneProps = {
    * pane assigns the current Terminal on mount and clears it on unmount.
    */
   terminalRef?: { current: Terminal | null }
+  /**
+   * Fired once after a Terminal is mounted into the DOM. Phase 7B uses it
+   * to attach inline-suggestion + context-menu behaviours over the live
+   * instance. Returning a disposer lets the consumer detach cleanly.
+   */
+  onTerminalReady?: (terminal: Terminal, element: HTMLDivElement) => (() => void) | void
 }
 
 const encoder = new TextEncoder()
 
-export function XtermPane({ session, title, terminalRef: externalRef }: XtermPaneProps) {
+export function XtermPane({
+  session,
+  title,
+  terminalRef: externalRef,
+  onTerminalReady,
+}: XtermPaneProps) {
   const elementRef = useRef<HTMLDivElement | null>(null)
   const terminalRef = useRef<Terminal | null>(null)
 
@@ -78,7 +89,10 @@ export function XtermPane({ session, title, terminalRef: externalRef }: XtermPan
       session?.write(encoder.encode(data))
     })
 
+    const readyDisposer = onTerminalReady?.(terminal, element)
+
     return () => {
+      readyDisposer?.()
       dataDisposable.dispose()
       resizeObserver.disconnect()
       terminal.dispose()
@@ -87,7 +101,7 @@ export function XtermPane({ session, title, terminalRef: externalRef }: XtermPan
         externalRef.current = null
       }
     }
-  }, [session, title, externalRef])
+  }, [session, title, externalRef, onTerminalReady])
 
   useEffect(() => {
     const terminal = terminalRef.current
