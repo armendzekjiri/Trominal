@@ -11,6 +11,7 @@ import {
 } from 'lucide-react'
 import { cn } from '@/lib/cn'
 import { useAuth } from '@/stores/auth'
+import { AdvancedTab } from './AdvancedTab'
 import { AiSettingsTab } from './AiSettingsTab'
 import { AccountTab } from './AccountTab'
 import { AppearanceTab } from './AppearanceTab'
@@ -85,8 +86,8 @@ const TABS: ReadonlyArray<SettingsTab> = [
     id: 'advanced',
     label: 'Advanced',
     icon: SettingsIcon,
-    description: 'Diagnostics, telemetry, experimental flags - Phase 9.',
-    ready: false,
+    description: 'Desktop updater and release diagnostics.',
+    ready: true,
   },
 ]
 
@@ -142,6 +143,8 @@ function ActiveTabContent({ id }: { id: SettingsTabId }) {
       return <AiSettingsTab />
     case 'appearance':
       return <AppearanceTab />
+    case 'advanced':
+      return <AdvancedTab />
     default:
       return null
   }

@@ -639,6 +639,14 @@ Tunnels and SFTP are separate product areas because they serve different workflo
 - `docs/SELF_HOSTING.md`, `docs/SECURITY.md`, `docs/ARCHITECTURE.md`, `docs/ADMIN_GUIDE.md`.
 - v0.1.0 tag (without Phase 8 if you want to ship sooner).
 
+#### Phase 9 implementation notes
+
+- Settings → Connection, Account, Appearance, and Advanced are implemented in the client.
+- Advanced includes a manual desktop updater check/install flow. Web builds show deployment-channel status instead.
+- The Tauri updater plugin is installed and permitted for desktop. Release builds inject updater `pubkey`, endpoint, and `createUpdaterArtifacts` via `.github/workflows/release.yml` so local dev builds do not require signing keys.
+- Tagged releases (`v*.*.*`) build a web artifact plus desktop bundles. Linux release output targets AppImage, deb, and rpm.
+- Release, self-hosting, current architecture, security operations, and admin docs live under `docs/`.
+
 ---
 
 ## 12. Quality Bars

@@ -40,7 +40,7 @@ Teams (shared workspaces with proper team-key crypto) ship in v0.2 (Phase 8).
 - **Crypto:** libsodium everywhere — same primitives in JS and Rust
 - **SSH:** native via `russh` (desktop), proxied via WebSocket (web)
 
-See [`.ai/shared/ARCHITECTURE.md`](.ai/shared/ARCHITECTURE.md) for diagrams.
+See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for the current architecture notes and [`.ai/shared/ARCHITECTURE.md`](.ai/shared/ARCHITECTURE.md) for the agent planning diagrams.
 
 ## Security
 
@@ -65,7 +65,7 @@ Then:
 3. Register the first user → automatic admin
 4. Visit `https://<your-domain>/admin` to manage your instance
 
-Full guide: [`docs/SELF_HOSTING.md`](docs/SELF_HOSTING.md) _(coming Phase 9)_.
+Full guide: [`docs/SELF_HOSTING.md`](docs/SELF_HOSTING.md).
 
 ## Development
 
@@ -87,9 +87,13 @@ pnpm dev                # web
 
 See [`AGENTS.md`](AGENTS.md) for Codex guidance, [`CLAUDE.md`](CLAUDE.md) for Claude Code guidance, and [`.ai/`](.ai/) for full project docs.
 
+## Release
+
+Release notes, updater keys, desktop signing, and web artifact deployment are covered in [`docs/RELEASE.md`](docs/RELEASE.md).
+
 ## Contributing
 
-PRs welcome. Read [`docs/CONTRIBUTING.md`](docs/CONTRIBUTING.md) first. Use [Conventional Commits](https://www.conventionalcommits.org/).
+PRs welcome. Read [`CONTRIBUTING.md`](CONTRIBUTING.md) first. Use [Conventional Commits](https://www.conventionalcommits.org/).
 
 ## License
 

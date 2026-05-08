@@ -1,0 +1,117 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+
+permissions:
+  contents: write
+
+jobs:
+  web:
+    name: Web build
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.9
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build web client
+        run: pnpm --dir apps/client build
+
+      - name: Upload web dist
+        uses: actions/upload-artifact@v4
+        with:
+          name: trominal-web-dist
+          path: apps/client/dist
+
+  desktop:
+    name: Desktop bundles
+    runs-on: ${{ matrix.platform }}
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: macos-latest
+            args: --target aarch64-apple-darwin
+            rustTargets: aarch64-apple-darwin
+          - platform: macos-latest
+            args: --target x86_64-apple-darwin
+            rustTargets: x86_64-apple-darwin
+          - platform: ubuntu-22.04
+            args: --bundles appimage,deb,rpm
+            rustTargets: ''
+          - platform: windows-latest
+            args: ''
+            rustTargets: ''
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.9
+
+      - name: Setup Rust
+        if: matrix.rustTargets == ''
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Setup Rust with target
+        if: matrix.rustTargets != ''
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.rustTargets }}
+
+      - name: Install Linux dependencies
+        if: matrix.platform == 'ubuntu-22.04'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev patchelf rpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build and upload desktop bundles
+        uses: tauri-apps/tauri-action@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        with:
+          projectPath: apps/client
+          tagName: ${{ github.ref_name }}
+          releaseName: Trominal ${{ github.ref_name }}
+          releaseBody: |
+            Desktop installers, updater signatures, and updater latest.json for Trominal.
+
+            The web build is attached to this workflow as the trominal-web-dist artifact.
+          releaseDraft: true
+          prerelease: ${{ contains(github.ref_name, '-') }}
+          generateReleaseNotes: true
+          uploadUpdaterJson: true
+          args: >-
+            ${{ matrix.args }}
+            --config
+            '{"bundle":{"createUpdaterArtifacts":true},"plugins":{"updater":{"pubkey":"${{ secrets.TAURI_UPDATER_PUBKEY }}","endpoints":["https://github.com/${{ github.repository }}/releases/latest/download/latest.json"],"windows":{"installMode":"passive"}}}}'
