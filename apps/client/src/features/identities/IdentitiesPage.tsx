@@ -5,7 +5,7 @@ import { TextInput } from '@/components/ui/text-input'
 import { cn } from '@/lib/cn'
 import { useDeleteIdentity, useIdentities, useSaveIdentity } from '@/features/vault/hooks'
 import { type IdentityInput, type IdentityItem } from '@/features/vault/model'
-import { generateEd25519KeyPair, toBase64 } from '@trominal/crypto'
+import { ed25519KeyPairToOpenSsh, generateEd25519KeyPair } from '@trominal/crypto'
 
 const EMPTY_IDENTITY: IdentityInput = {
   name: '',
@@ -47,11 +47,12 @@ export function IdentitiesPage() {
 
   async function generateEd25519(): Promise<void> {
     const keypair = await generateEd25519KeyPair()
+    const exported = await ed25519KeyPairToOpenSsh(keypair, draft.name || 'trominal')
     setDraft({
       ...draft,
       keyType: 'ed25519',
-      publicKey: `ed25519:${await toBase64(keypair.publicKey)}`,
-      privateKey: `ed25519:${await toBase64(keypair.privateKey)}`,
+      publicKey: exported.publicKey,
+      privateKey: exported.privateKey,
     })
     keypair.privateKey.fill(0)
   }

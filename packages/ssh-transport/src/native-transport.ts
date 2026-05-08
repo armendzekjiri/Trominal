@@ -56,15 +56,21 @@ export class NativeSshSession implements SshSession {
     })
 
     try {
+      const request: Record<string, unknown> = {
+        sessionId: this.id,
+        host: this.options.host,
+        port: this.options.port,
+        username: this.options.username,
+        cols: this.options.cols ?? 80,
+        rows: this.options.rows ?? 24,
+      }
+      const privateKeyPem = this.privateKeyPayload()
+      if (privateKeyPem !== undefined) {
+        request.privateKeyPem = privateKeyPem
+      }
+
       await invoke<string>('ssh_connect', {
-        request: {
-          sessionId: this.id,
-          host: this.options.host,
-          port: this.options.port,
-          username: this.options.username,
-          cols: this.options.cols ?? 80,
-          rows: this.options.rows ?? 24,
-        },
+        request,
       })
       this.currentState = 'connected'
     } catch (error) {
@@ -129,6 +135,14 @@ export class NativeSshSession implements SshSession {
     if (this.options.auth?.kind === 'private-key') {
       this.options.auth.privateKeyPem.fill(0)
     }
+  }
+
+  private privateKeyPayload(): number[] | undefined {
+    if (this.options.auth?.kind !== 'private-key') {
+      return undefined
+    }
+
+    return Array.from(this.options.auth.privateKeyPem)
   }
 
   private cleanupListeners(): void {

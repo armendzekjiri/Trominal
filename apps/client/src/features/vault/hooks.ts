@@ -5,13 +5,16 @@ import { newVaultId } from './ids'
 import {
   decryptGroup,
   decryptHost,
+  decryptHostCredential,
   decryptIdentity,
   decryptSnippet,
   encryptGroupInput,
+  encryptHostCredentialInput,
   encryptHostInput,
   encryptIdentityInput,
   encryptSnippetInput,
   type GroupInput,
+  type HostCredentialInput,
   type HostInput,
   type IdentityInput,
   type SnippetInput,
@@ -27,6 +30,7 @@ function vaultKey(): Uint8Array {
 
 const vaultKeys = {
   groups: ['vault', 'groups'] as const,
+  hostCredentials: ['vault', 'host-credentials'] as const,
   hosts: ['vault', 'hosts'] as const,
   identities: ['vault', 'identities'] as const,
   snippets: ['vault', 'snippets'] as const,
@@ -54,6 +58,19 @@ export function useHosts() {
       const api = await getApiClient()
       const records = await api.listVaultRecords('hosts')
       return Promise.all(records.map((record) => decryptHost(record, vaultKey())))
+    },
+  })
+}
+
+export function useHostCredentials() {
+  const key = useVault((s) => s.key)
+  return useQuery({
+    queryKey: vaultKeys.hostCredentials,
+    enabled: key !== null,
+    queryFn: async () => {
+      const api = await getApiClient()
+      const records = await api.listVaultRecords('host-credentials')
+      return Promise.all(records.map((record) => decryptHostCredential(record, vaultKey())))
     },
   })
 }
@@ -122,6 +139,32 @@ export function useDeleteHost() {
       await api.deleteVaultRecord('hosts', id)
     },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: vaultKeys.hosts }),
+  })
+}
+
+export function useSaveHostCredential() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async (input: HostCredentialInput) => {
+      const id = input.id ?? newVaultId()
+      const api = await getApiClient()
+      const payload = await encryptHostCredentialInput(id, vaultKey(), input)
+      return input.id === undefined
+        ? api.createVaultRecord('host-credentials', payload)
+        : api.updateVaultRecord('host-credentials', id, payload)
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: vaultKeys.hostCredentials }),
+  })
+}
+
+export function useDeleteHostCredential() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const api = await getApiClient()
+      await api.deleteVaultRecord('host-credentials', id)
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: vaultKeys.hostCredentials }),
   })
 }
 

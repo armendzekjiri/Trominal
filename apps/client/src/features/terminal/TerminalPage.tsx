@@ -1,4 +1,10 @@
-import { createLocalShellSession, createSshSession, type SshSession } from '@trominal/ssh-transport'
+import {
+  createLocalShellSession,
+  createSshSession,
+  type SshAuth,
+  type SshSession,
+} from '@trominal/ssh-transport'
+import { ed25519KeyPairToOpenSsh, fromBase64 } from '@trominal/crypto'
 import {
   Laptop,
   Loader2,
@@ -16,9 +22,11 @@ import { Dot } from '@/components/ui/dot'
 import { getApiClient } from '@/lib/api-client'
 import { cn } from '@/lib/cn'
 import { isTauri } from '@/lib/platform'
-import { useHosts } from '@/features/vault/hooks'
-import type { HostItem } from '@/features/vault/model'
+import { useHostCredentials, useHosts, useIdentities } from '@/features/vault/hooks'
+import type { HostCredentialItem, HostItem, IdentityItem } from '@/features/vault/model'
 import { XtermPane } from './XtermPane'
+
+const keyEncoder = new TextEncoder()
 
 type BaseTerminalTab = {
   id: string
@@ -72,7 +80,11 @@ function WebTerminalUnavailable() {
 function DesktopTerminalPage() {
   const [searchParams] = useSearchParams()
   const hostsQuery = useHosts()
+  const hostCredentialsQuery = useHostCredentials()
+  const identitiesQuery = useIdentities()
   const hosts = hostsQuery.data ?? []
+  const hostCredentials = hostCredentialsQuery.data ?? []
+  const identities = identitiesQuery.data ?? []
   const requestedHost =
     hosts.find((host) => host.id === searchParams.get('host')) ?? hosts[0] ?? null
   const [tabs, setTabs] = useState<TerminalTab[]>([])
@@ -137,12 +149,15 @@ function DesktopTerminalPage() {
   }
 
   async function hostSession(host: HostItem): Promise<SshSession> {
+    const auth = await authForHost(host, hostCredentials, identities)
+
     if (isTauri) {
       return createSshSession({
         hostId: host.id,
         host: host.hostname,
         port: Number.parseInt(host.port || '22', 10),
         username: host.username,
+        auth,
         sessionName: host.name,
       })
     }
@@ -155,6 +170,7 @@ function DesktopTerminalPage() {
       host: host.hostname,
       port: Number.parseInt(host.port || '22', 10),
       username: host.username,
+      auth,
       websocketUrl: token.websocket_url,
       sessionName: host.name,
     })
@@ -227,7 +243,7 @@ function DesktopTerminalPage() {
         </div>
       </div>
 
-      {hostsQuery.isLoading ? (
+      {hostsQuery.isLoading || hostCredentialsQuery.isLoading || identitiesQuery.isLoading ? (
         <div className="flex flex-1 items-center justify-center gap-2 text-fg-faint">
           <Loader2 size={14} className="animate-spin" />
           Loading hosts
@@ -293,4 +309,49 @@ function DesktopTerminalPage() {
       )}
     </div>
   )
+}
+
+async function authForHost(
+  host: HostItem,
+  credentials: HostCredentialItem[],
+  identities: IdentityItem[],
+): Promise<SshAuth | undefined> {
+  const credential = credentials.find((item) => item.hostId === host.id && item.identityId !== null)
+  const identity = identities.find((item) => item.id === credential?.identityId)
+
+  if (identity === undefined || identity.privateKey.trim() === '') {
+    return undefined
+  }
+
+  const privateKey = await normalizePrivateKey(identity)
+
+  return {
+    kind: 'private-key',
+    privateKeyPem: keyEncoder.encode(privateKey),
+    passphrase: credential?.privateKeyPassphrase || undefined,
+  }
+}
+
+async function normalizePrivateKey(identity: IdentityItem): Promise<string> {
+  const privateKey = identity.privateKey.trim()
+
+  if (privateKey.startsWith('ed25519:') && identity.publicKey.startsWith('ed25519:')) {
+    const publicKey = await fromBase64(identity.publicKey.slice('ed25519:'.length))
+    const secretKey = await fromBase64(privateKey.slice('ed25519:'.length))
+    try {
+      return (
+        await ed25519KeyPairToOpenSsh(
+          {
+            publicKey,
+            privateKey: secretKey,
+          },
+          identity.name || 'trominal',
+        )
+      ).privateKey
+    } finally {
+      secretKey.fill(0)
+    }
+  }
+
+  return privateKey.endsWith('\n') ? privateKey : `${privateKey}\n`
 }
