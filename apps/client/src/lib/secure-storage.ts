@@ -5,7 +5,9 @@ import { isTauri } from './platform'
  * Platform-agnostic secret store used for the refresh token and the persisted
  * server URL.
  *
- * - Desktop (Tauri): commands proxy to the OS keychain via the `keyring` crate.
+ * - Desktop (Tauri): refresh tokens proxy to the OS keychain via the `keyring`
+ *   crate. The API base URL uses normal webview storage because it is not
+ *   confidential and should not trigger a Keychain prompt at startup.
  * - Web: `sessionStorage` for genuinely sensitive values (refresh token) so
  *   they're cleared on tab close, `localStorage` for non-secret values like
  *   the server URL. We do not pretend to encrypt at rest in the browser —
@@ -24,12 +26,23 @@ export type SecureStorage = {
 
 const tauriBackend: SecureStorage = {
   async get(key) {
+    if (key === 'api_base_url') {
+      return webStorageFor(key).getItem(`trominal:${key}`)
+    }
     return await invoke<string | null>('secure_get', { key })
   },
   async set(key, value) {
+    if (key === 'api_base_url') {
+      webStorageFor(key).setItem(`trominal:${key}`, value)
+      return
+    }
     await invoke<void>('secure_set', { key, value })
   },
   async delete(key) {
+    if (key === 'api_base_url') {
+      webStorageFor(key).removeItem(`trominal:${key}`)
+      return
+    }
     await invoke<void>('secure_delete', { key })
   },
 }
