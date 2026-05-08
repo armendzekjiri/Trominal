@@ -56,6 +56,7 @@ final class AuthTest extends TestCase
         self::assertContains('user', $roles);
         self::assertContains('admin.users.manage', $permissions);
         self::assertContains('hosts.connect', $permissions);
+        self::assertContains('sftp.read', $permissions);
         self::assertFalse((bool) AppSetting::registration()->value['open']);
         self::assertSame(1, AuditLog::query()->where('action', 'auth.registered')->count());
     }

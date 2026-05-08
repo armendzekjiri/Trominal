@@ -84,7 +84,7 @@ This separation is intentional: the client app stays focused on SSH workflow; th
 - **react-router-dom** for routing
 - **Vitest + Playwright** for tests
 
-### Mobile (Phase 6, not now)
+### Mobile (future, not now)
 
 - Tauri 2 iOS/Android — same React codebase
 
@@ -148,6 +148,7 @@ hosts.create, hosts.read, hosts.update, hosts.delete, hosts.connect
 snippets.create, snippets.read, snippets.update, snippets.delete
 identities.create, identities.read, identities.update, identities.delete
 tunnels.create, tunnels.read, tunnels.update, tunnels.delete
+sftp.connect, sftp.read, sftp.upload, sftp.download, sftp.delete
 ai.use
 audit.read.own
 
@@ -563,7 +564,7 @@ OpenAPI 3.1 spec at `apps/backend/openapi.yaml`. Client SDK auto-generated to `p
 - Master password setup → derives vault key → generates user keypair → encrypts private key → uploads.
 - Auto-lock after idle timeout.
 - shadcn theme matching termcn.dev (dark default).
-- App shell: sidebar (Hosts, Snippets, Tunnels, Settings) + main pane.
+- App shell: sidebar (Hosts, Terminal, Snippets, Identities, Tunnels, SFTP, Settings) + main pane.
 - Permission-aware UI: hide buttons the user can't use, based on `/api/v1/me` permissions.
 - **Deliverable:** sign up as first/admin user, set master password, log in to client AND admin panel. Web build and desktop build identical.
 
@@ -578,12 +579,33 @@ OpenAPI 3.1 spec at `apps/backend/openapi.yaml`. Client SDK auto-generated to `p
 - Tabs for multiple sessions.
 - Disconnect / reconnect with memory zeroize.
 
-### Phase 6 — Tunneling + SFTP
+#### Phase 5.x implementation notes
+
+These notes describe the local v0.1 implementation already merged after Phase 5. They are authoritative for agents continuing from the current repository state.
+
+- Phase 5.1 added the local desktop shell surface.
+- Phase 5.2 changed desktop SSH to run through the system `ssh` binary in a Tauri PTY so password and keyboard-interactive auth work in the terminal. `russh` remains the locked long-term native SSH engine, but system `ssh` is the current v0.1 desktop transport.
+- Phase 5.3 added host-attached encrypted SSH identities, generated OpenSSH-compatible Ed25519 and RSA-4096 identities, and terminal auth through attached identities.
+- Attached key bootstrap happens on host save, not during terminal connect: Trominal tests the selected key first, prompts for the server password if needed, tries `ssh-copy-id`, and falls back to a manual `authorized_keys` install command.
+- Existing RSA identities exported as PKCS#8 are normalized client-side before use, and host credential switching keeps one current credential per host to avoid stale key selection.
+- Web SSH proxy and multi-session tabs remain planned follow-up work; the current v0.1 priority is reliable desktop SSH, then Phase 6 Tunnels/SFTP.
+
+### Phase 6 — Tunnels and SFTP
+
+Tunnels and SFTP are separate product areas because they serve different workflows. Do not combine them into one page.
+
+#### Phase 6A — Tunnels
 
 - Tunnel manager UI: local, remote, SOCKS.
-- Desktop: real port-forwards via russh.
+- Desktop v0.1: real port-forwards through the current system `ssh` transport. Later replace the engine with `russh` when the native SSH engine is implemented.
 - Web: tunneling proxied through backend with operator-configurable allow/deny.
+
+#### Phase 6B — SFTP
+
+- Separate sidebar item and route from Tunnels (`/sftp`).
 - SFTP browser: dual-pane file manager, drag-drop.
+- Desktop v0.1: use the current host identity/auth model and a native file-transfer bridge.
+- Web: SFTP proxied through backend with the same operator-configurable allow/deny model as web tunneling.
 
 ### Phase 7 — AI Integration (BYOK)
 

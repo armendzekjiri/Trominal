@@ -12,6 +12,7 @@ import { AppShell } from '@/features/app/AppShell'
 import { HostsPage } from '@/features/hosts/HostsPage'
 import { SnippetsPage } from '@/features/snippets/SnippetsPage'
 import { TunnelsPlaceholder } from '@/features/app/TunnelsPlaceholder'
+import { SftpPlaceholder } from '@/features/app/SftpPlaceholder'
 import { IdentitiesPage } from '@/features/identities/IdentitiesPage'
 import { SettingsPlaceholder } from '@/features/app/SettingsPlaceholder'
 import { TerminalPage } from '@/features/terminal/TerminalPage'
@@ -53,6 +54,7 @@ const router = createBrowserRouter([
                   { path: 'snippets', element: <SnippetsPage /> },
                   { path: 'identities', element: <IdentitiesPage /> },
                   { path: 'tunnels', element: <TunnelsPlaceholder /> },
+                  { path: 'sftp', element: <SftpPlaceholder /> },
                   { path: 'settings', element: <SettingsPlaceholder /> },
                 ],
               },
