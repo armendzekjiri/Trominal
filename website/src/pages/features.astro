@@ -1,0 +1,427 @@
+---
+import Page from '@/layouts/Page.astro'
+import Icon from '@/components/chrome/Icon.astro'
+
+const featureGrid = [
+  {
+    icon: 'folder',
+    title: 'SFTP browser',
+    body: 'Drag-drop transfers, mass rename, parallel uploads. Works on slow connections.',
+  },
+  {
+    icon: 'tunnel',
+    title: 'Port forwarding',
+    body: 'Local, remote, and SOCKS5 dynamic. Toggle from any device, traffic stats included.',
+  },
+  {
+    icon: 'code',
+    title: 'Snippets & templates',
+    body: 'Parameterized commands shared across the team. Mustache-style variables.',
+  },
+  {
+    icon: 'key',
+    title: 'Identities & certs',
+    body: 'ed25519, ECDSA, RSA, certificates. Per-host overrides. Hardware-key support.',
+  },
+  {
+    icon: 'users',
+    title: 'Team workspaces',
+    body: 'Roles, audit log, role-based permissions. Granular per-host access. (Phase 8)',
+  },
+  {
+    icon: 'cpu',
+    title: 'GPU-accelerated render',
+    body: 'WebGL-backed terminal via xterm.js. Smooth scrollback even on huge log dumps.',
+  },
+  {
+    icon: 'git',
+    title: 'OpenAPI-defined sync',
+    body: 'Every endpoint declared in OpenAPI 3.1 — typed SDKs, drift-free, easy to extend.',
+  },
+  {
+    icon: 'search',
+    title: 'Universal search',
+    body: '⌘K finds hosts, snippets, files, and scrollback across every active session.',
+  },
+  {
+    icon: 'monitor',
+    title: 'Themable',
+    body: 'Built-in palettes plus full custom themes. Sync them across the team too.',
+  },
+] as const
+---
+
+<Page
+  title="Features"
+  description="A walkthrough of what's in Trominal — and what we deliberately left out."
+  active="features"
+>
+  <header class="page-head">
+    <div class="wrap">
+      <span class="eyebrow"><span class="dot"></span>Features</span>
+      <h1>Everything an SSH client should be.<br />Nothing it shouldn't.</h1>
+      <p class="lede">A walkthrough of what's in Trominal — and what we deliberately left out.</p>
+    </div>
+  </header>
+
+  <!-- Big feature 1: hosts -->
+  <section class="section flush">
+    <div class="wrap">
+      <div
+        style="display:grid;grid-template-columns:1fr 1.05fr;gap:56px;align-items:center"
+        class="big-feature-grid"
+      >
+        <div>
+          <span class="tag accent"><Icon name="server" size={11} /> Hosts</span>
+          <h2 style="margin-top:18px">Your hosts, organized like your team thinks.</h2>
+          <p style="margin-top:14px;color:var(--ink-3);font-size:16px">
+            Group by environment, tag by purpose, color by team. Search anything in 50ms — host
+            name, address, tag, identity, last-seen comment. Fingerprints are pinned and TOFU
+            prompts are explicit.
+          </p>
+          <ul class="prose" style="margin-top:18px;padding-left:0;list-style:none">
+            <li style="display:flex;gap:10px;padding:6px 0">
+              <span style="color:var(--accent)"><Icon name="check" size={14} /></span>
+              <span>SSH config import on first launch</span>
+            </li>
+            <li style="display:flex;gap:10px;padding:6px 0">
+              <span style="color:var(--accent)"><Icon name="check" size={14} /></span>
+              <span>Per-host initial commands &amp; env vars</span>
+            </li>
+            <li style="display:flex;gap:10px;padding:6px 0">
+              <span style="color:var(--accent)"><Icon name="check" size={14} /></span>
+              <span>Bastion / jump host chains, multi-hop</span>
+            </li>
+            <li style="display:flex;gap:10px;padding:6px 0">
+              <span style="color:var(--accent)"><Icon name="check" size={14} /></span>
+              <span>Connection-state badges across the team</span>
+            </li>
+          </ul>
+        </div>
+        <div
+          style="border:1px solid var(--line);border-radius:14px;background:var(--bg-2);padding:18px"
+        >
+          <div
+            style="font-family:var(--mono);font-size:11px;color:var(--ink-4);text-transform:uppercase;letter-spacing:.08em;margin-bottom:12px"
+          >
+            Hosts · 14
+          </div>
+          <div style="display:flex;flex-direction:column;gap:6px">
+            <div
+              style="display:flex;align-items:center;gap:10px;padding:10px;background:var(--bg-3);border:1px solid var(--line);border-radius:8px"
+            >
+              <span style="width:6px;height:24px;border-radius:3px;background:#f17a7a"></span>
+              <div style="flex:1">
+                <div style="font-size:13px;font-weight:500">web-01.prod</div>
+                <div class="mono" style="font-size:11px;color:var(--ink-4)">
+                  deploy@10.0.4.21 · nginx · us-east
+                </div>
+              </div>
+              <span class="tag accent" style="height:20px;font-size:10px">
+                <span style="width:5px;height:5px;border-radius:50%;background:var(--accent)"
+                ></span>connected
+              </span>
+            </div>
+            <div
+              style="display:flex;align-items:center;gap:10px;padding:10px;background:var(--bg-3);border:1px solid var(--line);border-radius:8px"
+            >
+              <span style="width:6px;height:24px;border-radius:3px;background:#f17a7a"></span>
+              <div style="flex:1">
+                <div style="font-size:13px;font-weight:500">db-primary</div>
+                <div class="mono" style="font-size:11px;color:var(--ink-4)">
+                  postgres@db.prod.acme · pg14
+                </div>
+              </div>
+              <span class="tag" style="height:20px;font-size:10px">14m</span>
+            </div>
+            <div
+              style="display:flex;align-items:center;gap:10px;padding:10px;background:var(--bg-3);border:1px solid var(--line);border-radius:8px"
+            >
+              <span style="width:6px;height:24px;border-radius:3px;background:#e0b870"></span>
+              <div style="flex:1">
+                <div style="font-size:13px;font-weight:500">stage-worker</div>
+                <div class="mono" style="font-size:11px;color:var(--ink-4)">
+                  ubuntu@10.1.2.4 · sidekiq
+                </div>
+              </div>
+              <span class="tag warn" style="height:20px;font-size:10px">auth failed</span>
+            </div>
+            <div
+              style="display:flex;align-items:center;gap:10px;padding:10px;background:var(--bg-3);border:1px solid var(--line);border-radius:8px"
+            >
+              <span style="width:6px;height:24px;border-radius:3px;background:#c897e0"></span>
+              <div style="flex:1">
+                <div style="font-size:13px;font-weight:500">homelab-nas</div>
+                <div class="mono" style="font-size:11px;color:var(--ink-4)">
+                  riley@192.168.1.42
+                </div>
+              </div>
+              <span class="tag" style="height:20px;font-size:10px">last week</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Big feature 2: AI -->
+  <section class="section">
+    <div class="wrap">
+      <div
+        style="display:grid;grid-template-columns:1.05fr 1fr;gap:56px;align-items:center"
+        class="big-feature-grid"
+      >
+        <div class="terminal">
+          <div class="head">
+            <div class="lights">
+              <span style="background:#f17a7a"></span>
+              <span style="background:#e0b870"></span>
+              <span style="background:#7dd3a0"></span>
+            </div>
+            <span class="mono">deploy@web-01:/srv/app</span>
+            <span
+              class="tag accent"
+              style="height:18px;padding:0 7px;font-size:10px;margin-left:auto"
+            >
+              <Icon name="sparkles" size={9} /> AI ready
+            </span>
+          </div>
+          <div class="body" style="min-height:240px">
+            <div class="row">
+              <span class="term-prompt">$</span> <span class="term-c-green">tail</span> -f
+              log/prod.log
+            </div>
+            <div class="row">
+              <span class="term-c-red">[ERROR]</span> redis: connection pool exhausted
+            </div>
+            <div
+              class="row"
+              style="margin-top:8px;background:rgba(125,211,160,0.08);border:1px solid var(--accent-line);border-radius:8px;padding:10px"
+            >
+              <div
+                style="display:flex;align-items:center;gap:6px;color:var(--accent);font-size:11px;font-weight:500;margin-bottom:6px"
+              >
+                <Icon name="sparkles" size={11} /> Trominal AI · based on your last command
+              </div>
+              <div style="color:var(--ink);font-size:13px;line-height:1.5">
+                Check Redis connection count and slow log:
+              </div>
+              <div
+                style="margin-top:8px;background:#0a0907;border:1px solid var(--line);border-radius:6px;padding:8px 10px;font-size:12px"
+              >
+                <span class="term-c-green">redis-cli</span> CLIENT LIST |
+                <span class="term-c-cyan">wc</span> -l
+              </div>
+            </div>
+            <div class="row" style="margin-top:8px">
+              <span class="term-prompt">$</span>
+              <span style="color:var(--ink-2)">redis-cli </span>
+              <span class="term-c-dim" style="font-style:italic">CLIENT LIST | wc -l</span>
+              <span
+                style="display:inline-block;width:7px;height:13px;background:var(--accent);animation:blink 1s step-end infinite"
+              ></span>
+            </div>
+            <div class="row" style="margin-top:8px;font-size:11px;color:var(--ink-4)">
+              tab to accept · esc to dismiss · ⌘L to ask
+            </div>
+          </div>
+        </div>
+        <div>
+          <span class="tag accent"><Icon name="sparkles" size={11} /> Trominal AI</span>
+          <h2 style="margin-top:18px">An AI that reads your terminal — not a chat bot.</h2>
+          <p style="margin-top:14px;color:var(--ink-3);font-size:16px">
+            Inline ghost-text suggestions appear after your last command and the output it
+            produced. Tab to accept, escape to dismiss. No popups, no chat windows, no asking
+            ChatGPT what your error means.
+          </p>
+          <ul class="prose" style="margin-top:18px;padding-left:0;list-style:none">
+            <li style="display:flex;gap:10px;padding:6px 0">
+              <span style="color:var(--accent)"><Icon name="check" size={14} /></span>
+              <span>BYOK — your provider, your endpoint, your key. No vendor lock-in.</span>
+            </li>
+            <li style="display:flex;gap:10px;padding:6px 0">
+              <span style="color:var(--accent)"><Icon name="check" size={14} /></span>
+              <span>Calls go directly from your client to the provider. Never through us.</span>
+            </li>
+            <li style="display:flex;gap:10px;padding:6px 0">
+              <span style="color:var(--accent)"><Icon name="check" size={14} /></span>
+              <span>Per-host opt-in for sending terminal context</span>
+            </li>
+            <li style="display:flex;gap:10px;padding:6px 0">
+              <span style="color:var(--accent)"><Icon name="check" size={14} /></span>
+              <span>Local-first mode for fully offline use (Ollama and friends)</span>
+            </li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Big feature 3: encryption -->
+  <section class="section">
+    <div class="wrap">
+      <div
+        style="display:grid;grid-template-columns:1fr 1.05fr;gap:56px;align-items:center"
+        class="big-feature-grid"
+      >
+        <div>
+          <span class="tag accent"><Icon name="lock" size={11} /> Zero-knowledge vault</span>
+          <h2 style="margin-top:18px">The server can't read your secrets — by design.</h2>
+          <p style="margin-top:14px;color:var(--ink-3);font-size:16px">
+            Master password derives a vault key with Argon2id, on your device. Every secret —
+            SSH keys, passwords, AI tokens, snippet bodies — is encrypted with XChaCha20-Poly1305
+            <em>before</em> it leaves your machine. The server stores ciphertext.
+          </p>
+          <ul class="prose" style="margin-top:18px;padding-left:0;list-style:none">
+            <li style="display:flex;gap:10px;padding:6px 0">
+              <span style="color:var(--accent)"><Icon name="check" size={14} /></span>
+              <span>Argon2id KDF (memlimit 64 MiB, opslimit 3) — phishing-resistant</span>
+            </li>
+            <li style="display:flex;gap:10px;padding:6px 0">
+              <span style="color:var(--accent)"><Icon name="check" size={14} /></span>
+              <span>libsodium primitives, identical bytes between Rust and the browser (CI-tested)</span>
+            </li>
+            <li style="display:flex;gap:10px;padding:6px 0">
+              <span style="color:var(--accent)"><Icon name="check" size={14} /></span>
+              <span>Auto-lock on idle, configurable timeout</span>
+            </li>
+            <li style="display:flex;gap:10px;padding:6px 0">
+              <span style="color:var(--accent)"><Icon name="check" size={14} /></span>
+              <span>TOTP 2FA for vault export, password change, and admin panel</span>
+            </li>
+          </ul>
+        </div>
+        <div
+          class="terminal"
+          style="background:var(--bg-2);font-family:var(--mono);font-size:13px"
+        >
+          <div class="head">
+            <div class="lights">
+              <span style="background:#f17a7a"></span>
+              <span style="background:#e0b870"></span>
+              <span style="background:#7dd3a0"></span>
+            </div>
+            <span class="mono">vault — what the server sees</span>
+          </div>
+          <div class="body">
+            <div class="row" style="color:var(--ink-5)"># ssh_keys table, row 1</div>
+            <div class="row">
+              <span style="color:var(--ink-3)">id:</span>
+              <span class="term-c-yellow">01HK9F...</span>
+            </div>
+            <div class="row">
+              <span style="color:var(--ink-3)">user_id:</span>
+              <span class="term-c-cyan">42</span>
+            </div>
+            <div class="row">
+              <span style="color:var(--ink-3)">label:</span>
+              <span class="term-c-green">"deploy-key"</span>
+            </div>
+            <div class="row">
+              <span style="color:var(--ink-3)">ciphertext:</span>
+              <span class="term-c-yellow">b'\x9a\x44\xee...&lt;1.4kb&gt;'</span>
+            </div>
+            <div class="row">
+              <span style="color:var(--ink-3)">nonce:</span>
+              <span class="term-c-yellow">b'\x12\xf3...&lt;24b&gt;'</span>
+            </div>
+            <div class="row" style="margin-top:10px;color:var(--ink-5)">
+              # there is no "private_key" column.
+            </div>
+            <div class="row" style="color:var(--ink-5)">
+              # the vault key never reaches the database.
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Feature grid -->
+  <section class="section">
+    <div class="wrap">
+      <div class="sec-head">
+        <span class="eyebrow">And the rest</span>
+        <h2>The full feature set.</h2>
+      </div>
+      <div class="feature-grid">
+        {
+          featureGrid.map((f) => (
+            <div class="feature">
+              <div class="icon">
+                <Icon name={f.icon} size={18} />
+              </div>
+              <h3>{f.title}</h3>
+              <p>{f.body}</p>
+            </div>
+          ))
+        }
+      </div>
+    </div>
+  </section>
+
+  <!-- What we don't do -->
+  <section class="section">
+    <div class="wrap">
+      <div
+        style="background:var(--bg-2);border:1px solid var(--line);border-radius:18px;padding:48px"
+      >
+        <span class="eyebrow">Deliberately absent</span>
+        <h2 style="margin-top:14px">What Trominal does <em>not</em> do.</h2>
+        <p style="margin-top:14px;color:var(--ink-3);font-size:16px;max-width:640px">
+          Bloat is a feature decision. We say no a lot.
+        </p>
+        <div
+          style="display:grid;grid-template-columns:repeat(2, 1fr);gap:14px;margin-top:28px"
+          class="absent-grid"
+        >
+          {
+            [
+              {
+                title: 'No telemetry',
+                body: 'Zero analytics, zero usage pings, zero "anonymous" identifiers from the client app.',
+              },
+              {
+                title: 'No third-party clouds',
+                body: 'Your data is on your server. Period. There is no Trominal cloud to "optionally" sync to.',
+              },
+              {
+                title: 'No enterprise paywall',
+                body: 'Audit log, RBAC, SSO — all in the OSS build. AGPL-3.0, forever.',
+              },
+              {
+                title: 'No agent on your servers',
+                body: 'Trominal speaks plain SSH. No daemons, no sidecars, no auto-installers.',
+              },
+            ].map((item) => (
+              <div
+                style="display:flex;gap:12px;padding:14px;background:var(--bg-3);border:1px solid var(--line);border-radius:8px"
+              >
+                <span
+                  style="color:var(--danger);font-family:var(--mono);font-size:14px;font-weight:600"
+                >
+                  ×
+                </span>
+                <div>
+                  <div style="font-weight:500">{item.title}</div>
+                  <div style="font-size:13px;color:var(--ink-3);margin-top:2px">{item.body}</div>
+                </div>
+              </div>
+            ))
+          }
+        </div>
+      </div>
+    </div>
+  </section>
+</Page>
+
+<style>
+  @media (max-width: 900px) {
+    .big-feature-grid {
+      grid-template-columns: 1fr !important;
+    }
+    .absent-grid {
+      grid-template-columns: 1fr !important;
+    }
+  }
+</style>

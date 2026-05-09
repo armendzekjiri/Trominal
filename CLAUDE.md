@@ -4,10 +4,11 @@
 
 ## What is Trominal?
 
-Trominal is an open-source, self-hostable, cross-platform Termius alternative. It has two surfaces:
+Trominal is an open-source, self-hostable, cross-platform Termius alternative. It has three surfaces:
 
 1. **Client app** (Tauri + React) — SSH workflow for end-users (web + macOS + Windows + Linux + later mobile).
 2. **Filament admin panel** (Blade-based, on the Laravel backend at `/admin`) — operator's control room for users, roles, permissions, teams, instance settings, and audit log.
+3. **Marketing site & docs** (Astro + MDX, deployed to Cloudflare Pages at `trominal.app`) — landing page, install guide, public demo info, full documentation. Lives in `/website/`.
 
 The first registered user gets BOTH `admin` and `user` roles, so they use the client for SSH AND the admin panel for instance management. Subsequent users typically have only `user`.
 
@@ -28,6 +29,7 @@ Load the matching skill file before working in that area:
 | Anything in `apps/backend/app/Filament/` (admin panel) | [`.ai/skills/filament-admin.md`](.ai/skills/filament-admin.md)                                                                                  |
 | Implementing UI in `apps/client/` (any visual work)    | [`.ai/skills/design-reference.md`](.ai/skills/design-reference.md) **+** [`.ai/skills/tauri-react-client.md`](.ai/skills/tauri-react-client.md) |
 | Non-visual client work (routing, state, hooks)         | [`.ai/skills/tauri-react-client.md`](.ai/skills/tauri-react-client.md)                                                                          |
+| Anything in `website/` (marketing site, docs)          | [`.ai/skills/website.md`](.ai/skills/website.md)                                                                                                |
 | Crypto, vault, key handling, auth secrets              | [`.ai/skills/crypto.md`](.ai/skills/crypto.md)                                                                                                  |
 | Writing tests, CI config                               | [`.ai/skills/testing.md`](.ai/skills/testing.md)                                                                                                |
 | Committing, branching, opening a PR                    | [`.ai/skills/git-workflow.md`](.ai/skills/git-workflow.md)                                                                                      |
@@ -58,6 +60,8 @@ Load the matching skill file before working in that area:
 - Registration: **single-user mode by default**
 - License: **AGPL-3.0**
 - Visual design: locked in `.ai/design/` — dark-first warm charcoal, green accent, JetBrains Mono
+- Marketing site: **Astro 5 + MDX + Tailwind**, deployed to **Cloudflare Pages** at `trominal.app`, with a Worker-backed `/api/stats.json` (KV-cached) for live GitHub data
+- Public demo backend: **`https://backend.trominal.app`** — real, secure instance, database wiped periodically, **not for production**
 
 ## First action
 

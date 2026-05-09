@@ -1,0 +1,24 @@
+---
+import Base from './Base.astro'
+import Header from '@/components/chrome/Header.astro'
+import Footer from '@/components/chrome/Footer.astro'
+import type { NavKey } from '@/lib/site'
+
+interface Props {
+  title: string
+  description?: string
+  active?: NavKey
+  ogImage?: string
+  noIndex?: boolean
+}
+
+const { title, description, active, ogImage, noIndex } = Astro.props
+---
+
+<Base title={title} description={description} ogImage={ogImage} noIndex={noIndex}>
+  <Header active={active} />
+  <main>
+    <slot />
+  </main>
+  <Footer />
+</Base>

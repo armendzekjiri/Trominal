@@ -1,0 +1,184 @@
+---
+import Page from '@/layouts/Page.astro'
+import Icon from '@/components/chrome/Icon.astro'
+import { SITE } from '@/lib/site'
+---
+
+<Page
+  title="Contribute"
+  description="Trominal is open source under AGPL-3.0. Code, docs, design, security review — all welcome."
+  active="contribute"
+>
+  <header class="page-head">
+    <div class="wrap">
+      <span class="eyebrow"><span class="dot"></span>Contribute</span>
+      <h1>Help build a better SSH client.</h1>
+      <p class="lede">
+        Trominal is open source under AGPL-3.0. Code, docs, design, security review — all
+        welcome. Here's how to get started without stepping on anyone's toes.
+      </p>
+    </div>
+  </header>
+
+  <section class="section flush">
+    <div class="wrap">
+      <div
+        style="display:grid;grid-template-columns:repeat(3,1fr);gap:18px"
+        class="contrib-paths"
+      >
+        {
+          [
+            {
+              icon: 'code' as const,
+              title: 'Write code',
+              body: 'Pick up a "good first issue", or work on a Phase from the roadmap. Conventional Commits + tests required.',
+              cta: 'Open issues',
+              href: SITE.github.issuesUrl,
+              external: true,
+            },
+            {
+              icon: 'book' as const,
+              title: 'Improve docs',
+              body: 'Self-hosting guides, admin notes, security explanations. Markdown PRs against /docs/ are reviewed first.',
+              cta: 'Docs source',
+              href: '/docs',
+              external: false,
+            },
+            {
+              icon: 'shield' as const,
+              title: 'Audit security',
+              body: 'Crypto, vault, web SSH proxy. Coordinated disclosure via SECURITY.md — see the threat model first.',
+              cta: 'Security policy',
+              href: '/security',
+              external: false,
+            },
+          ].map((item) => (
+            <div class="card" style="padding:24px">
+              <div
+                style="width:36px;height:36px;border-radius:8px;background:var(--accent-soft);border:1px solid var(--accent-line);display:flex;align-items:center;justify-content:center;color:var(--accent);margin-bottom:14px"
+              >
+                <Icon name={item.icon} size={18} />
+              </div>
+              <h3>{item.title}</h3>
+              <p style="margin-top:8px;color:var(--ink-3);font-size:14px">{item.body}</p>
+              <a
+                href={item.href}
+                target={item.external ? '_blank' : undefined}
+                rel={item.external ? 'noopener' : undefined}
+                style="display:inline-flex;align-items:center;gap:6px;margin-top:14px;color:var(--accent);font-size:13px"
+              >
+                {item.cta} <Icon name="arrow_right" size={12} />
+              </a>
+            </div>
+          ))
+        }
+      </div>
+    </div>
+  </section>
+
+  <section class="section">
+    <div class="wrap">
+      <div
+        style="display:grid;grid-template-columns:1fr 1fr;gap:48px;align-items:start"
+        class="contrib-twocol"
+      >
+        <div>
+          <h2>The development loop</h2>
+          <ol class="prose" style="margin-top:14px">
+            <li>
+              Fork the repo, clone, and run <code>pnpm install</code>.
+            </li>
+            <li>
+              Boot the dev stack: <code>docker compose -f docker/docker-compose.dev.yml up</code>
+              brings up Postgres + Redis. Then
+              <code>composer --working-dir apps/backend dev</code> starts the backend, and
+              <code>pnpm --dir apps/client tauri dev</code> launches the desktop client.
+            </li>
+            <li>
+              Branch from <code>main</code> using a phased name (e.g. <code>phase/9-auto-update</code>
+              or <code>fix/auth-totp</code>).
+            </li>
+            <li>
+              Write a failing test first when changing crypto or auth logic. Define the OpenAPI
+              entry first when changing API surfaces.
+            </li>
+            <li>Open a PR with a description, screenshot if UI, and security checklist.</li>
+          </ol>
+          <div style="margin-top:18px;display:flex;gap:10px;flex-wrap:wrap">
+            <a
+              href={`${SITE.github.url}/blob/main/CONTRIBUTING.md`}
+              target="_blank"
+              rel="noopener"
+              class="btn btn-primary"
+            >
+              <Icon name="git" size={14} /> CONTRIBUTING.md
+            </a>
+            <a href="/docs/contributing" class="btn btn-secondary">Read on this site</a>
+          </div>
+        </div>
+        <div>
+          <h2>Quality bars</h2>
+          <ul class="prose" style="margin-top:14px">
+            <li>Backend test coverage ≥ 80%, client ≥ 70%.</li>
+            <li>Type-strict TS, PHPStan/Larastan level 8, Pint clean.</li>
+            <li>Conventional Commits on every commit.</li>
+            <li>
+              Crypto changes: tests committed before the implementation. CI runs the cross-platform
+              crypto suite (TS ↔ Rust) on every PR.
+            </li>
+            <li>
+              Filament admin pages need an authorization test before they merge — non-admin gets a
+              403.
+            </li>
+            <li>No new dependency without a justification in the commit message.</li>
+            <li>No secrets in logs. Ever.</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="section">
+    <div class="wrap">
+      <div class="card" style="padding:36px;text-align:center">
+        <h3>First-time contributor?</h3>
+        <p class="muted" style="margin-top:10px">
+          Look for issues tagged <code class="mono">good first issue</code> or
+          <code class="mono">help wanted</code>. Comment to claim one. We'll pair-review your
+          first PR end-to-end.
+        </p>
+        <div
+          style="margin-top:18px;display:flex;justify-content:center;gap:10px;flex-wrap:wrap"
+        >
+          <a
+            href={`${SITE.github.url}/issues?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22`}
+            target="_blank"
+            rel="noopener"
+            class="btn btn-primary"
+          >
+            Good first issues
+          </a>
+          <a
+            href={SITE.github.discussionsUrl}
+            target="_blank"
+            rel="noopener"
+            class="btn btn-secondary"
+          >
+            Join the discussion
+          </a>
+        </div>
+      </div>
+    </div>
+  </section>
+</Page>
+
+<style>
+  @media (max-width: 900px) {
+    .contrib-paths {
+      grid-template-columns: 1fr !important;
+    }
+    .contrib-twocol {
+      grid-template-columns: 1fr !important;
+    }
+  }
+</style>

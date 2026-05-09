@@ -1,0 +1,45 @@
+---
+import { fetchGithubStats, FALLBACK_STATS } from '@/lib/github'
+import { formatStarCount } from '@/lib/format'
+
+interface Props {
+  class?: string
+}
+
+const { class: className } = Astro.props
+
+let stars: number = FALLBACK_STATS.stars
+try {
+  const stats = await fetchGithubStats()
+  stars = stats.stars
+} catch {
+  // Build-time fetch failed, use fallback. Client refresh will update.
+}
+---
+
+<span class={className} data-stars-target>{formatStarCount(stars)}</span>
+
+<script>
+  // Refresh star count from the live API endpoint after page load so it
+  // stays fresh between deploys (the build-time value is the floor).
+  function formatStars(n: number): string {
+    return n >= 1000 ? `${(n / 1000).toFixed(1)}k` : String(n)
+  }
+
+  async function refresh() {
+    try {
+      const res = await fetch('/api/stats.json', { cache: 'no-store' })
+      if (!res.ok) return
+      const data = (await res.json()) as { stars?: number }
+      if (typeof data.stars !== 'number') return
+      const formatted = formatStars(data.stars)
+      document.querySelectorAll<HTMLElement>('[data-stars-target]').forEach((el) => {
+        el.textContent = formatted
+      })
+    } catch {
+      /* noop */
+    }
+  }
+
+  refresh()
+</script>

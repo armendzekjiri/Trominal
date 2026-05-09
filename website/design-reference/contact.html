@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<title>Contact — Trominal</title>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet"/>
+<link rel="stylesheet" href="site.css"/>
+</head>
+<body>
+<div data-header="contact"></div>
+
+<header class="page-head">
+  <div class="wrap">
+    <span class="eyebrow"><span class="dot"></span>Contact</span>
+    <h1>Find the right channel.</h1>
+    <p class="lede">Trominal is volunteer-run. Picking the right place to ask gets you a faster answer.</p>
+  </div>
+</header>
+
+<section class="section flush">
+  <div class="wrap">
+    <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:18px">
+      <div class="card">
+        <div style="display:flex;align-items:center;gap:12px;margin-bottom:14px">
+          <span style="width:40px;height:40px;border-radius:10px;background:var(--accent-soft);border:1px solid var(--accent-line);color:var(--accent);display:flex;align-items:center;justify-content:center" data-icon="github" data-size="18"></span>
+          <div><h3>Bug or feature request</h3><div class="mono" style="font-size:11px;color:var(--ink-4);margin-top:2px">github.com/trominal/trominal/issues</div></div>
+        </div>
+        <p style="color:var(--ink-3);font-size:14px">Anything reproducible. Use the templates — they prompt for the info we need to act fast.</p>
+        <a href="https://github.com/trominal/trominal/issues" target="_blank" rel="noopener" class="btn btn-secondary" style="margin-top:16px">Open an issue</a>
+      </div>
+
+      <div class="card">
+        <div style="display:flex;align-items:center;gap:12px;margin-bottom:14px">
+          <span style="width:40px;height:40px;border-radius:10px;background:rgba(122,162,247,0.12);border:1px solid rgba(122,162,247,0.3);color:var(--info);display:flex;align-items:center;justify-content:center" data-icon="discord" data-size="18"></span>
+          <div><h3>General chat &amp; help</h3><div class="mono" style="font-size:11px;color:var(--ink-4);margin-top:2px">discord.gg/trominal</div></div>
+        </div>
+        <p style="color:var(--ink-3);font-size:14px">"How do I set up bastion chains?" — that kind of thing. Active community, maintainers drop in.</p>
+        <a href="#" class="btn btn-secondary" style="margin-top:16px">Join Discord</a>
+      </div>
+
+      <div class="card">
+        <div style="display:flex;align-items:center;gap:12px;margin-bottom:14px">
+          <span style="width:40px;height:40px;border-radius:10px;background:rgba(241,122,122,0.12);border:1px solid rgba(241,122,122,0.3);color:var(--danger);display:flex;align-items:center;justify-content:center" data-icon="shield" data-size="18"></span>
+          <div><h3>Security disclosure</h3><div class="mono" style="font-size:11px;color:var(--ink-4);margin-top:2px">security@trominal.dev</div></div>
+        </div>
+        <p style="color:var(--ink-3);font-size:14px">PGP-encrypted reports preferred. We follow a 90-day coordinated disclosure policy. Hall of fame on the security page.</p>
+        <a href="security.html" class="btn btn-secondary" style="margin-top:16px">Security policy &amp; PGP key</a>
+      </div>
+
+      <div class="card">
+        <div style="display:flex;align-items:center;gap:12px;margin-bottom:14px">
+          <span style="width:40px;height:40px;border-radius:10px;background:rgba(224,184,112,0.12);border:1px solid rgba(224,184,112,0.3);color:var(--warn);display:flex;align-items:center;justify-content:center" data-icon="mail" data-size="18"></span>
+          <div><h3>Press &amp; partnerships</h3><div class="mono" style="font-size:11px;color:var(--ink-4);margin-top:2px">hello@trominal.dev</div></div>
+        </div>
+        <p style="color:var(--ink-3);font-size:14px">Writing about the project, packaging it for a distro, want a logo asset? This is the inbox.</p>
+        <a href="mailto:hello@trominal.dev" class="btn btn-secondary" style="margin-top:16px">Email us</a>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- FAQ -->
+<section class="section">
+  <div class="wrap">
+    <div class="sec-head">
+      <span class="eyebrow">FAQ</span>
+      <h2>Before you ask.</h2>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:10px;max-width:760px">
+      <details class="card">
+        <summary style="cursor:pointer;font-weight:500;display:flex;align-items:center;gap:10px"><span data-icon="arrow_right" data-size="14" style="color:var(--accent)"></span>Is there a paid version?</summary>
+        <p style="color:var(--ink-3);font-size:14px;margin-top:12px;padding-left:24px">No. There is no Pro tier, no Enterprise tier, no feature gates. The full app is MIT-licensed.</p>
+      </details>
+      <details class="card">
+        <summary style="cursor:pointer;font-weight:500;display:flex;align-items:center;gap:10px"><span data-icon="arrow_right" data-size="14" style="color:var(--accent)"></span>Do you offer hosted Trominal?</summary>
+        <p style="color:var(--ink-3);font-size:14px;margin-top:12px;padding-left:24px">A small "Trominal Cloud" beta exists for hobbyists who don't want to run their own server. It's optional and can be turned off in one click. Full data export is built in.</p>
+      </details>
+      <details class="card">
+        <summary style="cursor:pointer;font-weight:500;display:flex;align-items:center;gap:10px"><span data-icon="arrow_right" data-size="14" style="color:var(--accent)"></span>Can I get support for my company?</summary>
+        <p style="color:var(--ink-3);font-size:14px;margin-top:12px;padding-left:24px">Two maintainers offer paid consulting / priority support — see the <a href="#" style="color:var(--accent)">support page</a>. The community Discord is free and active.</p>
+      </details>
+      <details class="card">
+        <summary style="cursor:pointer;font-weight:500;display:flex;align-items:center;gap:10px"><span data-icon="arrow_right" data-size="14" style="color:var(--accent)"></span>Where are you legally based?</summary>
+        <p style="color:var(--ink-3);font-size:14px;margin-top:12px;padding-left:24px">Trominal is a project of <strong>Trominal Foundation</strong>, a Dutch non-profit (Stichting), registered at KvK 99281402. Mail address: Postbus 14122, 1001 GC Amsterdam, NL.</p>
+      </details>
+    </div>
+  </div>
+</section>
+
+<div data-footer></div>
+<script src="chrome.js"></script>
+</body>
+</html>

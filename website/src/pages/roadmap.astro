@@ -1,0 +1,234 @@
+---
+import Page from '@/layouts/Page.astro'
+import Icon from '@/components/chrome/Icon.astro'
+import { SITE } from '@/lib/site'
+
+export const prerender = true
+
+interface PhaseDef {
+  number: number
+  name: string
+  status: 'done' | 'in-progress' | 'planned'
+  summary: string
+  highlights: string[]
+}
+
+// Mirrors PROJECT_BRIEF.md §11. Update in lockstep with the brief.
+const PHASES: PhaseDef[] = [
+  {
+    number: 0,
+    name: 'Foundation',
+    status: 'done',
+    summary: 'Monorepo, dev compose stack, CI, license, lint/format toolchain.',
+    highlights: [
+      'pnpm workspaces, Laravel 13 backend scaffold, Tauri 2 + React + TS client',
+      'docker-compose for Postgres + Redis',
+      'GitHub Actions, Husky pre-commit, AGPL-3.0',
+    ],
+  },
+  {
+    number: 1,
+    name: 'Backend auth + single-user mode',
+    status: 'done',
+    summary: 'Sanctum auth, refresh-token rotation, 2FA, single-user closeout, audit log.',
+    highlights: [
+      'Spatie Laravel Permission, default roles + permissions seeded',
+      'Atomic single-user-mode race condition handled',
+      'Forgot/reset password (queued mail)',
+    ],
+  },
+  {
+    number: 2,
+    name: 'Filament admin panel',
+    status: 'done',
+    summary: 'Filament 3 panel at /admin, gated by admin role + 2FA.',
+    highlights: [
+      'User, role, permission, invite resources',
+      'Settings page (registration mode, instance name, feature flags)',
+      'Audit log viewer, system health dashboard',
+    ],
+  },
+  {
+    number: 3,
+    name: 'Vault backend',
+    status: 'done',
+    summary: 'Hosts, snippets, identities, tunnels — encrypted-at-rest CRUD with delta sync.',
+    highlights: [
+      'Laravel encrypted casts on every ciphertext column',
+      'OpenAPI 3.1 spec generated, typed @trominal/api-client',
+      'Master-password rotation transaction',
+    ],
+  },
+  {
+    number: 4,
+    name: 'Client foundation + auth UI',
+    status: 'done',
+    summary: 'libsodium crypto package, first-launch flow, login + register + 2FA.',
+    highlights: [
+      'TS ↔ Rust crypto cross-tested in CI for byte-identical output',
+      'Permission-aware UI (hide buttons the user can\'t use)',
+      'Auto-lock on idle, secure storage for refresh tokens',
+    ],
+  },
+  {
+    number: 5,
+    name: 'Hosts, snippets, identities, terminal',
+    status: 'done',
+    summary: 'The thing you live in — full SSH workflow on desktop.',
+    highlights: [
+      'xterm.js terminal with PTY resize, copy/paste, true colors',
+      'Host-attached encrypted SSH identities (Ed25519 + RSA-4096)',
+      'System ssh PTY transport for v0.1 (russh remains the long-term native engine)',
+    ],
+  },
+  {
+    number: 6,
+    name: 'Tunnels and SFTP',
+    status: 'in-progress',
+    summary: 'Port-forwards (local/remote/SOCKS) and SFTP file manager.',
+    highlights: [
+      '6A — Tunnels: real port-forwards through current ssh transport',
+      '6B — SFTP: dual-pane browser, drag-drop, parallel transfers',
+      'Web variant proxied through backend, operator-configurable allow/deny',
+    ],
+  },
+  {
+    number: 7,
+    name: 'AI integration (BYOK)',
+    status: 'in-progress',
+    summary:
+      'Bring your own key — adapters for OpenAI, Anthropic, custom endpoints. Calls go directly from client to provider.',
+    highlights: [
+      'Phase 7C done: opt-in auto-suggest with smart heuristics',
+      'Inline ghost-text suggestions, "Ask AI" panel, "Explain this" right-click',
+      'Snippet generation from natural language',
+    ],
+  },
+  {
+    number: 8,
+    name: 'Teams',
+    status: 'in-progress',
+    summary: 'Multi-user teams with per-team symmetric keys wrapped per member.',
+    highlights: [
+      '8A — Backend foundation done (teams, team_members, ULIDs, encrypted casts)',
+      '8B — Crypto helpers done (wrap/unwrap with sealed boxes)',
+      '8C — Vault scope, 8D — Filament team admin, 8E — Client workspace switcher',
+      'Pending: client create/edit flows for team-scoped resources',
+    ],
+  },
+  {
+    number: 9,
+    name: 'Polish, docs, release',
+    status: 'in-progress',
+    summary: 'Settings UX, auto-updater, code signing, full docs, v0.1.0 tag.',
+    highlights: [
+      'Settings → Connection / Account / Appearance / Advanced — implemented',
+      'Tauri auto-updater plugin wired up; release CI builds desktop bundles',
+      'Linux: AppImage + .deb + .rpm; macOS notarization docs',
+    ],
+  },
+]
+
+const STATUS_META = {
+  done: { label: 'Shipped', color: 'var(--accent)', bg: 'var(--accent-soft)', border: 'var(--accent-line)' },
+  'in-progress': {
+    label: 'In progress',
+    color: 'var(--warn)',
+    bg: 'rgba(224,184,112,0.1)',
+    border: 'rgba(224,184,112,0.3)',
+  },
+  planned: { label: 'Planned', color: 'var(--ink-3)', bg: 'rgba(255,255,255,0.04)', border: 'var(--line)' },
+} as const
+---
+
+<Page
+  title="Roadmap"
+  description="The phased build plan for Trominal — what's shipped, what's next, what's coming."
+  active="roadmap"
+>
+  <header class="page-head">
+    <div class="wrap">
+      <span class="eyebrow"><span class="dot"></span>Roadmap</span>
+      <h1>What we're building, in order.</h1>
+      <p class="lede">
+        Trominal ships in phases. Each phase is fully complete (tested, documented, merged)
+        before the next begins. Source of truth lives in
+        <a
+          href={`${SITE.github.url}/blob/main/.ai/shared/PROJECT_BRIEF.md`}
+          target="_blank"
+          rel="noopener"
+          style="color:var(--accent);border-bottom:1px solid var(--accent-line)"
+        >
+          PROJECT_BRIEF.md §11
+        </a>.
+      </p>
+    </div>
+  </header>
+
+  <section class="section flush">
+    <div class="wrap">
+      <div style="display:flex;flex-direction:column;gap:16px">
+        {
+          PHASES.map((phase) => {
+            const meta = STATUS_META[phase.status]
+            return (
+              <div
+                class="card"
+                style={`border-color:${phase.status === 'done' ? meta.border : 'var(--line)'};padding:28px`}
+              >
+                <div
+                  style="display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap"
+                >
+                  <div style="display:flex;align-items:center;gap:12px">
+                    <span
+                      class="mono"
+                      style="font-size:11px;color:var(--ink-4);text-transform:uppercase;letter-spacing:0.1em"
+                    >
+                      Phase {phase.number}
+                    </span>
+                    <h3 style="font-size:20px">{phase.name}</h3>
+                  </div>
+                  <span
+                    class="tag"
+                    style={`background:${meta.bg};border-color:${meta.border};color:${meta.color}`}
+                  >
+                    {phase.status === 'done' && <Icon name="check" size={11} />}
+                    {phase.status === 'in-progress' && <Icon name="bolt" size={11} />}
+                    {meta.label}
+                  </span>
+                </div>
+                <p style="margin-top:10px;color:var(--ink-3);font-size:15px">{phase.summary}</p>
+                <ul
+                  style="margin-top:14px;padding-left:0;list-style:none;display:flex;flex-direction:column;gap:6px"
+                >
+                  {phase.highlights.map((h) => (
+                    <li
+                      style="display:flex;gap:10px;font-size:14px;color:var(--ink-2);padding:4px 0"
+                    >
+                      <span style="color:var(--accent);flex-shrink:0">·</span>
+                      <span>{h}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )
+          })
+        }
+      </div>
+
+      <div class="card" style="padding:32px;text-align:center;margin-top:32px">
+        <h3>Want to influence what ships next?</h3>
+        <p class="muted" style="margin-top:10px">
+          Open issues are how we prioritize.
+          <a href={SITE.github.issuesUrl} target="_blank" rel="noopener" style="color:var(--accent)">
+            Browse the backlog
+          </a>
+          or
+          <a href={SITE.github.discussionsUrl} target="_blank" rel="noopener" style="color:var(--accent)">
+            start a discussion
+          </a>.
+        </p>
+      </div>
+    </div>
+  </section>
+</Page>
