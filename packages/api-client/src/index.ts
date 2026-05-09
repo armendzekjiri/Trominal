@@ -250,9 +250,25 @@ export type TeamMemberKeyRewrap = {
   wrapped_team_key_nonce: string
 }
 
-/** Request body for DELETE /api/v1/teams/{id}/members/{memberId}. */
+/** A vault record re-encrypted under the new team key during member removal. */
+export type TeamReencryptedResource = {
+  type: VaultResourceType
+  id: string
+  fields: VaultRecordPayload
+}
+
+/**
+ * Request body for DELETE /api/v1/teams/{id}/members/{memberId}.
+ *
+ * Per PROJECT_BRIEF §5.3, removing a member must (a) re-wrap the team key for
+ * every remaining member and (b) re-encrypt every team-scoped vault record
+ * under that new team key — otherwise the removed user's retained plaintext
+ * key still decrypts the on-disk ciphertext. The server validates that
+ * `reencrypted_resources` covers exactly the team's current set of records.
+ */
 export type RemoveTeamMemberRequest = {
   remaining_members: TeamMemberKeyRewrap[]
+  reencrypted_resources: TeamReencryptedResource[]
 }
 
 /** Error thrown when the Trominal API responds outside the 2xx range. */

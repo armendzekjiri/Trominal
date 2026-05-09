@@ -764,7 +764,7 @@ components:
           $ref: '#/components/schemas/TeamRole'
     TeamMemberRemoveRequest:
       type: object
-      required: [remaining_members]
+      required: [remaining_members, reencrypted_resources]
       properties:
         remaining_members:
           type: array
@@ -778,6 +778,26 @@ components:
                 type: string
               wrapped_team_key_nonce:
                 type: string
+        reencrypted_resources:
+          description: |
+            Every team-scoped vault record this team owns, re-encrypted under
+            the new team key. Per PROJECT_BRIEF §5.3, the removed user's
+            retained plaintext team key must not be able to decrypt any of
+            the team's records after rotation; this is enforced by the
+            server, which validates that the list covers exactly the team's
+            current set of vault rows. Each `fields` map must contain only
+            ciphertext / nonce columns for that resource type.
+          type: array
+          items:
+            type: object
+            required: [type, id, fields]
+            properties:
+              type:
+                $ref: '#/components/schemas/VaultResourceType'
+              id:
+                type: string
+              fields:
+                $ref: '#/components/schemas/VaultRecordPayload'
     TeamResponse:
       type: object
       required: [data]

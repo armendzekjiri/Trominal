@@ -8,8 +8,10 @@ use App\Models\AuditLog;
 use App\Models\Team;
 use App\Models\TeamMember;
 use App\Models\User;
+use App\Support\Vault\VaultResourceRegistry;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Database\Eloquent\Collection;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
@@ -169,7 +171,10 @@ final class TeamService
     }
 
     /**
-     * @param  array{remaining_members: list<array{member_id: string, wrapped_team_key_ciphertext: string, wrapped_team_key_nonce: string}>}  $payload
+     * @param  array{
+     *     remaining_members: list<array{member_id: string, wrapped_team_key_ciphertext: string, wrapped_team_key_nonce: string}>,
+     *     reencrypted_resources: list<array{type: string, id: string, fields: array<string, mixed>}>
+     * }  $payload
      */
     public function removeMember(User $actor, Team $team, TeamMember $member, array $payload): void
     {
@@ -199,6 +204,17 @@ final class TeamService
                 ]);
             }
 
+            // Re-encrypt every team-scoped vault record under the new team
+            // key. The brief (§5.3) requires this so the removed member's
+            // retained plaintext key cannot decrypt the records later — the
+            // wrapped-key rotation alone leaves the on-disk ciphertext
+            // recoverable with the old key. Validation runs first so the
+            // whole operation is atomic.
+            $rotated = $this->applyResourceReencryption(
+                $team,
+                $payload['reencrypted_resources'],
+            );
+
             $member->delete();
             $team->forceFill(['key_version' => $newKeyVersion])->save();
 
@@ -206,6 +222,7 @@ final class TeamService
                 'team_id' => (string) $team->id,
                 'removed_user_id' => (string) $member->user_id,
                 'key_version' => $newKeyVersion,
+                'resources_rotated' => $rotated,
             ]);
         });
     }
@@ -309,6 +326,97 @@ final class TeamService
                 'member' => __('The selected team member is invalid.'),
             ]);
         }
+    }
+
+    /**
+     * Replay the client-supplied re-encrypted ciphertext into every
+     * team-scoped vault record. Throws if any expected record is missing
+     * or any unexpected record is supplied — the caller's transaction
+     * rolls back on either branch.
+     *
+     * @param  list<array{type: string, id: string, fields: array<string, mixed>}>  $reencrypted
+     */
+    private function applyResourceReencryption(Team $team, array $reencrypted): int
+    {
+        $expected = $this->collectTeamScopedResources($team);
+        $expectedKeys = [];
+        foreach ($expected as $type => $records) {
+            foreach ($records as $record) {
+                $expectedKeys[$type.':'.(string) $record->getKey()] = true;
+            }
+        }
+        $providedKeys = [];
+
+        foreach ($reencrypted as $entry) {
+            $type = $entry['type'];
+            $id = $entry['id'];
+            $key = $type.':'.$id;
+
+            if (! array_key_exists($key, $expectedKeys)) {
+                throw ValidationException::withMessages([
+                    'reencrypted_resources' => __('Unexpected vault record was supplied for re-encryption.'),
+                ]);
+            }
+            if (array_key_exists($key, $providedKeys)) {
+                throw ValidationException::withMessages([
+                    'reencrypted_resources' => __('Duplicate vault record in re-encryption payload.'),
+                ]);
+            }
+            $providedKeys[$key] = true;
+
+            $resource = VaultResourceRegistry::get($type);
+            $allowedFields = array_filter(
+                $resource['fields'],
+                static fn (string $field): bool => str_ends_with($field, '_ciphertext') || str_ends_with($field, '_nonce'),
+            );
+            $invalidFields = array_diff(array_keys($entry['fields']), $allowedFields);
+            if ($invalidFields !== []) {
+                throw ValidationException::withMessages([
+                    'reencrypted_resources' => __('One or more vault fields cannot be changed during team rotation.'),
+                ]);
+            }
+
+            /** @var Model $record */
+            $record = $expected[$type]->firstWhere(
+                static fn (Model $row): bool => (string) $row->getKey() === $id,
+            );
+            $record->update($entry['fields']);
+        }
+
+        $missingKeys = array_diff_key($expectedKeys, $providedKeys);
+        if ($missingKeys !== []) {
+            throw ValidationException::withMessages([
+                'reencrypted_resources' => __('Every team-scoped vault record must be re-encrypted before removing a member.'),
+            ]);
+        }
+
+        return count($expectedKeys);
+    }
+
+    /**
+     * Pluck every team-scoped vault record under this team, locking each
+     * row for the rotation transaction.
+     *
+     * @return array<string, Collection<int, Model>>
+     */
+    private function collectTeamScopedResources(Team $team): array
+    {
+        $bundle = [];
+        foreach (VaultResourceRegistry::all() as $type => $resource) {
+            if (! $resource['team_scoped']) {
+                continue;
+            }
+            /** @var class-string<Model> $modelClass */
+            $modelClass = $resource['model'];
+            /** @var Collection<int, Model> $records */
+            $records = $modelClass::query()
+                ->where('team_id', $team->id)
+                ->lockForUpdate()
+                ->get();
+            $bundle[$type] = $records;
+        }
+
+        return $bundle;
     }
 
     private function assertNotLastOwner(Team $team, TeamMember $member): void

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Tests\Feature\Api\V1;
 
 use App\Models\AuditLog;
+use App\Models\Host;
 use App\Models\Team;
 use App\Models\TeamMember;
 use App\Models\User;
@@ -195,6 +196,7 @@ final class TeamsTest extends TestCase
                     'wrapped_team_key_nonce' => 'rotated-owner-nonce',
                 ],
             ],
+            'reencrypted_resources' => [],
         ], $headers)
             ->assertUnprocessable()
             ->assertJsonValidationErrors(['remaining_members']);
@@ -212,6 +214,7 @@ final class TeamsTest extends TestCase
                     'wrapped_team_key_nonce' => 'rotated-admin-nonce',
                 ],
             ],
+            'reencrypted_resources' => [],
         ], $headers)->assertNoContent();
 
         $team->refresh();
@@ -225,6 +228,110 @@ final class TeamsTest extends TestCase
         self::assertSame('rotated-admin-wrap', $adminMember->wrapped_team_key_ciphertext);
         self::assertFalse(TeamMember::query()->whereKey($member->id)->exists());
         self::assertSame(1, AuditLog::query()->where('action', 'team.member.removed')->count());
+    }
+
+    public function test_removing_member_requires_reencryption_of_every_team_scoped_record(): void
+    {
+        // The brief (§5.3) requires resource ciphertext to be re-encrypted
+        // under a fresh team key on member removal — otherwise the removed
+        // member's retained plaintext team key still decrypts the records.
+        // The service rejects any payload that omits or duplicates rows.
+        $owner = $this->userWithRole('user');
+        $memberUser = $this->userWithRole('user');
+        $team = $this->createTeamForOwner($owner);
+        $ownerMember = TeamMember::query()
+            ->where('team_id', $team->id)
+            ->where('user_id', $owner->id)
+            ->firstOrFail();
+        $member = $this->createMembership($team, $memberUser, TeamMember::ROLE_MEMBER);
+        $headers = $this->bearerHeaders($owner);
+
+        /** @var Host $host */
+        $host = Host::query()->create([
+            'user_id' => $owner->id,
+            'team_id' => $team->id,
+            'name_ciphertext' => 'old-name-ct',
+            'name_nonce' => 'old-name-nonce',
+            'hostname_ciphertext' => 'old-hostname-ct',
+            'hostname_nonce' => 'old-hostname-nonce',
+        ]);
+
+        // Missing host re-encryption rejects.
+        $this->deleteJson("/api/v1/teams/{$team->id}/members/{$member->id}", [
+            'remaining_members' => [[
+                'member_id' => $ownerMember->id,
+                'wrapped_team_key_ciphertext' => 'rotated-owner-wrap',
+                'wrapped_team_key_nonce' => 'rotated-owner-nonce',
+            ]],
+            'reencrypted_resources' => [],
+        ], $headers)
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors(['reencrypted_resources']);
+
+        // Unexpected record id rejects.
+        $this->deleteJson("/api/v1/teams/{$team->id}/members/{$member->id}", [
+            'remaining_members' => [[
+                'member_id' => $ownerMember->id,
+                'wrapped_team_key_ciphertext' => 'rotated-owner-wrap',
+                'wrapped_team_key_nonce' => 'rotated-owner-nonce',
+            ]],
+            'reencrypted_resources' => [[
+                'type' => 'hosts',
+                'id' => '01J0FAKEHOSTID0000000000000',
+                'fields' => [
+                    'name_ciphertext' => 'new-name-ct',
+                    'name_nonce' => 'new-name-nonce',
+                ],
+            ]],
+        ], $headers)
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors(['reencrypted_resources']);
+
+        // Field outside the ciphertext allowlist rejects.
+        $this->deleteJson("/api/v1/teams/{$team->id}/members/{$member->id}", [
+            'remaining_members' => [[
+                'member_id' => $ownerMember->id,
+                'wrapped_team_key_ciphertext' => 'rotated-owner-wrap',
+                'wrapped_team_key_nonce' => 'rotated-owner-nonce',
+            ]],
+            'reencrypted_resources' => [[
+                'type' => 'hosts',
+                'id' => (string) $host->id,
+                // team_id sneaking in would let a malicious caller move the
+                // record between teams during rotation.
+                'fields' => ['team_id' => null],
+            ]],
+        ], $headers)
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors(['reencrypted_resources']);
+
+        // Complete payload succeeds, ciphertext rotates, audit log records the count.
+        $this->deleteJson("/api/v1/teams/{$team->id}/members/{$member->id}", [
+            'remaining_members' => [[
+                'member_id' => $ownerMember->id,
+                'wrapped_team_key_ciphertext' => 'rotated-owner-wrap',
+                'wrapped_team_key_nonce' => 'rotated-owner-nonce',
+            ]],
+            'reencrypted_resources' => [[
+                'type' => 'hosts',
+                'id' => (string) $host->id,
+                'fields' => [
+                    'name_ciphertext' => 'rotated-name-ct',
+                    'name_nonce' => 'rotated-name-nonce',
+                    'hostname_ciphertext' => 'rotated-hostname-ct',
+                    'hostname_nonce' => 'rotated-hostname-nonce',
+                ],
+            ]],
+        ], $headers)->assertNoContent();
+
+        $host->refresh();
+        // `name_ciphertext` is a Laravel `encrypted` cast (defense in depth);
+        // the cast unwraps the wire ciphertext that the client sent.
+        self::assertSame('rotated-name-ct', $host->name_ciphertext);
+        self::assertSame('rotated-hostname-ct', $host->hostname_ciphertext);
+
+        $audit = AuditLog::query()->where('action', 'team.member.removed')->latest('id')->firstOrFail();
+        self::assertSame(1, ($audit->metadata['resources_rotated'] ?? null));
     }
 
     public function test_rejects_team_writes_without_required_spatie_permission(): void
