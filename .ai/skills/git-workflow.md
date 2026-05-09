@@ -8,6 +8,10 @@
 - `phase/N-name` — long-lived per phase (e.g., `phase/0-foundation`, `phase/1-auth`).
 - `feat/short-description` — short-lived, branched from current phase branch.
 - `fix/short-description` — bug fixes.
+- `release/backend-vX.Y` — backend release stabilization branch.
+- `release/client-vX.Y` — client release stabilization branch.
+- `hotfix/backend-vX.Y.Z` — backend patch branch created from the last stable backend tag.
+- `hotfix/client-vX.Y.Z` — client patch branch created from the last stable client tag.
 - Squash-merge to `main` after PR review.
 
 ## Conventional Commits
@@ -93,7 +97,59 @@ Plus a hook that runs:
 
 ## Releasing
 
-- Tag from `main`: `v0.1.0`, `v0.1.1`, etc.
-- `CHANGELOG.md` updated in the release PR.
-- GitHub Actions builds installers for macOS, Windows, Linux on tag push.
-- Web build deployed by self-hoster from `main` branch.
+- Backend and client releases are independent.
+- Backend stable tags: `backend-v0.1.0`, `backend-v0.1.1`, etc.
+- Client stable tags: `client-v0.1.0`, `client-v0.1.1`, etc.
+- Release candidate tags: `backend-v0.1.1-rc.1`, `client-v0.1.1-rc.1`, etc.
+- Product milestone tags like `v0.1.0` are informational and do not trigger build workflows.
+- Stable release tags should come from updated `main`, except urgent hotfix tags may come from a reviewed `hotfix/*` branch based on the previous stable deployable tag.
+- Never force-move a pushed stable release tag. If a release is wrong, ship the next patch version.
+- `CHANGELOG.md` and `docs/RELEASE.md` must stay accurate in release PRs.
+
+### Normal deployable release
+
+```bash
+git switch main
+git pull origin main
+git switch -c release/backend-v0.1
+git push -u origin release/backend-v0.1
+
+git tag backend-v0.1.0-rc.1
+git push origin backend-v0.1.0-rc.1
+```
+
+After the release branch is accepted and merged into `main`:
+
+```bash
+git switch main
+git pull origin main
+git tag backend-v0.1.0
+git push origin backend-v0.1.0
+```
+
+Use `release/client-v0.1`, `client-v0.1.0-rc.1`, and `client-v0.1.0` for client releases.
+
+### Hotfix release
+
+Start from the last stable deployable tag being patched:
+
+```bash
+git fetch origin --tags
+git switch -c hotfix/backend-v0.1.1 backend-v0.1.0
+```
+
+After the fix and tests:
+
+```bash
+git tag backend-v0.1.1-rc.1
+git push origin backend-v0.1.1-rc.1
+```
+
+After smoke testing:
+
+```bash
+git tag backend-v0.1.1
+git push origin backend-v0.1.1
+```
+
+Open PRs from the hotfix branch back into `main` and any active release branch for the same deployable.
