@@ -1,0 +1,13 @@
+[package]
+name = "trominal-core"
+description = "Shared SSH / SFTP / tunnel session logic for the Trominal desktop client and the trominal-helper CLI."
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+
+[dependencies]
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+portable-pty = { workspace = true }

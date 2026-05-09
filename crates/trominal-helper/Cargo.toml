@@ -1,0 +1,17 @@
+[package]
+name = "trominal-helper"
+description = "Local-loopback SSH/SFTP bridge that lets the Trominal web app drive zero-knowledge SSH sessions from the user's own machine."
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+
+[[bin]]
+name = "trominal-helper"
+path = "src/main.rs"
+
+[dependencies]
+trominal-core = { path = "../trominal-core" }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }

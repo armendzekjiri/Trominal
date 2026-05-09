@@ -11,7 +11,6 @@
 //! background thread and emit `sftp://transfer` events; clients can call
 //! `sftp_cancel` to kill the in-flight child.
 
-use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::env;
 use std::fs;
@@ -23,10 +22,16 @@ use std::thread;
 use std::time::UNIX_EPOCH;
 use tauri::{AppHandle, Emitter, State};
 use thiserror::Error;
+use trominal_core::{
+    cleanup_temp_paths, LocalHomeResponse, LocalListRequest, LocalListResponse, SftpEntry,
+    SftpHomeRequest, SftpHomeResponse, SftpHostArgs, SftpListRequest, SftpListResponse,
+    SftpPathRequest, SftpRemoveRequest, SftpRenameRequest, SftpTransferEvent, SftpTransferRequest,
+    SftpTransferStartResponse,
+};
 
 use crate::local_shell::{
-    cleanup_temp_paths, destination, is_rsa_private_key, read_child_stderr,
-    rsa_key_compat_process_options, user_safe_ssh_error, user_safe_ssh_output, write_temp_ssh_file,
+    destination, is_rsa_private_key, read_child_stderr, rsa_key_compat_process_options,
+    user_safe_ssh_error, user_safe_ssh_output, write_temp_ssh_file,
 };
 
 #[derive(Default)]
@@ -48,97 +53,6 @@ enum SftpError {
     Operation(String),
     #[error("sftp transfer is unknown or already finished")]
     MissingTransfer,
-}
-
-#[derive(Deserialize, Clone)]
-#[serde(rename_all = "camelCase")]
-pub struct SftpHostArgs {
-    host: String,
-    port: u16,
-    username: String,
-    /// PEM-encoded private key. Zeroized after the temp key file is written.
-    private_key_pem: Vec<u8>,
-}
-
-#[derive(Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct SftpListRequest {
-    host: SftpHostArgs,
-    remote_path: String,
-}
-
-#[derive(Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct SftpHomeRequest {
-    host: SftpHostArgs,
-}
-
-#[derive(Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct SftpHomeResponse {
-    path: String,
-}
-
-#[derive(Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct SftpPathRequest {
-    host: SftpHostArgs,
-    remote_path: String,
-}
-
-#[derive(Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct SftpRemoveRequest {
-    host: SftpHostArgs,
-    remote_path: String,
-    is_dir: bool,
-}
-
-#[derive(Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct SftpRenameRequest {
-    host: SftpHostArgs,
-    from_path: String,
-    to_path: String,
-}
-
-#[derive(Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct SftpTransferRequest {
-    transfer_id: String,
-    host: SftpHostArgs,
-    local_path: String,
-    remote_path: String,
-}
-
-#[derive(Serialize, Clone)]
-#[serde(rename_all = "camelCase")]
-pub struct SftpEntry {
-    name: String,
-    kind: String,
-    size: u64,
-    modified: String,
-    permissions: String,
-}
-
-#[derive(Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct SftpListResponse {
-    entries: Vec<SftpEntry>,
-}
-
-#[derive(Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct SftpTransferStartResponse {
-    transfer_id: String,
-}
-
-#[derive(Serialize, Clone)]
-#[serde(rename_all = "camelCase")]
-struct SftpTransferEvent {
-    transfer_id: String,
-    state: &'static str,
-    message: Option<String>,
 }
 
 // ---------- Tauri commands ----------
@@ -566,25 +480,6 @@ pub(crate) fn extract_pwd_path(stdout: &str) -> Option<String> {
 }
 
 // ---------- Local filesystem (for the dual-pane left side) ----------
-
-#[derive(Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct LocalListRequest {
-    path: String,
-}
-
-#[derive(Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct LocalListResponse {
-    path: String,
-    entries: Vec<SftpEntry>,
-}
-
-#[derive(Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct LocalHomeResponse {
-    path: String,
-}
 
 #[tauri::command]
 pub fn sftp_local_list(request: LocalListRequest) -> Result<LocalListResponse, String> {

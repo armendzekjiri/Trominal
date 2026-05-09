@@ -1,0 +1,28 @@
+[workspace]
+resolver = "2"
+members = [
+    "apps/client/src-tauri",
+    "crates/trominal-core",
+    "crates/trominal-helper",
+]
+# `packages/crypto/parity` is a standalone cross-platform fixture verifier
+# with its own pinned deps that runs only in CI. Cargo auto-includes any
+# nested `Cargo.toml` it finds under the workspace root unless that path
+# is explicitly listed in `exclude`, so listing it here keeps `cargo test
+# --manifest-path packages/crypto/parity/Cargo.toml` (the parity job)
+# happy without dragging the crate into the main `cargo check --workspace`
+# lockfile.
+exclude = ["packages/crypto/parity"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+authors = ["ArmendIdeas"]
+license = "AGPL-3.0-only"
+
+[workspace.dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+thiserror = "2"
+tokio = { version = "1", features = ["full"] }
+portable-pty = "0.9"
