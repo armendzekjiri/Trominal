@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 import type { LoginRequest, RegisterRequest, UserDto } from '@trominal/api-client'
 import { TrominalApiError } from '@trominal/api-client'
+import { useTeamScope } from '@/features/teams/store'
 import { getApiClient, resetApiClient } from '@/lib/api-client'
 import { secureStorage } from '@/lib/secure-storage'
 
@@ -180,6 +181,7 @@ export const useAuth = create<AuthStore>((set, get) => ({
       }
     }
     await secureStorage.delete('refresh_token')
+    useTeamScope.getState().setPersonalScope()
     resetApiClient()
     set({ ...initial, isHydrating: false })
   },

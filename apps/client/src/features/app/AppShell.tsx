@@ -12,6 +12,7 @@ import {
 import type { LucideIcon } from 'lucide-react'
 import { Link, NavLink, Outlet } from 'react-router-dom'
 import { Logo } from '@/components/branding/logo'
+import { TeamScopeSwitcher } from '@/features/teams/TeamScopeSwitcher'
 import { cn } from '@/lib/cn'
 import { useAuth } from '@/stores/auth'
 import { useVault } from '@/stores/vault'
@@ -44,6 +45,8 @@ export function AppShell() {
         <div className="px-2 pt-2">
           <Logo />
         </div>
+
+        <TeamScopeSwitcher />
 
         <nav className="flex flex-col gap-0.5">
           {NAV_ITEMS.filter((item) => hasPermission(item.permission)).map((item) => (

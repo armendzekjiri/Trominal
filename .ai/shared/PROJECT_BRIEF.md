@@ -664,7 +664,15 @@ Tunnels and SFTP are separate product areas because they serve different workflo
 
 - Filament now has `TeamResource` under Administration. Admins with `admin.teams.manage` can list teams, view team metadata, inspect member rows, and delete teams with an `admin.team.deleted` audit log entry.
 - Filament intentionally does not create or edit teams. A valid zero-knowledge team requires a client-generated team key plus per-member wrapped keys, which the server-side admin panel cannot produce without breaking the encryption model.
-- Still pending in later Phase 8 slices: client team switcher/resource filtering UI and client create/share flows that use team keys.
+- Still pending in later Phase 8 slices: client create/share flows that use team keys.
+
+#### Phase 8E implementation notes
+
+- The client sidebar has a workspace switcher for Personal vault versus teams returned by `GET /api/v1/teams`.
+- Team names are decrypted client-side by decrypting the user's private key with the in-memory vault key, unwrapping the member-specific team key, then decrypting `teams.name_ciphertext`. Failed team-name decrypts fall back to a non-secret team id label.
+- Vault list hooks now include the selected team id in their TanStack Query cache keys, pass `?team=<team_id>` through the API client, and decrypt team-scoped records with the selected team key plus team-scoped associated data. AI settings remain personal-only.
+- The selected team key is memory-only and is wiped on workspace switch, vault lock, and logout.
+- Client create/edit/delete actions for vault resources are intentionally guarded while a team workspace is selected. Team writes require the next Phase 8 slice because resources must be encrypted with the team key and team-scoped associated data, not the personal vault key.
 
 ### Phase 9 — Polish, Docs, Release
 

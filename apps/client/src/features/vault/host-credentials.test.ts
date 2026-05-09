@@ -32,6 +32,7 @@ function credential(
 ): HostCredentialItem {
   return {
     id: overrides.id,
+    teamId: null,
     hostId: overrides.hostId,
     identityId: null,
     label: '',
