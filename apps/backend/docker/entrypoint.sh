@@ -25,6 +25,13 @@ if [ "$(id -u)" = "0" ]; then
         gosu www-data php artisan view:cache --no-ansi
     fi
 
+    command_name="$(basename "${1:-}")"
+    if [ "$command_name" = "php-fpm" ] || [ "${command_name#php-fpm}" != "$command_name" ]; then
+        # Keep the FPM master as root so it can initialize Docker stderr/stdout,
+        # then let the pool drop request workers to www-data via www.conf.
+        exec "$@"
+    fi
+
     exec gosu www-data "$@"
 fi
 
