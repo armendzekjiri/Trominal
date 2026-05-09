@@ -3,6 +3,9 @@
 declare(strict_types=1);
 
 return [
+    'backend_version' => env('TROMINAL_BACKEND_VERSION', '0.1.0'),
+    'api_version' => env('TROMINAL_API_VERSION', 'v1'),
+    'min_client_version' => env('TROMINAL_MIN_CLIENT_VERSION', '0.1.0'),
     'registration_mode' => env('TROMINAL_REGISTRATION_MODE', 'single'),
     'access_token_expiration_minutes' => (int) env('TROMINAL_ACCESS_TOKEN_EXPIRATION_MINUTES', 15),
     'refresh_token_expiration_days' => (int) env('TROMINAL_REFRESH_TOKEN_EXPIRATION_DAYS', 30),

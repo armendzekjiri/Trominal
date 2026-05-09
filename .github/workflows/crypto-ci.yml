@@ -1,0 +1,42 @@
+name: Crypto CI
+
+on:
+  pull_request:
+    paths:
+      - 'packages/crypto/**'
+      - 'Cargo.toml'
+      - 'Cargo.lock'
+      - '.github/workflows/crypto-ci.yml'
+  push:
+    branches:
+      - main
+      - 'phase/**'
+    paths:
+      - 'packages/crypto/**'
+      - 'Cargo.toml'
+      - 'Cargo.lock'
+      - '.github/workflows/crypto-ci.yml'
+
+jobs:
+  crypto-parity:
+    name: Crypto parity (TS to Rust)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo registry
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            packages/crypto/parity/target
+          key: ${{ runner.os }}-cargo-parity-${{ hashFiles('packages/crypto/parity/Cargo.toml') }}
+
+      - name: Run parity tests
+        run: cargo test --manifest-path packages/crypto/parity/Cargo.toml

@@ -1,0 +1,75 @@
+name: Backend CI
+
+on:
+  pull_request:
+    paths:
+      - 'apps/backend/**'
+      - 'docker/**'
+      - 'docker-compose.yml'
+      - '.dockerignore'
+      - '.github/workflows/backend-ci.yml'
+      - '.github/workflows/backend-release.yml'
+  push:
+    branches:
+      - main
+      - 'phase/**'
+    paths:
+      - 'apps/backend/**'
+      - 'docker/**'
+      - 'docker-compose.yml'
+      - '.dockerignore'
+      - '.github/workflows/backend-ci.yml'
+      - '.github/workflows/backend-release.yml'
+
+jobs:
+  backend:
+    name: Backend
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          extensions: pdo_pgsql, pdo_sqlite, redis, sodium, sqlite3
+          coverage: none
+
+      - name: Install Composer dependencies
+        working-directory: apps/backend
+        run: composer install --no-interaction --prefer-dist --no-progress
+
+      - name: Prepare environment
+        working-directory: apps/backend
+        run: |
+          cp .env.example .env
+          php artisan key:generate
+          touch database/database.sqlite
+
+      - name: Pint
+        working-directory: apps/backend
+        run: ./vendor/bin/pint --test
+
+      - name: Larastan
+        working-directory: apps/backend
+        run: ./vendor/bin/phpstan analyse --memory-limit=1G
+
+      - name: Pest
+        working-directory: apps/backend
+        env:
+          DB_CONNECTION: sqlite
+          DB_DATABASE: database/database.sqlite
+        run: ./vendor/bin/pest
+
+      - name: Docker build smoke test
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: apps/backend/Dockerfile
+          target: runtime
+          push: false
+          tags: trominal-backend:ci
+          build-args: |
+            TROMINAL_BACKEND_VERSION=ci

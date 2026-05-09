@@ -16,6 +16,9 @@ final class SystemTest extends TestCase
         $this->getJson('/api/server-info')
             ->assertOk()
             ->assertJsonPath('instance_name', 'Trominal')
+            ->assertJsonPath('backend_version', '0.1.0')
+            ->assertJsonPath('api_version', 'v1')
+            ->assertJsonPath('min_client_version', '0.1.0')
             ->assertJsonPath('registration_mode', 'single')
             ->assertJsonPath('registration_open', true)
             ->assertJsonPath('web_ssh_enabled', false);

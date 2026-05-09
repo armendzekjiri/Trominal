@@ -1,0 +1,107 @@
+name: Backend Release
+
+on:
+  push:
+    tags:
+      - 'backend-v*.*.*'
+
+permissions:
+  contents: write
+  packages: write
+
+jobs:
+  release:
+    name: Build and publish backend image
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          extensions: pdo_pgsql, pdo_sqlite, redis, sodium, sqlite3
+          coverage: none
+
+      - name: Install Composer dependencies
+        working-directory: apps/backend
+        run: composer install --no-interaction --prefer-dist --no-progress
+
+      - name: Prepare test environment
+        working-directory: apps/backend
+        run: |
+          cp .env.example .env
+          php artisan key:generate
+          touch database/database.sqlite
+
+      - name: Backend tests
+        working-directory: apps/backend
+        env:
+          DB_CONNECTION: sqlite
+          DB_DATABASE: database/database.sqlite
+        run: ./vendor/bin/pest
+
+      - name: Resolve image tags
+        id: image
+        shell: bash
+        run: |
+          version="${GITHUB_REF_NAME#backend-v}"
+          major_minor="$(printf '%s' "$version" | awk -F. '{print $1"."$2}')"
+          owner="$(printf '%s' "${GITHUB_REPOSITORY_OWNER}" | tr '[:upper:]' '[:lower:]')"
+          image="ghcr.io/${owner}/trominal-backend"
+
+          {
+            echo "version=${version}"
+            echo "image=${image}"
+            echo "tags<<EOF"
+            echo "${image}:${version}"
+            echo "${image}:${major_minor}"
+            case "$version" in
+              *-*) ;;
+              *) echo "${image}:latest" ;;
+            esac
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Setup Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push backend image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: apps/backend/Dockerfile
+          target: runtime
+          push: true
+          tags: ${{ steps.image.outputs.tags }}
+          labels: |
+            org.opencontainers.image.title=Trominal Backend
+            org.opencontainers.image.description=Laravel API and Filament admin backend for Trominal
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.version=${{ steps.image.outputs.version }}
+          build-args: |
+            TROMINAL_BACKEND_VERSION=${{ steps.image.outputs.version }}
+
+      - name: Create backend GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: Trominal Backend ${{ steps.image.outputs.version }}
+          draft: true
+          prerelease: ${{ contains(steps.image.outputs.version, '-') }}
+          generate_release_notes: true
+          body: |
+            Backend Docker image:
+
+            `${{ steps.image.outputs.image }}:${{ steps.image.outputs.version }}`
+
+            Update self-hosted instances by setting `TROMINAL_BACKEND_IMAGE` to this tag, pulling `app`, `queue`, `scheduler`, and `ssh-proxy`, then running migrations.
