@@ -419,8 +419,11 @@ refresh_tokens         (id, user_id, token_hash, family_id, expires_at, revoked_
 roles, permissions, model_has_roles, model_has_permissions, role_has_permissions
 
 # Teams (Phase 8)
-teams                  (id, name, slug, owner_id, created_at, ...)
-team_members           (id, team_id, user_id, team_role, wrapped_team_key, joined_at)
+teams                  (id, created_by_user_id, name_ciphertext, name_nonce,
+                        key_version, deleted_at, created_at, ...)
+team_members           (id, team_id, user_id, role[owner|admin|member|viewer],
+                        wrapped_team_key_ciphertext, wrapped_team_key_nonce,
+                        key_version, created_at, ...)
 
 # Personal resources
 groups                 (id, user_id, team_id?, name, parent_id, color, sort_order)
@@ -477,8 +480,16 @@ ws_session_tokens      (id, user_id, host_id, token_hash, ip, expires_at, used_a
 
 ### Teams (Phase 8)
 
-- `GET/POST/PUT/DELETE /api/v1/teams`
-- `GET/POST/DELETE     /api/v1/teams/{id}/members`
+- `GET    /api/v1/teams`
+- `POST   /api/v1/teams`
+- `GET    /api/v1/teams/users/lookup?email=...` (returns user public key)
+- `GET    /api/v1/teams/{id}`
+- `PATCH  /api/v1/teams/{id}`
+- `DELETE /api/v1/teams/{id}`
+- `GET    /api/v1/teams/{id}/members`
+- `POST   /api/v1/teams/{id}/members`
+- `PATCH  /api/v1/teams/{id}/members/{member_id}`
+- `DELETE /api/v1/teams/{id}/members/{member_id}` (requires wrapped keys for every remaining member)
 - Resources can be filtered by team: `GET /api/v1/hosts?team={team_id}`
 
 ### WebSocket
@@ -626,6 +637,42 @@ Tunnels and SFTP are separate product areas because they serve different workflo
 - Crypto: team-key wrap/unwrap with user keypairs.
 - Member removal triggers team-key rotation.
 - Pest tests for the rotation flow.
+
+#### Phase 8A implementation notes
+
+- Backend team foundation is implemented on `phase/8-teams`: `teams` and `team_members` use ULIDs, encrypted casts for ciphertext columns, per-member `wrapped_team_key_*`, and a monotonically increasing `key_version`.
+- API endpoints now cover team create/read/update/delete, user public-key lookup by email, member add/list/role-change/remove, and removal-time key rotation payload validation.
+- Team role rules are enforced in `TeamService`: owners/admins can manage members, only owners can create another owner or delete a team, and the final owner cannot be demoted or removed.
+- Removing a member requires the client to submit a new wrapped team key for every remaining member. The server never sees the plaintext team key and only stores wrapped ciphertexts.
+- Every state-changing team action writes an audit log entry. `TeamsTest` covers encrypted-at-rest assertions, membership authorization, owner preservation, and rotation validation.
+
+#### Phase 8B implementation notes
+
+- `packages/crypto` provides team-key helpers: `generateTeamKey`, `wrapTeamKey`, `unwrapTeamKey`, and `makeTeamKeyAd`.
+- Team keys are 32-byte symmetric keys. Wrapping uses a random 32-byte wrapping key, XChaCha20-Poly1305 with AD `trominal:v1:team_key:<team_id>:member:<member_id>:v<key_version>`, and libsodium sealed boxes to encrypt the wrapping key for the member's X25519 public key.
+- The server-storable shape stays `{ ciphertext, nonce }`; `ciphertext` contains a versioned payload with the sealed wrapping key plus encrypted team key, while `nonce` is the XChaCha20 nonce.
+- Tests cover round-trip unwrap, wrong-member failure, AD/key-version mismatch failure, fresh nonce/material generation, and team-key length.
+
+#### Phase 8C implementation notes
+
+- Vault resources now support real team scope through nullable `team_id` columns on groups, hosts, snippets, identities, tunnels, and host credentials. AI settings remain personal-only.
+- `GET /api/v1/vault/{resource}` omits `team` for personal records and accepts `?team=<team_id>` for team records. Delta sync includes personal records plus records from every team where the user is a member.
+- Vault policies allow access when the user owns a personal record or belongs to the record's team. Relationship IDs must stay inside the same scope, so a team host cannot point to a personal group and a personal host cannot point to a team group.
+- Master-password rotation explicitly stays personal-only; team-scoped resources are encrypted with team keys and are rejected from `/api/v1/me/master-password/change`.
+
+#### Phase 8D implementation notes
+
+- Filament now has `TeamResource` under Administration. Admins with `admin.teams.manage` can list teams, view team metadata, inspect member rows, and delete teams with an `admin.team.deleted` audit log entry.
+- Filament intentionally does not create or edit teams. A valid zero-knowledge team requires a client-generated team key plus per-member wrapped keys, which the server-side admin panel cannot produce without breaking the encryption model.
+- Still pending in later Phase 8 slices: client create/share flows that use team keys.
+
+#### Phase 8E implementation notes
+
+- The client sidebar has a workspace switcher for Personal vault versus teams returned by `GET /api/v1/teams`.
+- Team names are decrypted client-side by decrypting the user's private key with the in-memory vault key, unwrapping the member-specific team key, then decrypting `teams.name_ciphertext`. Failed team-name decrypts fall back to a non-secret team id label.
+- Vault list hooks now include the selected team id in their TanStack Query cache keys, pass `?team=<team_id>` through the API client, and decrypt team-scoped records with the selected team key plus team-scoped associated data. AI settings remain personal-only.
+- The selected team key is memory-only and is wiped on workspace switch, vault lock, and logout.
+- Client create/edit/delete actions for vault resources are intentionally guarded while a team workspace is selected. Team writes require the next Phase 8 slice because resources must be encrypted with the team key and team-scoped associated data, not the personal vault key.
 
 ### Phase 9 — Polish, Docs, Release
 

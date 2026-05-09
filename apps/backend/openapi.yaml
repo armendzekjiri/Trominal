@@ -191,6 +191,7 @@ paths:
         - bearerAuth: []
       parameters:
         - $ref: '#/components/parameters/VaultResource'
+        - $ref: '#/components/parameters/TeamScope'
       responses:
         '200':
           description: Vault records.
@@ -282,6 +283,206 @@ paths:
           description: Missing permission or not the owner.
         '404':
           description: Vault record not found.
+  /api/v1/teams/users/lookup:
+    get:
+      summary: Look up a user public key by email for team-key wrapping.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: email
+          in: query
+          required: true
+          schema:
+            type: string
+            format: email
+      responses:
+        '200':
+          description: User public key material.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data:
+                    $ref: '#/components/schemas/TeamUserKey'
+        '403':
+          description: Missing team invite permission.
+        '404':
+          description: User not found or suspended.
+  /api/v1/teams:
+    get:
+      summary: List encrypted teams where the authenticated user is a member.
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Teams visible to the current user.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TeamListResponse'
+        '403':
+          description: Missing team read permission.
+    post:
+      summary: Create an encrypted team and attach the current user as owner.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TeamCreateRequest'
+      responses:
+        '201':
+          description: Team created.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TeamResponse'
+        '403':
+          description: Missing team create permission.
+        '422':
+          description: Validation failed.
+  /api/v1/teams/{team_id}:
+    get:
+      summary: Read one encrypted team with members.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/TeamId'
+      responses:
+        '200':
+          description: Team record.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TeamResponse'
+        '403':
+          description: Missing permission or not a team member.
+        '404':
+          description: Team not found.
+    patch:
+      summary: Update encrypted team metadata.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/TeamId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TeamUpdateRequest'
+      responses:
+        '200':
+          description: Team updated.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TeamResponse'
+        '403':
+          description: Missing permission or not a team owner/admin.
+        '422':
+          description: Validation failed.
+    delete:
+      summary: Delete a team. Only team owners may delete teams.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/TeamId'
+      responses:
+        '204':
+          description: Team deleted.
+        '403':
+          description: Missing permission or not a team owner.
+        '404':
+          description: Team not found.
+  /api/v1/teams/{team_id}/members:
+    get:
+      summary: List members of one team with public key metadata.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/TeamId'
+      responses:
+        '200':
+          description: Team members.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TeamMemberListResponse'
+        '403':
+          description: Missing permission or not a team member.
+    post:
+      summary: Add a team member with their wrapped team key.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/TeamId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TeamMemberCreateRequest'
+      responses:
+        '201':
+          description: Team member added.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TeamMemberResponse'
+        '403':
+          description: Missing permission or not a team owner/admin.
+        '422':
+          description: Validation failed.
+  /api/v1/teams/{team_id}/members/{member_id}:
+    patch:
+      summary: Change a team member role.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/TeamId'
+        - $ref: '#/components/parameters/TeamMemberId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TeamMemberUpdateRequest'
+      responses:
+        '200':
+          description: Team member role updated.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TeamMemberResponse'
+        '403':
+          description: Missing permission or not allowed to assign the requested role.
+        '422':
+          description: Validation failed.
+    delete:
+      summary: Remove a team member after key rotation.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/TeamId'
+        - $ref: '#/components/parameters/TeamMemberId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TeamMemberRemoveRequest'
+      responses:
+        '204':
+          description: Team member removed and team key version rotated.
+        '403':
+          description: Missing permission or not a team owner/admin.
+        '422':
+          description: Validation failed.
   /api/v1/me/master-password/change:
     post:
       summary: Atomically rotate all encrypted vault material after a client-side master-password change.
@@ -348,6 +549,25 @@ components:
       required: true
       schema:
         type: string
+    TeamScope:
+      name: team
+      in: query
+      required: false
+      schema:
+        type: string
+      description: Optional team ID. Omit for personal vault records.
+    TeamId:
+      name: team_id
+      in: path
+      required: true
+      schema:
+        type: string
+    TeamMemberId:
+      name: member_id
+      in: path
+      required: true
+      schema:
+        type: string
   schemas:
     RegisterRequest:
       type: object
@@ -400,6 +620,212 @@ components:
           pattern: "^\\d{6}$"
         device_name:
           type: string
+    TeamRole:
+      type: string
+      enum: [owner, admin, member, viewer]
+    TeamUserKey:
+      type: object
+      required: [id, name, email, public_key]
+      properties:
+        id:
+          type: string
+        name:
+          type:
+            - string
+            - 'null'
+        email:
+          type: string
+          format: email
+        public_key:
+          type: string
+    TeamMember:
+      type: object
+      required:
+        - id
+        - team_id
+        - user_id
+        - role
+        - wrapped_team_key_ciphertext
+        - wrapped_team_key_nonce
+        - key_version
+        - created_at
+        - updated_at
+      properties:
+        id:
+          type: string
+        team_id:
+          type: string
+        user_id:
+          type: string
+        role:
+          $ref: '#/components/schemas/TeamRole'
+        wrapped_team_key_ciphertext:
+          type: string
+          description: Client-side wrapped team key for this member.
+        wrapped_team_key_nonce:
+          type: string
+        key_version:
+          type: integer
+        created_at:
+          type:
+            - string
+            - 'null'
+          format: date-time
+        updated_at:
+          type:
+            - string
+            - 'null'
+          format: date-time
+        user:
+          $ref: '#/components/schemas/TeamUserKey'
+    Team:
+      type: object
+      required:
+        - id
+        - name_ciphertext
+        - name_nonce
+        - key_version
+        - current_member
+        - created_at
+        - updated_at
+      properties:
+        id:
+          type: string
+        name_ciphertext:
+          type: string
+        name_nonce:
+          type: string
+        key_version:
+          type: integer
+        current_member:
+          $ref: '#/components/schemas/TeamMember'
+        members:
+          type: array
+          items:
+            $ref: '#/components/schemas/TeamMember'
+        created_at:
+          type:
+            - string
+            - 'null'
+          format: date-time
+        updated_at:
+          type:
+            - string
+            - 'null'
+          format: date-time
+    TeamCreateRequest:
+      type: object
+      required:
+        - name_ciphertext
+        - name_nonce
+        - wrapped_team_key_ciphertext
+        - wrapped_team_key_nonce
+      properties:
+        id:
+          type: string
+          description: Optional client-generated ULID used to bind AEAD associated data before create.
+        name_ciphertext:
+          type: string
+        name_nonce:
+          type: string
+        wrapped_team_key_ciphertext:
+          type: string
+        wrapped_team_key_nonce:
+          type: string
+    TeamUpdateRequest:
+      type: object
+      required: [name_ciphertext, name_nonce]
+      properties:
+        name_ciphertext:
+          type: string
+        name_nonce:
+          type: string
+    TeamMemberCreateRequest:
+      type: object
+      required:
+        - user_id
+        - role
+        - wrapped_team_key_ciphertext
+        - wrapped_team_key_nonce
+      properties:
+        user_id:
+          type: string
+        role:
+          $ref: '#/components/schemas/TeamRole'
+        wrapped_team_key_ciphertext:
+          type: string
+        wrapped_team_key_nonce:
+          type: string
+    TeamMemberUpdateRequest:
+      type: object
+      required: [role]
+      properties:
+        role:
+          $ref: '#/components/schemas/TeamRole'
+    TeamMemberRemoveRequest:
+      type: object
+      required: [remaining_members, reencrypted_resources]
+      properties:
+        remaining_members:
+          type: array
+          items:
+            type: object
+            required: [member_id, wrapped_team_key_ciphertext, wrapped_team_key_nonce]
+            properties:
+              member_id:
+                type: string
+              wrapped_team_key_ciphertext:
+                type: string
+              wrapped_team_key_nonce:
+                type: string
+        reencrypted_resources:
+          description: |
+            Every team-scoped vault record this team owns, re-encrypted under
+            the new team key. Per PROJECT_BRIEF §5.3, the removed user's
+            retained plaintext team key must not be able to decrypt any of
+            the team's records after rotation; this is enforced by the
+            server, which validates that the list covers exactly the team's
+            current set of vault rows. Each `fields` map must contain only
+            ciphertext / nonce columns for that resource type.
+          type: array
+          items:
+            type: object
+            required: [type, id, fields]
+            properties:
+              type:
+                $ref: '#/components/schemas/VaultResourceType'
+              id:
+                type: string
+              fields:
+                $ref: '#/components/schemas/VaultRecordPayload'
+    TeamResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          $ref: '#/components/schemas/Team'
+    TeamListResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/Team'
+    TeamMemberResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          $ref: '#/components/schemas/TeamMember'
+    TeamMemberListResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/TeamMember'
     VaultResourceType:
       type: string
       enum:
@@ -418,6 +844,11 @@ components:
         id:
           type: string
           description: Optional client-generated ULID used to bind AEAD associated data before create.
+        team_id:
+          type:
+            - string
+            - 'null'
+          description: Optional team scope. Omit or null for personal vault records.
       examples:
         - name_ciphertext: 'base64-ciphertext'
           name_nonce: 'base64-nonce'
@@ -432,6 +863,11 @@ components:
           type: string
         type:
           $ref: '#/components/schemas/VaultResourceType'
+        team_id:
+          type:
+            - string
+            - 'null'
+          description: Present on team-scoped vault resource types. Null means personal scope.
         created_at:
           type:
             - string

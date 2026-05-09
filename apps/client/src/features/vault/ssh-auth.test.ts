@@ -19,6 +19,7 @@ describe('SSH identity auth', () => {
     const privateKey = await crypto.subtle.exportKey('pkcs8', pair.privateKey)
     const identity: IdentityItem = {
       id: 'identity_rsa',
+      teamId: null,
       name: 'rsa unit',
       keyType: 'rsa-4096',
       publicKey: await rsaPublicJwkToAuthorizedKey(publicJwk, 'rsa@example.test'),

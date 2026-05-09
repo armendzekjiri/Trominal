@@ -9,6 +9,53 @@ Security-relevant changes are tagged `security:`.
 
 ## [Unreleased]
 
+### Added — Phase 8A: Teams backend foundation
+
+- Backend `teams` / `team_members` schema with ULIDs, encrypted ciphertext
+  casts, member-specific wrapped team keys, team roles, and `key_version`
+  tracking for rotation.
+- Team API endpoints for team CRUD, user public-key lookup, member add/list,
+  role changes, and removal with mandatory wrapped-key rotation payloads for
+  every remaining member.
+- Typed `@trominal/api-client` team DTOs and methods, plus OpenAPI schemas for
+  encrypted team metadata and wrapped team-key membership records.
+- Pest coverage for encrypted-at-rest storage, permission failures, team role
+  authorization, final-owner protection, audit logs, and member-removal key
+  rotation validation.
+
+### Added — Phase 8B: Team-key crypto helpers
+
+- `@trominal/crypto` team-key helpers for generating 32-byte team keys,
+  wrapping them for X25519 member public keys, unwrapping with member keypairs,
+  and binding wrapped keys to team/member/key-version associated data.
+- Wrapped team keys use XChaCha20-Poly1305 for the team key and libsodium
+  sealed boxes for the random wrapping key, keeping the backend storage shape
+  as ciphertext plus nonce.
+- Six Vitest cases cover round-trip unwrap, wrong-key failure, AD mismatch,
+  fresh wrapping material, and key length validation.
+
+### Added — Phase 8C: Team-scoped vault records
+
+- Nullable `team_id` scope on groups, hosts, snippets, identities, tunnels,
+  and host credentials, with personal records still represented by
+  `team_id = null`.
+- Vault API filtering with `GET /api/v1/vault/{resource}?team=<team_id>`,
+  team-member authorization in vault policies, and delta sync visibility for
+  all teams where the user is a member.
+- Scope-safe relationship validation so linked group/host/identity records
+  cannot cross personal/team boundaries.
+- Master-password rotation now rejects team-scoped resources, keeping team-key
+  encrypted data out of the personal vault rotation flow.
+
+### Added — Phase 8D: Filament team management
+
+- Filament `TeamResource` under Administration for admins with
+  `admin.teams.manage`, including team list, team detail, member metadata,
+  member counts, key versions, and creator email.
+- Team deletion from Filament writes an `admin.team.deleted` audit log entry.
+- Admin-side team create/edit remains disabled because valid teams require
+  client-generated encrypted names and wrapped team keys.
+
 ### Added — Phase 7B: AI inside the terminal & snippet generation
 
 - **Inline command suggestions** in the terminal: `Ctrl+Space` triggers the

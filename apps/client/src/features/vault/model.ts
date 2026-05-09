@@ -18,6 +18,7 @@ const AD_RESOURCE: Record<EncryptedVaultResource, string> = {
 
 export type HostItem = {
   id: string
+  teamId: string | null
   groupId: string | null
   name: string
   hostname: string
@@ -30,6 +31,7 @@ export type HostItem = {
 
 export type GroupItem = {
   id: string
+  teamId: string | null
   parentId: string | null
   name: string
   color: string
@@ -38,6 +40,7 @@ export type GroupItem = {
 
 export type SnippetItem = {
   id: string
+  teamId: string | null
   title: string
   body: string
   tags: string[]
@@ -46,6 +49,7 @@ export type SnippetItem = {
 
 export type IdentityItem = {
   id: string
+  teamId: string | null
   name: string
   keyType: string
   publicKey: string
@@ -55,6 +59,7 @@ export type IdentityItem = {
 
 export type HostCredentialItem = {
   id: string
+  teamId: string | null
   hostId: string | null
   identityId: string | null
   label: string
@@ -105,6 +110,7 @@ export type TunnelConfig = {
 
 export type TunnelItem = {
   id: string
+  teamId: string | null
   hostId: string | null
   name: string
   config: TunnelConfig
@@ -182,6 +188,16 @@ function numberField(record: VaultRecord, field: string): number {
 function relationField(record: VaultRecord, field: string): string | null {
   const value = record[field]
   return typeof value === 'string' && value.length > 0 ? value : null
+}
+
+function recordAd(record: VaultRecord, resource: EncryptedVaultResource): string {
+  const teamId = relationField(record, 'team_id')
+
+  if (teamId === null) {
+    return makeAd(AD_RESOURCE[resource], record.id)
+  }
+
+  return makeAd(`team_${AD_RESOURCE[resource]}`, `${record.id}:${teamId}`)
 }
 
 function tagsFromString(value: string): string[] {
@@ -321,7 +337,7 @@ async function decryptText(
   if (ct === null || nonce === null) {
     return ''
   }
-  return decryptToString({ v: 1, ct, n: nonce }, key, makeAd(AD_RESOURCE[resource], record.id))
+  return decryptToString({ v: 1, ct, n: nonce }, key, recordAd(record, resource))
 }
 
 async function encryptText(
@@ -347,6 +363,7 @@ async function encryptText(
 export async function decryptHost(record: VaultRecord, key: Uint8Array): Promise<HostItem> {
   return {
     id: record.id,
+    teamId: relationField(record, 'team_id'),
     groupId: relationField(record, 'group_id'),
     name: await decryptText(record, key, 'hosts', 'name'),
     hostname: await decryptText(record, key, 'hosts', 'hostname'),
@@ -361,6 +378,7 @@ export async function decryptHost(record: VaultRecord, key: Uint8Array): Promise
 export async function decryptGroup(record: VaultRecord, key: Uint8Array): Promise<GroupItem> {
   return {
     id: record.id,
+    teamId: relationField(record, 'team_id'),
     parentId: relationField(record, 'parent_id'),
     name: await decryptText(record, key, 'groups', 'name'),
     color: await decryptText(record, key, 'groups', 'color'),
@@ -371,6 +389,7 @@ export async function decryptGroup(record: VaultRecord, key: Uint8Array): Promis
 export async function decryptSnippet(record: VaultRecord, key: Uint8Array): Promise<SnippetItem> {
   return {
     id: record.id,
+    teamId: relationField(record, 'team_id'),
     title: await decryptText(record, key, 'snippets', 'title'),
     body: await decryptText(record, key, 'snippets', 'body'),
     tags: tagsFromString(await decryptText(record, key, 'snippets', 'tags')),
@@ -381,6 +400,7 @@ export async function decryptSnippet(record: VaultRecord, key: Uint8Array): Prom
 export async function decryptIdentity(record: VaultRecord, key: Uint8Array): Promise<IdentityItem> {
   return {
     id: record.id,
+    teamId: relationField(record, 'team_id'),
     name: await decryptText(record, key, 'identities', 'name'),
     keyType: stringField(record, 'key_type') ?? 'ed25519',
     publicKey: await decryptText(record, key, 'identities', 'public_key'),
@@ -395,6 +415,7 @@ export async function decryptHostCredential(
 ): Promise<HostCredentialItem> {
   return {
     id: record.id,
+    teamId: relationField(record, 'team_id'),
     hostId: relationField(record, 'host_id'),
     identityId: relationField(record, 'identity_id'),
     label: await decryptText(record, key, 'host-credentials', 'label'),
@@ -429,6 +450,7 @@ export async function decryptAiSettings(
 export async function decryptTunnel(record: VaultRecord, key: Uint8Array): Promise<TunnelItem> {
   return {
     id: record.id,
+    teamId: relationField(record, 'team_id'),
     hostId: relationField(record, 'host_id'),
     name: await decryptText(record, key, 'tunnels', 'name'),
     config: tunnelConfigFromString(await decryptText(record, key, 'tunnels', 'config')),

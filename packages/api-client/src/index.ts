@@ -33,9 +33,15 @@ export type VaultRecordPayload = Record<string, boolean | number | string | null
 export type VaultRecord = VaultRecordPayload & {
   id: string
   type: VaultResourceType
+  team_id?: string | null
   created_at: string | null
   updated_at: string | null
   deleted_at: string | null
+}
+
+/** Optional filters for encrypted vault record lists. */
+export type ListVaultRecordsOptions = {
+  teamId?: string
 }
 
 /** Delta sync payload grouped by vault resource type. */
@@ -170,6 +176,99 @@ export type SshTokenResponse = {
   token: string
   expires_at: string
   websocket_url: string
+}
+
+/** Team-scoped role inside a shared encrypted workspace. */
+export type TeamRole = 'owner' | 'admin' | 'member' | 'viewer'
+
+/** User public key material needed to wrap a team key for that user. */
+export type TeamUserKeyDto = {
+  id: string
+  name: string | null
+  email: string
+  public_key: string
+}
+
+/** Team membership envelope with the member-specific wrapped team key. */
+export type TeamMemberDto = {
+  id: string
+  team_id: string
+  user_id: string
+  role: TeamRole
+  wrapped_team_key_ciphertext: string
+  wrapped_team_key_nonce: string
+  key_version: number
+  created_at: string | null
+  updated_at: string | null
+  user?: TeamUserKeyDto
+}
+
+/** Encrypted team metadata and the authenticated user's wrapped team key. */
+export type TeamDto = {
+  id: string
+  name_ciphertext: string
+  name_nonce: string
+  key_version: number
+  current_member: TeamMemberDto
+  members?: TeamMemberDto[]
+  created_at: string | null
+  updated_at: string | null
+}
+
+/** Request body for POST /api/v1/teams. */
+export type CreateTeamRequest = {
+  id?: string
+  name_ciphertext: string
+  name_nonce: string
+  wrapped_team_key_ciphertext: string
+  wrapped_team_key_nonce: string
+}
+
+/** Request body for PATCH /api/v1/teams/{id}. */
+export type UpdateTeamRequest = {
+  name_ciphertext: string
+  name_nonce: string
+}
+
+/** Request body for POST /api/v1/teams/{id}/members. */
+export type AddTeamMemberRequest = {
+  user_id: string
+  role: TeamRole
+  wrapped_team_key_ciphertext: string
+  wrapped_team_key_nonce: string
+}
+
+/** Request body for PATCH /api/v1/teams/{id}/members/{memberId}. */
+export type UpdateTeamMemberRequest = {
+  role: TeamRole
+}
+
+/** One member key rewrap after a team membership removal. */
+export type TeamMemberKeyRewrap = {
+  member_id: string
+  wrapped_team_key_ciphertext: string
+  wrapped_team_key_nonce: string
+}
+
+/** A vault record re-encrypted under the new team key during member removal. */
+export type TeamReencryptedResource = {
+  type: VaultResourceType
+  id: string
+  fields: VaultRecordPayload
+}
+
+/**
+ * Request body for DELETE /api/v1/teams/{id}/members/{memberId}.
+ *
+ * Per PROJECT_BRIEF §5.3, removing a member must (a) re-wrap the team key for
+ * every remaining member and (b) re-encrypt every team-scoped vault record
+ * under that new team key — otherwise the removed user's retained plaintext
+ * key still decrypts the on-disk ciphertext. The server validates that
+ * `reencrypted_resources` covers exactly the team's current set of records.
+ */
+export type RemoveTeamMemberRequest = {
+  remaining_members: TeamMemberKeyRewrap[]
+  reencrypted_resources: TeamReencryptedResource[]
 }
 
 /** Error thrown when the Trominal API responds outside the 2xx range. */
@@ -310,8 +409,14 @@ export class TrominalApiClient {
   }
 
   /** List encrypted vault records for one resource type. */
-  async listVaultRecords(resource: VaultResourceType): Promise<VaultRecord[]> {
-    const response = await this.request<{ data: VaultRecord[] }>(`/api/v1/vault/${resource}`)
+  async listVaultRecords(
+    resource: VaultResourceType,
+    options: ListVaultRecordsOptions = {},
+  ): Promise<VaultRecord[]> {
+    const query = options.teamId === undefined ? '' : `?team=${encodeURIComponent(options.teamId)}`
+    const response = await this.request<{ data: VaultRecord[] }>(
+      `/api/v1/vault/${resource}${query}`,
+    )
     return response.data
   }
 
@@ -371,6 +476,97 @@ export class TrominalApiClient {
   async createSshToken(payload: SshTokenRequest): Promise<SshTokenResponse> {
     return this.request<SshTokenResponse>('/api/v1/ws/ssh-token', {
       method: 'POST',
+      body: payload,
+    })
+  }
+
+  /** List encrypted teams where the current user is a member. */
+  async listTeams(): Promise<TeamDto[]> {
+    const response = await this.request<{ data: TeamDto[] }>('/api/v1/teams')
+    return response.data
+  }
+
+  /** Create a team and attach the current user as owner with a wrapped team key. */
+  async createTeam(payload: CreateTeamRequest): Promise<TeamDto> {
+    const response = await this.request<{ data: TeamDto }>('/api/v1/teams', {
+      method: 'POST',
+      body: payload,
+    })
+    return response.data
+  }
+
+  /** Read one encrypted team with members. */
+  async getTeam(id: string): Promise<TeamDto> {
+    const response = await this.request<{ data: TeamDto }>(`/api/v1/teams/${id}`)
+    return response.data
+  }
+
+  /** Update encrypted team metadata. */
+  async updateTeam(id: string, payload: UpdateTeamRequest): Promise<TeamDto> {
+    const response = await this.request<{ data: TeamDto }>(`/api/v1/teams/${id}`, {
+      method: 'PATCH',
+      body: payload,
+    })
+    return response.data
+  }
+
+  /** Delete a team. The backend only allows team owners. */
+  async deleteTeam(id: string): Promise<void> {
+    await this.request<void>(`/api/v1/teams/${id}`, { method: 'DELETE' })
+  }
+
+  /** Look up a user by email and return their public key for team-key wrapping. */
+  async lookupTeamUser(email: string): Promise<TeamUserKeyDto> {
+    const response = await this.request<{ data: TeamUserKeyDto }>(
+      `/api/v1/teams/users/lookup?email=${encodeURIComponent(email)}`,
+    )
+    return response.data
+  }
+
+  /** List members of one team with public key metadata. */
+  async listTeamMembers(teamId: string): Promise<TeamMemberDto[]> {
+    const response = await this.request<{ data: TeamMemberDto[] }>(
+      `/api/v1/teams/${teamId}/members`,
+    )
+    return response.data
+  }
+
+  /** Add a team member with a member-specific wrapped team key. */
+  async addTeamMember(teamId: string, payload: AddTeamMemberRequest): Promise<TeamMemberDto> {
+    const response = await this.request<{ data: TeamMemberDto }>(
+      `/api/v1/teams/${teamId}/members`,
+      {
+        method: 'POST',
+        body: payload,
+      },
+    )
+    return response.data
+  }
+
+  /** Change a team member role. The backend prevents removing the final owner. */
+  async updateTeamMember(
+    teamId: string,
+    memberId: string,
+    payload: UpdateTeamMemberRequest,
+  ): Promise<TeamMemberDto> {
+    const response = await this.request<{ data: TeamMemberDto }>(
+      `/api/v1/teams/${teamId}/members/${memberId}`,
+      {
+        method: 'PATCH',
+        body: payload,
+      },
+    )
+    return response.data
+  }
+
+  /** Remove a team member after providing rewrapped keys for all remaining members. */
+  async removeTeamMember(
+    teamId: string,
+    memberId: string,
+    payload: RemoveTeamMemberRequest,
+  ): Promise<void> {
+    await this.request<void>(`/api/v1/teams/${teamId}/members/${memberId}`, {
+      method: 'DELETE',
       body: payload,
     })
   }

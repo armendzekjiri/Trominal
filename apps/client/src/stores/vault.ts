@@ -10,6 +10,7 @@ import {
   wipe,
 } from '@trominal/crypto'
 import type { UserVaultMaterial } from '@trominal/api-client'
+import { useTeamScope } from '@/features/teams/store'
 
 const DEFAULT_AUTO_LOCK_MS = 15 * 60 * 1000
 
@@ -130,6 +131,7 @@ export const useVault = create<VaultStore>((set, get) => ({
     if (key !== null) {
       wipe(key)
     }
+    useTeamScope.getState().clearSelectedTeamKey()
     set({ key: null, isLocked: true, lockTimerId: null })
   },
 

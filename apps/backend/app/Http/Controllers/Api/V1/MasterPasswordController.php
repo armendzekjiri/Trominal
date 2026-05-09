@@ -83,6 +83,7 @@ final class MasterPasswordController extends Controller
         $record = $modelClass::query()
             ->whereKey($id)
             ->where('user_id', $user->id)
+            ->when($resource['team_scoped'], fn ($query) => $query->whereNull('team_id'))
             ->first();
 
         if (! $record instanceof Model) {

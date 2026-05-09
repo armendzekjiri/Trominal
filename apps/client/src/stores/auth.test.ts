@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { TrominalApiError, type TokenPairResponse, type UserDto } from '@trominal/api-client'
+import { useTeamScope } from '@/features/teams/store'
 import { secureStorage } from '@/lib/secure-storage'
 import * as apiClientModule from '@/lib/api-client'
 import { useAuth } from './auth'
@@ -42,11 +43,13 @@ function makePair(refresh: string): TokenPairResponse {
 
 beforeEach(async () => {
   await secureStorage.delete('refresh_token')
+  useTeamScope.getState().setPersonalScope()
   // Reset the auth store to its initial shape between tests.
   await useAuth.getState().logout()
 })
 
 afterEach(() => {
+  useTeamScope.getState().setPersonalScope()
   vi.restoreAllMocks()
 })
 
@@ -122,5 +125,20 @@ describe('auth store hydrate()', () => {
 
     expect(refresh).not.toHaveBeenCalled()
     expect(useAuth.getState().isHydrating).toBe(false)
+  })
+
+  it('clears team scope secrets on logout', async () => {
+    const teamKey = new Uint8Array(32).fill(11)
+    useTeamScope.getState().setTeamScope('team_01')
+    useTeamScope.getState().setSelectedTeamKey('team_01', 1, teamKey)
+    vi.spyOn(apiClientModule, 'getApiClient').mockResolvedValue({
+      logout: vi.fn(),
+    } as unknown as Awaited<ReturnType<typeof apiClientModule.getApiClient>>)
+
+    await useAuth.getState().logout()
+
+    expect(useTeamScope.getState().selectedTeamId).toBeNull()
+    expect(useTeamScope.getState().selectedTeamKey).toBeNull()
+    expect(Array.from(teamKey).every((byte) => byte === 0)).toBe(true)
   })
 })

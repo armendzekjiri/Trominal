@@ -9,6 +9,7 @@ import {
   toBase64,
 } from '@trominal/crypto'
 import type { UserVaultMaterial } from '@trominal/api-client'
+import { useTeamScope } from '@/features/teams/store'
 import { useVault } from './vault'
 
 const TEST_EMAIL = 'unlock-test@example.com'
@@ -34,10 +35,12 @@ async function makeMaterial(): Promise<{ material: UserVaultMaterial; key: Uint8
 
 beforeEach(() => {
   useVault.getState().lock()
+  useTeamScope.getState().setPersonalScope()
 })
 
 afterEach(() => {
   useVault.getState().lock()
+  useTeamScope.getState().setPersonalScope()
 })
 
 describe('vault store', () => {
@@ -74,6 +77,19 @@ describe('vault store', () => {
     expect(useVault.getState().key).toBeNull()
     expect(useVault.getState().isLocked).toBe(true)
   }, 30_000)
+
+  it('lock() wipes the selected team key', () => {
+    const vaultKey = new Uint8Array(32).fill(5)
+    const teamKey = new Uint8Array(32).fill(6)
+
+    useVault.getState().adoptKey(vaultKey)
+    useTeamScope.getState().setTeamScope('team_01')
+    useTeamScope.getState().setSelectedTeamKey('team_01', 1, teamKey)
+    useVault.getState().lock()
+
+    expect(useTeamScope.getState().selectedTeamKey).toBeNull()
+    expect(Array.from(teamKey).every((byte) => byte === 0)).toBe(true)
+  })
 
   it('adoptKey unlocks without re-deriving (used immediately after register)', async () => {
     const { material, key } = await makeMaterial()
