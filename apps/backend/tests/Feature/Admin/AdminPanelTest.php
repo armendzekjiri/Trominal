@@ -49,6 +49,23 @@ final class AdminPanelTest extends TestCase
             ->assertOk();
     }
 
+    public function test_admin_panel_does_not_500_when_admin_user_has_no_name(): void
+    {
+        // Registration accepts a null `name` (the client only collects email +
+        // master password), so the admin's name column is often null. Filament
+        // 4's strict-typed FilamentManager::getUserName() returned null in
+        // that case and crashed the admin shell — the User model now
+        // implements HasName and falls back to the email address.
+        $admin = $this->createUser(role: 'admin', twoFactor: true);
+        $admin->forceFill(['name' => null])->save();
+
+        $this->actingAs($admin)
+            ->get('/admin')
+            ->assertOk();
+
+        self::assertSame($admin->email, $admin->fresh()->getFilamentName());
+    }
+
     public function test_filament_does_not_expose_a_registration_page(): void
     {
         // Phase 4 makes the client app the canonical first-user signup flow:
