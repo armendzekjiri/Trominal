@@ -28,7 +28,7 @@ Required production edits:
 - `TROMINAL_SITE_ADDRESS`: Caddy site address, for example `trominal.example.com`
 - `POSTGRES_PASSWORD` and `DB_PASSWORD`: same strong password
 - `ALLOWED_ORIGINS`: deployed client origins and `tauri://localhost`
-- `TROMINAL_BACKEND_IMAGE`: released image tag, for example `ghcr.io/<owner>/trominal-backend:2.1.1`
+- `TROMINAL_BACKEND_IMAGE`: released image tag, for example `ghcr.io/armendzekjiri/trominal-backend:0.1.0`
 
 Start the backend stack:
 
@@ -58,8 +58,8 @@ The production Compose file runs:
 Update only the backend:
 
 ```bash
-TROMINAL_BACKEND_IMAGE=ghcr.io/<owner>/trominal-backend:2.1.1 docker compose pull app queue scheduler ssh-proxy
-TROMINAL_BACKEND_IMAGE=ghcr.io/<owner>/trominal-backend:2.1.1 docker compose up -d app queue scheduler ssh-proxy
+TROMINAL_BACKEND_IMAGE=ghcr.io/armendzekjiri/trominal-backend:0.1.0 docker compose pull app queue scheduler ssh-proxy
+TROMINAL_BACKEND_IMAGE=ghcr.io/armendzekjiri/trominal-backend:0.1.0 docker compose up -d app queue scheduler ssh-proxy
 docker compose exec app php artisan migrate --force
 ```
 
@@ -139,9 +139,9 @@ CACHE_STORE=redis
 QUEUE_CONNECTION=redis
 
 TROMINAL_REGISTRATION_MODE=single
-TROMINAL_BACKEND_VERSION=2.1.1
+TROMINAL_BACKEND_VERSION=0.1.0
 TROMINAL_API_VERSION=v1
-TROMINAL_MIN_CLIENT_VERSION=1.6.0
+TROMINAL_MIN_CLIENT_VERSION=0.1.0
 ALLOWED_ORIGINS=https://trominal.example.com,tauri://localhost
 ```
 

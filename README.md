@@ -51,8 +51,8 @@ Read the full threat model in [`SECURITY.md`](SECURITY.md).
 ## Self-hosting
 
 ```bash
-git clone https://github.com/<your-org>/trominal.git
-cd trominal
+git clone https://github.com/armendzekjiri/Trominal.git
+cd Trominal
 cp docker/env/backend.env.example .env
 # Edit .env to set APP_KEY, APP_URL, TROMINAL_SITE_ADDRESS, DB password, etc.
 docker compose up -d
@@ -61,17 +61,17 @@ docker compose exec app php artisan migrate --seed --force
 
 Then:
 
-1. Open the **client app** (web at `https://<your-domain>` or download desktop)
+1. Open the **client app** (web at your deployed domain, for example `https://trominal.example.com`, or download desktop)
 2. Enter your server URL on first launch
 3. Register the first user → automatic admin
-4. Visit `https://<your-domain>/admin` to manage your instance
+4. Visit your admin URL, for example `https://trominal.example.com/admin`, to manage your instance
 
 Full guide: [`docs/SELF_HOSTING.md`](docs/SELF_HOSTING.md).
 
 Backend and client releases are independent:
 
-- `backend-v2.1.1` publishes `ghcr.io/<owner>/trominal-backend:2.1.1`
-- `client-v1.8.0` builds web and desktop client artifacts
+- `backend-v0.1.0` publishes `ghcr.io/armendzekjiri/trominal-backend:0.1.0`
+- `client-v0.1.0` builds web and desktop client artifacts
 
 ## Development
 
