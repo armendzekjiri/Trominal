@@ -1,0 +1,122 @@
+---
+import Icon from '@/components/chrome/Icon.astro'
+import { fetchGithubStats, FALLBACK_STATS } from '@/lib/github'
+import { formatStarCount, formatDate } from '@/lib/format'
+import { SITE } from '@/lib/site'
+
+let stats = FALLBACK_STATS
+try {
+  stats = await fetchGithubStats()
+} catch {
+  /* fallback */
+}
+
+const starValue = formatStarCount(stats.stars)
+const contribValue = stats.contributors !== null ? String(stats.contributors) : '—'
+
+const releaseLabel = stats.latestVersion ?? 'No release yet'
+const releaseSub = stats.latestReleaseDate
+  ? `Released ${formatDate(stats.latestReleaseDate)}`
+  : 'Pre-release development'
+
+const statCardStyle = 'text-align:center;padding:28px 20px'
+const statIconStyle =
+  'width:36px;height:36px;border-radius:8px;background:var(--accent-soft);border:1px solid var(--accent-line);display:inline-flex;align-items:center;justify-content:center;color:var(--accent);margin-bottom:14px'
+const statValueStyle =
+  'font-size:28px;font-weight:600;color:var(--ink);letter-spacing:-0.02em'
+const statLabelStyle =
+  'font-family:var(--mono);font-size:11px;text-transform:uppercase;letter-spacing:0.1em;color:var(--ink-4);margin-top:6px'
+---
+
+<section class="section">
+  <div class="wrap">
+    <div class="sec-head" style="text-align:center;margin-left:auto;margin-right:auto">
+      <span class="eyebrow">Built in the open</span>
+      <h2 style="margin-top:14px">Real progress, no marketing fluff.</h2>
+      <p style="margin-top:14px">
+        No paid testimonials, no fictional customers. Watch development as it happens — every
+        commit, every release, every issue, on GitHub.
+      </p>
+    </div>
+
+    <div
+      style="display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-bottom:16px"
+      class="open-stats-grid"
+    >
+      <div class="card" style={statCardStyle}>
+        <div style={statIconStyle}><Icon name="sparkles" size={18} /></div>
+        <div class="mono" style={statValueStyle} data-stars-target>{starValue}</div>
+        <div style={statLabelStyle}>Stars</div>
+      </div>
+      <div class="card" style={statCardStyle}>
+        <div style={statIconStyle}><Icon name="users" size={18} /></div>
+        <div class="mono" style={statValueStyle} data-contrib-target>{contribValue}</div>
+        <div style={statLabelStyle}>Contributors</div>
+      </div>
+      <div class="card" style={statCardStyle}>
+        <div style={statIconStyle}><Icon name="scale" size={18} /></div>
+        <div class="mono" style={statValueStyle}>AGPL-3.0</div>
+        <div style={statLabelStyle}>License</div>
+      </div>
+    </div>
+
+    <a
+      href={stats.latestReleaseUrl ?? SITE.github.releasesUrl}
+      target="_blank"
+      rel="noopener"
+      class="card hover"
+      style="display:flex;align-items:center;gap:18px;padding:20px 24px;text-decoration:none"
+    >
+      <div
+        style="width:44px;height:44px;border-radius:10px;background:var(--accent-soft);border:1px solid var(--accent-line);display:flex;align-items:center;justify-content:center;color:var(--accent);flex-shrink:0"
+      >
+        <Icon name="tag" size={20} />
+      </div>
+      <div style="flex:1;min-width:0">
+        <div
+          style="font-family:var(--mono);font-size:11px;text-transform:uppercase;letter-spacing:0.1em;color:var(--ink-4)"
+        >
+          Latest release
+        </div>
+        <div
+          class="mono"
+          style="margin-top:4px;font-size:18px;color:var(--ink);font-weight:500"
+          data-version-target
+        >
+          {releaseLabel}
+        </div>
+        <div style="margin-top:4px;font-size:13px;color:var(--ink-3)">{releaseSub}</div>
+      </div>
+      <Icon name="arrow_right" size={18} />
+    </a>
+  </div>
+</section>
+
+<script>
+  async function refresh() {
+    try {
+      const res = await fetch('/api/stats.json', { cache: 'no-store' })
+      if (!res.ok) return
+      const data = (await res.json()) as {
+        stars?: number
+        contributors?: number | null
+      }
+      if (typeof data.contributors === 'number') {
+        document.querySelectorAll<HTMLElement>('[data-contrib-target]').forEach((el) => {
+          el.textContent = String(data.contributors)
+        })
+      }
+    } catch {
+      /* noop */
+    }
+  }
+  refresh()
+</script>
+
+<style>
+  @media (max-width: 700px) {
+    .open-stats-grid {
+      grid-template-columns: 1fr !important;
+    }
+  }
+</style>

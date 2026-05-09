@@ -1,0 +1,43 @@
+---
+import Page from '@/layouts/Page.astro'
+import { renderRepoMarkdown } from '@/lib/markdown'
+import { SITE } from '@/lib/site'
+
+export const prerender = true
+
+const { html, headings } = renderRepoMarkdown('SECURITY.md')
+const toc = headings.filter((h) => h.depth === 2)
+---
+
+<Page
+  title="Security"
+  description="Trominal's threat model, cryptographic design, and how to report vulnerabilities."
+  active="security"
+>
+  <header class="page-head">
+    <div class="wrap">
+      <span class="eyebrow"><span class="dot"></span>Security</span>
+      <h1>How Trominal handles your secrets.</h1>
+      <p class="lede">
+        The full threat model, the cryptography we use, and what we explicitly do <em>not</em>
+        protect against. Source-of-truth lives in <a
+          href={`${SITE.github.url}/blob/main/SECURITY.md`}
+          target="_blank"
+          rel="noopener"
+          style="color:var(--accent);border-bottom:1px solid var(--accent-line)">SECURITY.md</a>.
+      </p>
+    </div>
+  </header>
+
+  <section class="section flush">
+    <div class="wrap">
+      <div class="two-col">
+        <aside class="toc">
+          <h6>On this page</h6>
+          {toc.map((h) => <a href={`#${h.slug}`}>{h.text}</a>)}
+        </aside>
+        <article class="prose" set:html={html} />
+      </div>
+    </div>
+  </section>
+</Page>

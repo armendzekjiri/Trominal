@@ -1,0 +1,173 @@
+---
+import Page from '@/layouts/Page.astro'
+import { Image } from 'astro:assets'
+import iconLarge from '@/assets/brand/icon-1024.png'
+
+export const prerender = true
+
+const colors = [
+  { name: 'bg', hex: '#0e0d0b', label: 'Page background' },
+  { name: 'bg-2', hex: '#15140f', label: 'Surface' },
+  { name: 'bg-3', hex: '#1c1a14', label: 'Card' },
+  { name: 'ink', hex: '#f0ebde', label: 'Primary text' },
+  { name: 'ink-3', hex: '#a39d8a', label: 'Muted text' },
+  { name: 'accent', hex: '#7dd3a0', label: 'Brand green' },
+  { name: 'accent-2', hex: '#5fb685', label: 'Brand green (hover)' },
+  { name: 'warn', hex: '#e0b870', label: 'Warning' },
+  { name: 'danger', hex: '#f17a7a', label: 'Danger' },
+  { name: 'info', hex: '#7aa2f7', label: 'Info' },
+] as const
+---
+
+<Page
+  title="Brand kit"
+  description="Logo, colors, and typography for Trominal — for press, screencasts, and forks."
+  active="brand"
+>
+  <header class="page-head">
+    <div class="wrap">
+      <span class="eyebrow"><span class="dot"></span>Brand kit</span>
+      <h1>Use the brand, but use it right.</h1>
+      <p class="lede">
+        Trominal is open source. Logo and color tokens are below — please don't redraw them
+        from memory.
+      </p>
+    </div>
+  </header>
+
+  <section class="section flush">
+    <div class="wrap">
+      <h2 style="margin-bottom:18px">Logo</h2>
+      <div
+        style="display:grid;grid-template-columns:1fr 1fr;gap:18px;margin-bottom:14px"
+        class="brand-grid"
+      >
+        <div class="card" style="padding:28px;text-align:center">
+          <Image
+            src={iconLarge}
+            alt="Trominal app icon"
+            width={128}
+            height={128}
+            style="border-radius:24px;margin:8px auto 14px;display:block"
+          />
+          <div
+            class="mono"
+            style="font-size:11px;text-transform:uppercase;letter-spacing:0.1em;color:var(--ink-4)"
+          >
+            App icon
+          </div>
+          <a
+            href="/icon-1024.png"
+            download
+            style="display:inline-block;margin-top:14px;color:var(--accent);font-size:13px;border-bottom:1px solid var(--accent-line)"
+          >
+            Download 1024×1024 PNG
+          </a>
+        </div>
+
+        <div
+          class="card"
+          style="padding:28px;display:flex;align-items:center;justify-content:center"
+        >
+          <span
+            class="brand"
+            style="font-family:var(--mono);font-size:32px;font-weight:600;display:flex;align-items:center;gap:14px"
+          >
+            <span style="color:var(--accent)">&gt;</span>
+            <span
+              style="width:30px;height:30px;border-radius:5px;background:var(--accent);box-shadow:0 0 24px rgba(125,211,160,0.45)"
+            ></span>
+            <span>trominal</span>
+          </span>
+        </div>
+      </div>
+      <p class="muted" style="font-size:13px;max-width:680px">
+        The wordmark is always lowercase, set in JetBrains Mono Semibold (600). The leading
+        <span class="mono">&gt;</span> is in <span class="mono">var(--accent)</span> green. The
+        block square is the same accent green and sits between the prompt and the wordmark.
+      </p>
+    </div>
+  </section>
+
+  <section class="section">
+    <div class="wrap">
+      <h2 style="margin-bottom:18px">Colors</h2>
+      <div
+        style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:14px"
+      >
+        {
+          colors.map((c) => (
+            <div class="card" style="padding:0;overflow:hidden">
+              <div
+                style={`background:${c.hex};height:100px;border-bottom:1px solid var(--line)`}
+              />
+              <div style="padding:14px 16px">
+                <div class="mono" style="font-size:12px;color:var(--accent)">
+                  --{c.name}
+                </div>
+                <div
+                  class="mono"
+                  style="font-size:11px;color:var(--ink-3);margin-top:4px"
+                >
+                  {c.hex}
+                </div>
+                <div style="font-size:12px;color:var(--ink-3);margin-top:4px">
+                  {c.label}
+                </div>
+              </div>
+            </div>
+          ))
+        }
+      </div>
+    </div>
+  </section>
+
+  <section class="section">
+    <div class="wrap">
+      <h2 style="margin-bottom:18px">Typography</h2>
+      <div class="card" style="padding:32px">
+        <div style="font-family:var(--ui);font-size:32px;font-weight:600;letter-spacing:-0.025em">
+          Inter — UI typeface
+        </div>
+        <p class="muted" style="margin-top:6px;font-size:14px">
+          Used for body copy, headings, buttons. Weights 400, 500, 600, 700.
+        </p>
+        <hr class="rule" style="margin:24px 0" />
+        <div
+          class="mono"
+          style="font-size:32px;font-weight:600;letter-spacing:-0.015em"
+        >
+          JetBrains Mono — voice of the product
+        </div>
+        <p class="muted" style="margin-top:6px;font-size:14px">
+          Used in the wordmark, terminal output, code blocks, kbd shortcuts, eyebrow labels,
+          and any time we want to feel like a terminal. Weights 400, 500, 600.
+        </p>
+      </div>
+    </div>
+  </section>
+
+  <section class="section">
+    <div class="wrap">
+      <h2 style="margin-bottom:18px">What not to do</h2>
+      <ul class="prose" style="max-width:none">
+        <li>Don't recolor the logo. The accent green is the only fill.</li>
+        <li>Don't capitalize the wordmark — it's <span class="mono">trominal</span>, lowercase.</li>
+        <li>Don't add a tagline below the wordmark in the lockup. Tagline lives in copy.</li>
+        <li>Don't put the wordmark on a busy background — give it space and a dark surface.</li>
+        <li>
+          AGPL-3.0 means forks must remain open source. If you ship a hard fork, please rename
+          and re-color so users don't get confused.
+        </li>
+      </ul>
+    </div>
+  </section>
+</Page>
+
+<style>
+  @media (max-width: 700px) {
+    .brand-grid {
+      grid-template-columns: 1fr !important;
+    }
+  }
+</style>

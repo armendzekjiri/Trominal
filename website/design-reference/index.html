@@ -1,0 +1,324 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<title>Trominal — Self-hosted SSH client for teams</title>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet"/>
+<link rel="stylesheet" href="site.css"/>
+</head>
+<body>
+<div data-header="home"></div>
+
+<!-- HERO -->
+<section class="hero">
+  <div class="wrap">
+    <div class="hero-grid">
+      <div>
+        <span class="eyebrow"><span class="dot"></span>v1.4.2 — Atlas · released May 6, 2026</span>
+        <h1>The SSH&nbsp;client your terminal&nbsp;deserves.</h1>
+        <p class="lede">Trominal is an open-source, self-hosted SSH client for teams. Sync your hosts, snippets, and identities across desktop and mobile — without sending a single byte to anyone else's server.</p>
+        <div class="actions">
+          <a href="install.html" class="btn btn-primary btn-lg"><span data-icon="download" data-size="15"></span> Install Trominal</a>
+          <a href="https://github.com/trominal/trominal" target="_blank" rel="noopener" class="btn btn-secondary btn-lg"><span data-icon="github" data-size="15"></span> Star on GitHub <span class="mono" style="color:var(--ink-3);font-size:13px">8.4k</span></a>
+        </div>
+        <div class="meta">
+          <span><span data-icon="check" data-size="13"></span> macOS · Linux · Windows · iOS</span>
+          <span><span data-icon="shield" data-size="13"></span> MIT-licensed</span>
+          <span><span data-icon="eye_off" data-size="13"></span> Zero telemetry</span>
+        </div>
+      </div>
+
+      <!-- Animated terminal preview -->
+      <div class="terminal" style="box-shadow: 0 30px 80px rgba(0,0,0,0.4), 0 0 0 1px rgba(125,211,160,0.06);">
+        <div class="head">
+          <div class="lights"><span style="background:#f17a7a"></span><span style="background:#e0b870"></span><span style="background:#7dd3a0"></span></div>
+          <span class="mono" style="color:var(--ink-2)">deploy@web-01.prod</span>
+          <span style="flex:1"></span>
+          <span class="tag accent" style="height:18px;padding:0 7px;font-size:10px"><span style="width:5px;height:5px;border-radius:50%;background:var(--accent)"></span>22ms</span>
+        </div>
+        <div class="body">
+          <div class="row"><span class="term-c-dim"># last login: Wed May 8, 2026 — via Trominal</span></div>
+          <div class="row"><span class="term-prompt">deploy@web-01:~$</span> <span class="term-c-green">git</span> <span class="term-c-cyan">status</span></div>
+          <div class="row"><span class="term-c-dim">On branch </span><span class="term-c-green">main</span></div>
+          <div class="row"><span class="term-c-dim">  modified: </span><span class="term-c-yellow">config/database.yml</span></div>
+          <div class="row"><span class="term-c-dim">  modified: </span><span class="term-c-yellow">sessions_controller.rb</span></div>
+          <div class="row">&nbsp;</div>
+          <div class="row"><span class="term-prompt">deploy@web-01:~$</span> <span class="term-c-green">tail</span> -f log/prod.log</div>
+          <div class="row"><span class="term-c-dim">[14:22:09]</span> <span class="term-c-green">INFO</span>  GET /api/v1/users/42 → 200</div>
+          <div class="row"><span class="term-c-dim">[14:22:11]</span> <span class="term-c-yellow">WARN</span>  Slow query (412ms) on sessions</div>
+          <div class="row"><span class="term-c-dim">[14:22:14]</span> <span class="term-c-red">ERROR</span> Postgres: too many connections</div>
+          <div class="row" style="margin-top:6px;background:rgba(125,211,160,0.06);padding:6px 8px;border-left:2px solid var(--accent);border-radius:0 4px 4px 0">
+            <span style="color:var(--accent);font-size:11px;font-weight:500">⌁ Trominal AI</span>
+            <span style="color:var(--ink-2)"> Postgres has hit max_connections.</span>
+          </div>
+          <div class="row" style="margin-top:6px"><span class="term-prompt">deploy@web-01:~$</span> <span style="color:var(--ink-2)">psql</span> <span class="term-c-dim" style="font-style:italic">-h db.prod.acme -U postgres</span><span style="display:inline-block;width:7px;height:13px;background:var(--accent);margin-left:1px;vertical-align:-2px;animation:blink 1s step-end infinite"></span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- LOGOS / TRUST -->
+<section style="padding: 24px 0 56px">
+  <div class="wrap">
+    <p class="muted mono" style="font-size:11px;text-align:center;text-transform:uppercase;letter-spacing:.12em;margin-bottom:24px">Used by infra teams at</p>
+    <div style="display:flex;align-items:center;justify-content:center;gap:48px;flex-wrap:wrap;font-family:var(--mono);font-size:18px;color:var(--ink-4);font-weight:500">
+      <span>◇ Northwind</span>
+      <span>▲ Aperture</span>
+      <span>◊ Helios</span>
+      <span>⬢ Cobalt</span>
+      <span>◯ Lumen</span>
+      <span>⬡ Forge</span>
+    </div>
+  </div>
+</section>
+
+<!-- WHY -->
+<section class="section">
+  <div class="wrap">
+    <div class="sec-head" style="text-align:center;margin-left:auto;margin-right:auto">
+      <span class="eyebrow">Why Trominal</span>
+      <h2 style="margin:14px auto 0">Built for the way infra teams actually work.</h2>
+      <p style="margin:14px auto 0">Closed-source SSH clients hold your hosts hostage. Trominal flips that — your data sits on your server, your team shares one source of truth, and every line of code is on GitHub.</p>
+    </div>
+
+    <div class="feature-grid">
+      <div class="feature">
+        <div class="icon"><span data-icon="server" data-size="18"></span></div>
+        <h3>Self-hosted by default</h3>
+        <p>Run the Trominal server in a Docker container next to your other infra. Your hosts, keys, and snippets never leave your network.</p>
+      </div>
+      <div class="feature">
+        <div class="icon"><span data-icon="users" data-size="18"></span></div>
+        <h3>Team-first sync</h3>
+        <p>Share host configs and snippets across the team without copy-pasting <span class="mono">~/.ssh/config</span>. Role-based access, audit logs, the works.</p>
+      </div>
+      <div class="feature">
+        <div class="icon"><span data-icon="sparkles" data-size="18"></span></div>
+        <h3>AI that respects context</h3>
+        <p>Inline ghost-text suggestions trained on your shell history — running fully on-device or against your own LLM endpoint. No prompts shipped to vendors.</p>
+      </div>
+      <div class="feature">
+        <div class="icon"><span data-icon="keyboard" data-size="18"></span></div>
+        <h3>Mobile that doesn't suck</h3>
+        <p>A custom keyboard purpose-built for SSH. Pipe, tilde, ctrl, escape — all one tap away. Snippets and AI are right above the keys.</p>
+      </div>
+      <div class="feature">
+        <div class="icon"><span data-icon="lock" data-size="18"></span></div>
+        <h3>End-to-end encrypted vault</h3>
+        <p>Identities and secrets are sealed with a master password before they hit the wire. Even your server admin can't read them.</p>
+      </div>
+      <div class="feature">
+        <div class="icon"><span data-icon="git" data-size="18"></span></div>
+        <h3>Open source, MIT-licensed</h3>
+        <p>Audit it, fork it, patch it. We ship binaries, but the truth is on GitHub. No EULA, no rug-pulls, no enterprise tier.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- BIG SHOWCASE -->
+<section class="section">
+  <div class="wrap">
+    <div class="sec-head">
+      <span class="eyebrow">The terminal, reimagined</span>
+      <h2>Hosts, snippets, files, tunnels — one window, one keyboard shortcut.</h2>
+      <p>Tabs and splits you'd expect, plus a sidebar that actually understands your infrastructure: grouped by environment, color-coded by tags, searchable by anything.</p>
+    </div>
+
+    <!-- Mock app screenshot — built from primitives -->
+    <div style="border-radius:14px;overflow:hidden;border:1px solid var(--line);background:#0a0907;box-shadow:0 40px 100px rgba(0,0,0,0.5)">
+      <!-- titlebar -->
+      <div style="height:38px;background:#15140f;border-bottom:1px solid var(--line);display:flex;align-items:center;padding:0 14px;gap:10px;font-family:var(--mono);font-size:12px;color:var(--ink-3)">
+        <div style="display:flex;gap:6px">
+          <span style="width:11px;height:11px;border-radius:50%;background:#f17a7a"></span>
+          <span style="width:11px;height:11px;border-radius:50%;background:#e0b870"></span>
+          <span style="width:11px;height:11px;border-radius:50%;background:#7dd3a0"></span>
+        </div>
+        <span style="margin-left:auto;color:var(--ink-2)"><span class="mono" style="color:var(--accent)">&gt;</span> trominal · acme.internal</span>
+        <span style="margin-left:auto"></span>
+      </div>
+      <div style="display:grid;grid-template-columns:240px 1fr 280px;height:520px">
+        <!-- sidebar -->
+        <aside style="background:#15140f;border-right:1px solid var(--line);padding:14px 10px;overflow:hidden;font-size:13px">
+          <div style="display:flex;align-items:center;gap:8px;padding:6px 8px;background:rgba(255,255,255,0.04);border-radius:6px;color:var(--ink-3);margin-bottom:14px">
+            <span data-icon="search" data-size="13"></span>
+            <span style="font-size:12px">Search hosts…</span>
+            <span class="kbd" style="margin-left:auto">⌘K</span>
+          </div>
+          <div style="font-family:var(--mono);font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-4);padding:8px 8px 6px;display:flex;align-items:center;gap:6px">
+            <span style="width:5px;height:5px;border-radius:50%;background:#f17a7a"></span> Production
+          </div>
+          <div style="display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:5px;background:var(--accent-soft);color:var(--ink);border-left:2px solid var(--accent)">
+            <span style="width:6px;height:6px;border-radius:50%;background:var(--accent)"></span>
+            <span class="mono" style="font-size:12px">web-01.prod</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:8px;padding:6px 8px;color:var(--ink-3)">
+            <span style="width:6px;height:6px;border-radius:50%;background:var(--accent)"></span>
+            <span class="mono" style="font-size:12px">web-02.prod</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:8px;padding:6px 8px;color:var(--ink-3)">
+            <span style="width:6px;height:6px;border-radius:50%;background:var(--ink-5)"></span>
+            <span class="mono" style="font-size:12px">db-primary</span>
+          </div>
+          <div style="font-family:var(--mono);font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-4);padding:14px 8px 6px;display:flex;align-items:center;gap:6px">
+            <span style="width:5px;height:5px;border-radius:50%;background:#e0b870"></span> Staging
+          </div>
+          <div style="display:flex;align-items:center;gap:8px;padding:6px 8px;color:var(--ink-3)"><span style="width:6px;height:6px;border-radius:50%;background:var(--ink-5)"></span><span class="mono" style="font-size:12px">stage-app</span></div>
+          <div style="display:flex;align-items:center;gap:8px;padding:6px 8px;color:#f17a7a"><span style="width:6px;height:6px;border-radius:50%;background:#f17a7a"></span><span class="mono" style="font-size:12px">stage-worker</span></div>
+          <div style="font-family:var(--mono);font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-4);padding:14px 8px 6px;display:flex;align-items:center;gap:6px">
+            <span style="width:5px;height:5px;border-radius:50%;background:#c897e0"></span> Personal
+          </div>
+          <div style="display:flex;align-items:center;gap:8px;padding:6px 8px;color:var(--ink-3)"><span style="width:6px;height:6px;border-radius:50%;background:var(--ink-5)"></span><span class="mono" style="font-size:12px">homelab-nas</span></div>
+        </aside>
+        <!-- terminal -->
+        <main style="background:#0a0907;display:flex;flex-direction:column;overflow:hidden">
+          <div style="display:flex;align-items:center;gap:6px;padding:8px 12px;border-bottom:1px solid var(--line);background:#15140f">
+            <div style="display:flex;align-items:center;gap:6px;padding:4px 10px;background:#0a0907;border:1px solid var(--accent-line);border-radius:5px;font-family:var(--mono);font-size:11px">
+              <span style="width:5px;height:5px;border-radius:50%;background:var(--accent)"></span>web-01.prod
+            </div>
+            <div style="display:flex;align-items:center;gap:6px;padding:4px 10px;border:1px solid var(--line);border-radius:5px;font-family:var(--mono);font-size:11px;color:var(--ink-3)">
+              <span style="width:5px;height:5px;border-radius:50%;background:var(--accent)"></span>db-primary
+            </div>
+            <div style="display:flex;align-items:center;gap:6px;padding:4px 10px;border:1px solid var(--line);border-radius:5px;font-family:var(--mono);font-size:11px;color:var(--ink-3)">
+              <span style="width:5px;height:5px;border-radius:50%;background:#e0b870"></span>k8s-master
+            </div>
+            <span style="width:24px;height:24px;display:flex;align-items:center;justify-content:center;border-radius:5px;color:var(--ink-3)">+</span>
+          </div>
+          <div class="terminal" style="border:none;border-radius:0;background:#0a0907;flex:1">
+            <div class="body" style="padding:14px 16px">
+              <div class="row"><span class="term-prompt">deploy@web-01:~$</span> <span class="term-c-green">cd</span> /srv/app && <span class="term-c-green">git</span> <span class="term-c-cyan">log</span> --oneline -5</div>
+              <div class="row"><span class="term-c-yellow">a4f2c1e</span> Fix postgres connection pool exhaustion</div>
+              <div class="row"><span class="term-c-yellow">b1d8e22</span> Add health endpoint for k8s readiness</div>
+              <div class="row"><span class="term-c-yellow">c7e3a91</span> Bump rails 7.2 → 7.2.2</div>
+              <div class="row"><span class="term-c-yellow">d22f44a</span> Reduce session payload size</div>
+              <div class="row"><span class="term-c-yellow">e90c876</span> Cache user permissions for 60s</div>
+              <div class="row">&nbsp;</div>
+              <div class="row"><span class="term-prompt">deploy@web-01:/srv/app$</span> <span class="term-c-green">kubectl</span> get pods -n production</div>
+              <div class="row"><span class="term-c-dim">NAME                       READY  STATUS    RESTARTS  AGE</span></div>
+              <div class="row">api-7d4f8c9-x2k1q          1/1    <span class="term-c-green">Running</span>   0         4d</div>
+              <div class="row">api-7d4f8c9-m9p2r          1/1    <span class="term-c-green">Running</span>   0         4d</div>
+              <div class="row">worker-6c8b1a-z4j8n        1/1    <span class="term-c-green">Running</span>   2         2h</div>
+              <div class="row">worker-6c8b1a-q1m4p        0/1    <span class="term-c-red">CrashLoopBackOff</span> 8 12m</div>
+              <div class="row">&nbsp;</div>
+              <div class="row" style="display:flex;align-items:center"><span class="term-prompt">deploy@web-01:/srv/app$</span>&nbsp;<span style="display:inline-block;width:7px;height:13px;background:var(--accent);animation:blink 1s step-end infinite"></span></div>
+            </div>
+          </div>
+        </main>
+        <!-- AI panel -->
+        <aside style="background:#15140f;border-left:1px solid var(--line);padding:14px;overflow:hidden">
+          <div style="display:flex;align-items:center;gap:6px;font-family:var(--mono);font-size:11px;color:var(--accent);text-transform:uppercase;letter-spacing:.1em;margin-bottom:12px"><span data-icon="sparkles" data-size="12"></span> Trominal AI</div>
+          <div style="background:rgba(125,211,160,0.06);border:1px solid var(--accent-line);border-radius:8px;padding:10px;margin-bottom:8px;font-size:13px;color:var(--ink-2);line-height:1.5">
+            One worker pod is crash-looping. Tail its logs to find the cause:
+          </div>
+          <div style="background:#0a0907;border:1px solid var(--line);border-radius:6px;padding:8px 10px;font-family:var(--mono);font-size:11.5px;color:var(--ink-2);display:flex;align-items:flex-start;gap:8px">
+            <span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"><span class="term-c-green">kubectl</span> logs -n production worker-6c8b1a-q1m4p --previous</span>
+          </div>
+          <div style="margin-top:6px;display:flex;gap:6px"><span class="kbd">⏎</span><span style="font-size:11px;color:var(--ink-3)">run</span><span class="kbd" style="margin-left:8px">⌘C</span><span style="font-size:11px;color:var(--ink-3)">copy</span></div>
+          <hr class="rule" style="margin:18px 0"/>
+          <div style="font-family:var(--mono);font-size:11px;color:var(--ink-4);text-transform:uppercase;letter-spacing:.1em;margin-bottom:8px">Snippets</div>
+          <div style="display:flex;flex-direction:column;gap:6px">
+            <div style="background:var(--bg-3);border:1px solid var(--line);border-radius:6px;padding:8px 10px;font-family:var(--mono);font-size:11.5px;color:var(--ink-2)">k8s · pod logs</div>
+            <div style="background:var(--bg-3);border:1px solid var(--line);border-radius:6px;padding:8px 10px;font-family:var(--mono);font-size:11.5px;color:var(--ink-2)">psql · active sessions</div>
+            <div style="background:var(--bg-3);border:1px solid var(--line);border-radius:6px;padding:8px 10px;font-family:var(--mono);font-size:11.5px;color:var(--ink-2)">nginx · reload</div>
+          </div>
+        </aside>
+      </div>
+    </div>
+    <p class="muted" style="text-align:center;font-size:13px;margin-top:18px">↑ macOS · 1.4.2 · Atlas color scheme</p>
+  </div>
+</section>
+
+<!-- INSTALL TEASE -->
+<section class="section">
+  <div class="wrap">
+    <div style="display:grid;grid-template-columns:1.05fr 1fr;gap:48px;align-items:center">
+      <div>
+        <span class="eyebrow">Get started in 2 minutes</span>
+        <h2 style="margin-top:14px">One container. One CLI. Three platforms.</h2>
+        <p class="lede" style="margin-top:14px">Run the server with Docker, point your client at it, and you're connected. The same vault works on macOS, Linux, Windows, and iOS.</p>
+        <div style="margin-top:24px;display:flex;gap:10px;flex-wrap:wrap">
+          <a href="install.html" class="btn btn-primary">Installation guide</a>
+          <a href="docs.html" class="btn btn-secondary">Read the docs</a>
+        </div>
+      </div>
+      <div class="terminal">
+        <div class="head">
+          <div class="lights"><span style="background:#f17a7a"></span><span style="background:#e0b870"></span><span style="background:#7dd3a0"></span></div>
+          <span class="mono">~/infra</span>
+        </div>
+        <div class="body">
+          <div class="row"><span class="term-c-dim"># Run the Trominal server</span></div>
+          <div class="row"><span class="term-prompt">$</span> docker run -d \</div>
+          <div class="row">&nbsp;&nbsp;&nbsp;&nbsp;-p <span class="term-c-yellow">8443</span>:<span class="term-c-yellow">8443</span> \</div>
+          <div class="row">&nbsp;&nbsp;&nbsp;&nbsp;-v trominal-data:/var/trominal \</div>
+          <div class="row">&nbsp;&nbsp;&nbsp;&nbsp;ghcr.io/trominal/server:<span class="term-c-cyan">1.4.2</span></div>
+          <div class="row" style="color:var(--ink-5)">→ trominal v1.4.2 listening on :8443</div>
+          <div class="row">&nbsp;</div>
+          <div class="row"><span class="term-c-dim"># Pair the desktop client</span></div>
+          <div class="row"><span class="term-prompt">$</span> brew install trominal/tap/trominal</div>
+          <div class="row"><span class="term-prompt">$</span> trominal pair <span class="term-c-green">https://trominal.acme.internal</span></div>
+          <div class="row" style="color:var(--accent)">✓ paired as riley@acme.io</div>
+          <div class="row"><span style="display:inline-block;width:7px;height:13px;background:var(--accent);animation:blink 1s step-end infinite"></span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- TESTIMONIALS -->
+<section class="section">
+  <div class="wrap">
+    <div class="sec-head" style="text-align:center;margin-left:auto;margin-right:auto">
+      <span class="eyebrow">From the community</span>
+      <h2 style="margin-top:14px">What people are saying</h2>
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:16px">
+      <div class="card">
+        <p style="color:var(--ink);font-size:15px;line-height:1.55">"Finally an SSH client where I don't have to choose between syncing my hosts and not trusting a third party with our prod fingerprints."</p>
+        <div style="display:flex;align-items:center;gap:10px;margin-top:18px;padding-top:18px;border-top:1px solid var(--line)">
+          <div style="width:32px;height:32px;border-radius:8px;background:var(--bg-4);display:flex;align-items:center;justify-content:center;font-family:var(--mono);font-size:11px;font-weight:600">JR</div>
+          <div><div style="font-size:13px;font-weight:500">Julia Reiter</div><div class="mono" style="font-size:11px;color:var(--ink-4)">Staff SRE · Helios</div></div>
+        </div>
+      </div>
+      <div class="card">
+        <p style="color:var(--ink);font-size:15px;line-height:1.55">"The mobile keyboard alone makes it worth switching. I can actually fix things from a phone now without summoning the pipe character through three menus."</p>
+        <div style="display:flex;align-items:center;gap:10px;margin-top:18px;padding-top:18px;border-top:1px solid var(--line)">
+          <div style="width:32px;height:32px;border-radius:8px;background:var(--bg-4);display:flex;align-items:center;justify-content:center;font-family:var(--mono);font-size:11px;font-weight:600">DK</div>
+          <div><div style="font-size:13px;font-weight:500">Devon Krantz</div><div class="mono" style="font-size:11px;color:var(--ink-4)">Backend Lead · Cobalt</div></div>
+        </div>
+      </div>
+      <div class="card">
+        <p style="color:var(--ink);font-size:15px;line-height:1.55">"Read the entire codebase before deploying it. That's a sentence I haven't written about a paid SSH tool in a decade."</p>
+        <div style="display:flex;align-items:center;gap:10px;margin-top:18px;padding-top:18px;border-top:1px solid var(--line)">
+          <div style="width:32px;height:32px;border-radius:8px;background:var(--bg-4);display:flex;align-items:center;justify-content:center;font-family:var(--mono);font-size:11px;font-weight:600">MA</div>
+          <div><div style="font-size:13px;font-weight:500">Mira Adebayo</div><div class="mono" style="font-size:11px;color:var(--ink-4)">Security Eng · Northwind</div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- CTA -->
+<section class="section" style="border-bottom:1px solid var(--line)">
+  <div class="wrap">
+    <div style="background:linear-gradient(135deg, var(--bg-3), var(--bg-2));border:1px solid var(--line-2);border-radius:18px;padding:64px 56px;text-align:center;position:relative;overflow:hidden">
+      <div style="position:absolute;inset:0;background:radial-gradient(600px 300px at 50% 0%, rgba(125,211,160,0.10), transparent 70%);pointer-events:none"></div>
+      <span class="eyebrow" style="position:relative">Ready when you are</span>
+      <h2 style="margin-top:18px;position:relative">Bring your hosts home.</h2>
+      <p class="lede" style="margin:14px auto 0;max-width:540px;position:relative">Trominal is free, open source, and self-hostable forever. Spin up a server in five minutes — bring the team in when you're ready.</p>
+      <div style="margin-top:30px;display:flex;justify-content:center;gap:10px;flex-wrap:wrap;position:relative">
+        <a href="install.html" class="btn btn-primary btn-lg"><span data-icon="download" data-size="15"></span> Install Trominal</a>
+        <a href="https://github.com/trominal/trominal" target="_blank" rel="noopener" class="btn btn-secondary btn-lg"><span data-icon="github" data-size="15"></span> View source</a>
+      </div>
+    </div>
+  </div>
+</section>
+
+<div data-footer></div>
+<script src="chrome.js"></script>
+</body>
+</html>

@@ -1,0 +1,161 @@
+---
+import Page from '@/layouts/Page.astro'
+import { SITE } from '@/lib/site'
+
+export const prerender = true
+
+const lastUpdated = '9 May 2026'
+---
+
+<Page
+  title="Privacy"
+  description="What trominal.app and the public demo backend collect — and don't."
+  active="privacy"
+>
+  <header class="page-head">
+    <div class="wrap">
+      <span class="eyebrow"><span class="dot"></span>Privacy</span>
+      <h1>What we collect — and what we don't.</h1>
+      <p class="lede">
+        Plain English. No tracking pixels, no behavioral profiling, no third-party ad networks.
+        Last updated {lastUpdated}.
+      </p>
+    </div>
+  </header>
+
+  <section class="section flush">
+    <div class="wrap">
+      <article class="prose" style="max-width:760px">
+        <p>
+          This page covers two things: <strong>{SITE.domain}</strong> (the marketing site
+          you're reading) and <strong>{new URL(SITE.demo.backendUrl).host}</strong> (the public
+          demo backend). It does <em>not</em> cover instances of Trominal that you self-host —
+          those are governed by whoever runs them.
+        </p>
+
+        <h2>The marketing site (this site)</h2>
+
+        <h3>What we collect automatically</h3>
+        <p>
+          We use <strong>Cloudflare Real User Measurements (RUM)</strong>, a privacy-friendly
+          analytics service that runs without cookies and without persistent identifiers. It
+          records:
+        </p>
+        <ul>
+          <li>Page paths visited and approximate request volume</li>
+          <li>Referrer (where the request came from)</li>
+          <li>Browser type and operating system at a coarse granularity</li>
+          <li>Country (derived from the request IP at edge level — IP itself is not stored)</li>
+          <li>
+            Core Web Vitals — page load timing, layout shift, and interactivity metrics — to
+            help us spot performance regressions
+          </li>
+        </ul>
+        <p>
+          That data is aggregated by Cloudflare. We use it to understand which pages are
+          useful, which feel slow, and which aren't loading. There is no per-user profile and
+          nothing follows you across sessions.
+        </p>
+
+        <h3>What we don't collect</h3>
+        <ul>
+          <li>No cookies of our own</li>
+          <li>No tracking pixels, no Google Analytics, no Meta pixel, no LinkedIn pixel</li>
+          <li>No behavioral profiles, no fingerprinting</li>
+          <li>No A/B testing platforms</li>
+        </ul>
+
+        <h3>Embedded GitHub data</h3>
+        <p>
+          Star counts, contributor counts, and release info are fetched from the public GitHub
+          API by our Cloudflare Worker. The Worker caches results and serves them from
+          <code>/api/stats.json</code>. Your browser only ever talks to
+          <code>{SITE.domain}</code>; it does not contact GitHub directly.
+        </p>
+
+        <h3>Contact email</h3>
+        <p>
+          When you email <a href={`mailto:${SITE.contactEmail}`}>{SITE.contactEmail}</a>, your
+          message lands in a regular inbox. We keep correspondence as long as needed to answer
+          you. We do not subscribe you to anything. We do not share email content with third
+          parties.
+        </p>
+
+        <h2>The demo backend</h2>
+
+        <h3>What the demo stores</h3>
+        <p>
+          When you register on <code>{SITE.demo.backendUrl}</code> from a Trominal client, the
+          server stores:
+        </p>
+        <ul>
+          <li>
+            Email address (used for login and password reset). You can use a throwaway address.
+          </li>
+          <li>An Argon2id-hashed password used to authenticate API sessions</li>
+          <li>Your KDF salt, your public key, and ciphertext blobs the client uploads</li>
+          <li>Audit log entries with action type, IP, and user-agent (90-day retention)</li>
+        </ul>
+        <p>
+          The server <strong>cannot decrypt</strong> the ciphertext blobs. Your master password
+          never leaves your device — see <a href="/security">the threat model</a>.
+        </p>
+
+        <h3>Database resets</h3>
+        <p>
+          The demo's database is wiped periodically and without notice. Treat the demo as
+          ephemeral. To keep what you build, run your own server (see
+          <a href="/install">install</a>).
+        </p>
+
+        <h3>Acceptable use</h3>
+        <p>
+          The demo runs on shared infrastructure. Don't use it for production work, large
+          imports, automated load testing, or anything that violates
+          <a href="/terms">the terms</a>.
+        </p>
+
+        <h3>Logs</h3>
+        <p>
+          The Caddy reverse proxy in front of the demo writes short-lived access logs (path,
+          status, latency, IP) for diagnostic purposes. Logs are rotated daily. The Trominal
+          application itself never writes secrets, plaintext keys, or vault contents to logs.
+        </p>
+
+        <h2>Self-hosted instances</h2>
+        <p>
+          When you self-host Trominal, this privacy policy does not apply to your instance —
+          you, the operator, are the data controller. Trominal does not phone home, does not
+          send telemetry, and does not contact any Trominal-operated server unless you
+          explicitly point it there.
+        </p>
+
+        <h2>Your rights</h2>
+        <p>
+          For the demo backend: email <a href={`mailto:${SITE.contactEmail}`}>{SITE.contactEmail}</a>
+          to request deletion of your account and any associated ciphertexts. We will action
+          requests within 30 days, sooner where possible.
+        </p>
+        <p>
+          For the marketing site: there is no per-visitor data tied to you to delete, since
+          analytics are aggregate-only.
+        </p>
+
+        <h2>Changes to this policy</h2>
+        <p>
+          When this page changes, the date at the top updates and the diff lands in the public
+          repo at <a
+            href={`${SITE.github.url}/commits/main/website/src/pages/privacy.astro`}
+            target="_blank"
+            rel="noopener">website/src/pages/privacy.astro</a>. No silent edits.
+        </p>
+
+        <h2>Questions</h2>
+        <p>
+          Email <a href={`mailto:${SITE.contactEmail}`}>{SITE.contactEmail}</a> — the same
+          person reading the privacy mail also reviews the code.
+        </p>
+      </article>
+    </div>
+  </section>
+</Page>

@@ -1,0 +1,35 @@
+---
+import Page from '@/layouts/Page.astro'
+import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
+
+export const prerender = true
+
+const repoRoot = resolve(process.cwd(), '..')
+const licenseText = readFileSync(resolve(repoRoot, 'LICENSE'), 'utf-8')
+---
+
+<Page
+  title="License"
+  description="Trominal is licensed under the GNU Affero General Public License v3.0."
+  active="license"
+>
+  <header class="page-head">
+    <div class="wrap">
+      <span class="eyebrow"><span class="dot"></span>License</span>
+      <h1>AGPL-3.0.</h1>
+      <p class="lede">
+        Trominal is free software, distributed under the GNU Affero General Public License
+        version 3 — the strongest copyleft license, designed to keep network-deployed software
+        open. The complete license text is below.
+      </p>
+    </div>
+  </header>
+
+  <section class="section flush">
+    <div class="wrap">
+      <pre
+        style="background:#0a0907;border:1px solid var(--line);border-radius:var(--r-lg);padding:24px;font-family:var(--mono);font-size:12px;line-height:1.6;color:var(--ink-2);overflow-x:auto;white-space:pre-wrap;word-break:break-word">{licenseText}</pre>
+    </div>
+  </section>
+</Page>

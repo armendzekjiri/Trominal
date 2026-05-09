@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<title>Features — Trominal</title>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet"/>
+<link rel="stylesheet" href="site.css"/>
+</head>
+<body>
+<div data-header="features"></div>
+
+<header class="page-head">
+  <div class="wrap">
+    <span class="eyebrow"><span class="dot"></span>Features</span>
+    <h1>Everything an SSH client should be.<br/>Nothing it shouldn't.</h1>
+    <p class="lede">A walkthrough of what's in Trominal — and what we deliberately left out.</p>
+  </div>
+</header>
+
+<!-- Big feature 1 -->
+<section class="section flush">
+  <div class="wrap">
+    <div style="display:grid;grid-template-columns:1fr 1.05fr;gap:56px;align-items:center">
+      <div>
+        <span class="tag accent"><span data-icon="server" data-size="11"></span> Hosts</span>
+        <h2 style="margin-top:18px">Your hosts, organized like your team thinks.</h2>
+        <p style="margin-top:14px;color:var(--ink-3);font-size:16px">Group by environment, tag by purpose, color by team. Search anything in 50ms — host name, address, tag, identity, last-seen comment. Fingerprints are pinned and TOFU prompts are explicit.</p>
+        <ul class="prose" style="margin-top:18px;padding-left:0;list-style:none">
+          <li style="display:flex;gap:10px;padding:6px 0"><span style="color:var(--accent)" data-icon="check" data-size="14"></span><span>SSH config import on first launch</span></li>
+          <li style="display:flex;gap:10px;padding:6px 0"><span style="color:var(--accent)" data-icon="check" data-size="14"></span><span>Per-host initial commands &amp; env vars</span></li>
+          <li style="display:flex;gap:10px;padding:6px 0"><span style="color:var(--accent)" data-icon="check" data-size="14"></span><span>Bastion / jump host chains, multi-hop</span></li>
+          <li style="display:flex;gap:10px;padding:6px 0"><span style="color:var(--accent)" data-icon="check" data-size="14"></span><span>Connection-state badges across the team</span></li>
+        </ul>
+      </div>
+      <div style="border:1px solid var(--line);border-radius:14px;background:var(--bg-2);padding:18px">
+        <div style="font-family:var(--mono);font-size:11px;color:var(--ink-4);text-transform:uppercase;letter-spacing:.08em;margin-bottom:12px">Hosts · 14</div>
+        <div style="display:flex;flex-direction:column;gap:6px">
+          <div style="display:flex;align-items:center;gap:10px;padding:10px;background:var(--bg-3);border:1px solid var(--line);border-radius:8px">
+            <span style="width:6px;height:24px;border-radius:3px;background:#f17a7a"></span>
+            <div style="flex:1"><div style="font-size:13px;font-weight:500">web-01.prod</div><div class="mono" style="font-size:11px;color:var(--ink-4)">deploy@10.0.4.21 · nginx · us-east</div></div>
+            <span class="tag accent" style="height:20px;font-size:10px"><span style="width:5px;height:5px;border-radius:50%;background:var(--accent)"></span>connected</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:10px;padding:10px;background:var(--bg-3);border:1px solid var(--line);border-radius:8px">
+            <span style="width:6px;height:24px;border-radius:3px;background:#f17a7a"></span>
+            <div style="flex:1"><div style="font-size:13px;font-weight:500">db-primary</div><div class="mono" style="font-size:11px;color:var(--ink-4)">postgres@db.prod.acme · pg14</div></div>
+            <span class="tag" style="height:20px;font-size:10px">14m</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:10px;padding:10px;background:var(--bg-3);border:1px solid var(--line);border-radius:8px">
+            <span style="width:6px;height:24px;border-radius:3px;background:#e0b870"></span>
+            <div style="flex:1"><div style="font-size:13px;font-weight:500">stage-worker</div><div class="mono" style="font-size:11px;color:var(--ink-4)">ubuntu@10.1.2.4 · sidekiq</div></div>
+            <span class="tag warn" style="height:20px;font-size:10px">auth failed</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:10px;padding:10px;background:var(--bg-3);border:1px solid var(--line);border-radius:8px">
+            <span style="width:6px;height:24px;border-radius:3px;background:#c897e0"></span>
+            <div style="flex:1"><div style="font-size:13px;font-weight:500">homelab-nas</div><div class="mono" style="font-size:11px;color:var(--ink-4)">riley@192.168.1.42</div></div>
+            <span class="tag" style="height:20px;font-size:10px">last week</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Big feature 2 -->
+<section class="section">
+  <div class="wrap">
+    <div style="display:grid;grid-template-columns:1.05fr 1fr;gap:56px;align-items:center">
+      <div class="terminal">
+        <div class="head">
+          <div class="lights"><span style="background:#f17a7a"></span><span style="background:#e0b870"></span><span style="background:#7dd3a0"></span></div>
+          <span class="mono">deploy@web-01:/srv/app</span>
+          <span class="tag accent" style="height:18px;padding:0 7px;font-size:10px;margin-left:auto"><span data-icon="sparkles" data-size="9"></span>AI ready</span>
+        </div>
+        <div class="body" style="min-height:240px">
+          <div class="row"><span class="term-prompt">$</span> <span class="term-c-green">tail</span> -f log/prod.log</div>
+          <div class="row"><span class="term-c-red">[ERROR]</span> redis: connection pool exhausted</div>
+          <div class="row" style="margin-top:8px;background:rgba(125,211,160,0.08);border:1px solid var(--accent-line);border-radius:8px;padding:10px">
+            <div style="display:flex;align-items:center;gap:6px;color:var(--accent);font-size:11px;font-weight:500;margin-bottom:6px"><span data-icon="sparkles" data-size="11"></span> Trominal AI · based on your last command</div>
+            <div style="color:var(--ink);font-size:13px;line-height:1.5">Check Redis connection count and slow log:</div>
+            <div style="margin-top:8px;background:#0a0907;border:1px solid var(--line);border-radius:6px;padding:8px 10px;font-size:12px"><span class="term-c-green">redis-cli</span> CLIENT LIST | <span class="term-c-cyan">wc</span> -l</div>
+          </div>
+          <div class="row" style="margin-top:8px"><span class="term-prompt">$</span> <span style="color:var(--ink-2)">redis-cli </span><span class="term-c-dim" style="font-style:italic">CLIENT LIST | wc -l</span><span style="display:inline-block;width:7px;height:13px;background:var(--accent);animation:blink 1s step-end infinite"></span></div>
+          <div class="row" style="margin-top:8px;font-size:11px;color:var(--ink-4)">tab to accept · esc to dismiss · ⌘L to ask</div>
+        </div>
+      </div>
+      <div>
+        <span class="tag accent"><span data-icon="sparkles" data-size="11"></span> Trominal AI</span>
+        <h2 style="margin-top:18px">An AI that reads your terminal — not a chat bot.</h2>
+        <p style="margin-top:14px;color:var(--ink-3);font-size:16px">Inline ghost-text suggestions appear after your last command and the output it produced. Tab to accept, escape to dismiss. No popups, no chat windows, no asking ChatGPT what your error means.</p>
+        <ul class="prose" style="margin-top:18px;padding-left:0;list-style:none">
+          <li style="display:flex;gap:10px;padding:6px 0"><span style="color:var(--accent)" data-icon="check" data-size="14"></span><span>Choose your provider — Anthropic, OpenAI, or your own LLM endpoint</span></li>
+          <li style="display:flex;gap:10px;padding:6px 0"><span style="color:var(--accent)" data-icon="check" data-size="14"></span><span>Per-host opt-in for sending terminal context</span></li>
+          <li style="display:flex;gap:10px;padding:6px 0"><span style="color:var(--accent)" data-icon="check" data-size="14"></span><span>Redaction rules — auto-strip secrets before they leave</span></li>
+          <li style="display:flex;gap:10px;padding:6px 0"><span style="color:var(--accent)" data-icon="check" data-size="14"></span><span>Local-first mode for fully offline use</span></li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Big feature 3: mobile keyboard -->
+<section class="section">
+  <div class="wrap">
+    <div style="display:grid;grid-template-columns:1fr 1.05fr;gap:56px;align-items:center">
+      <div>
+        <span class="tag accent"><span data-icon="keyboard" data-size="11"></span> Mobile</span>
+        <h2 style="margin-top:18px">A keyboard built for the shell, not Slack.</h2>
+        <p style="margin-top:14px;color:var(--ink-3);font-size:16px">Two terminal-tuned symbol rows put pipe, tilde, slash, redirects, and angle brackets one tap from your thumb. Above the keys: snippet quick-bar, history scroll, and an AI button.</p>
+        <ul class="prose" style="margin-top:18px;padding-left:0;list-style:none">
+          <li style="display:flex;gap:10px;padding:6px 0"><span style="color:var(--accent)" data-icon="check" data-size="14"></span><span>Modifier row with <span class="mono">ctrl</span>, <span class="mono">esc</span>, <span class="mono">^C</span>, <span class="mono">^D</span></span></li>
+          <li style="display:flex;gap:10px;padding:6px 0"><span style="color:var(--accent)" data-icon="check" data-size="14"></span><span>Arrow cluster with history-up shortcut</span></li>
+          <li style="display:flex;gap:10px;padding:6px 0"><span style="color:var(--accent)" data-icon="check" data-size="14"></span><span>Snippet bar reorderable per-host</span></li>
+          <li style="display:flex;gap:10px;padding:6px 0"><span style="color:var(--accent)" data-icon="check" data-size="14"></span><span>Swipe up for emoji / 123 / system layouts</span></li>
+        </ul>
+      </div>
+      <!-- Mock keyboard -->
+      <div style="background:#0a0907;border:1px solid var(--line);border-radius:14px;padding:14px;font-family:var(--mono)">
+        <!-- snippet quick bar -->
+        <div style="display:flex;gap:6px;padding-bottom:10px;border-bottom:1px solid var(--line);margin-bottom:10px;overflow:hidden">
+          <span style="padding:6px 10px;background:rgba(255,255,255,0.06);border:1px solid var(--line);border-radius:6px;font-size:12px">ls -la</span>
+          <span style="padding:6px 10px;background:rgba(255,255,255,0.06);border:1px solid var(--line);border-radius:6px;font-size:12px">git status</span>
+          <span style="padding:6px 10px;background:rgba(255,255,255,0.06);border:1px solid var(--line);border-radius:6px;font-size:12px">tail -f</span>
+          <span style="padding:6px 10px;background:var(--accent-soft);border:1px solid var(--accent-line);color:var(--accent);border-radius:6px;font-size:12px">⌁ Ask AI</span>
+        </div>
+        <!-- mod row -->
+        <div style="display:flex;gap:5px;margin-bottom:5px">
+          <div style="flex:1;height:34px;background:rgba(255,255,255,0.06);border:1px solid var(--line);border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:11px">esc</div>
+          <div style="flex:1;height:34px;background:rgba(255,255,255,0.06);border:1px solid var(--line);border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:11px">tab</div>
+          <div style="flex:1;height:34px;background:var(--accent-soft);border:1px solid var(--accent-line);color:var(--accent);border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:11px">ctrl</div>
+          <div style="flex:1;height:34px;background:rgba(255,255,255,0.06);border:1px solid var(--line);border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:11px">alt</div>
+          <div style="flex:1;height:34px;background:rgba(255,255,255,0.06);border:1px solid var(--line);border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:11px">^C</div>
+          <div style="flex:1;height:34px;background:rgba(255,255,255,0.06);border:1px solid var(--line);border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:11px">^D</div>
+          <div style="width:28px;height:34px;background:rgba(255,255,255,0.06);border:1px solid var(--line);border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:13px">▲</div>
+        </div>
+        <!-- terminal symbols -->
+        <div style="display:flex;gap:5px;margin-bottom:5px">
+          <div style="flex:1;height:36px;background:rgba(255,255,255,0.08);border:1px solid var(--line-2);border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:14px">/</div>
+          <div style="flex:1;height:36px;background:rgba(255,255,255,0.08);border:1px solid var(--line-2);border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:14px">-</div>
+          <div style="flex:1;height:36px;background:rgba(255,255,255,0.08);border:1px solid var(--line-2);border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:14px">_</div>
+          <div style="flex:1;height:36px;background:rgba(255,255,255,0.08);border:1px solid var(--line-2);border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:14px">|</div>
+          <div style="flex:1;height:36px;background:rgba(255,255,255,0.08);border:1px solid var(--line-2);border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:14px">~</div>
+          <div style="flex:1;height:36px;background:rgba(255,255,255,0.08);border:1px solid var(--line-2);border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:14px">*</div>
+          <div style="flex:1;height:36px;background:rgba(255,255,255,0.08);border:1px solid var(--line-2);border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:14px">&amp;</div>
+          <div style="flex:1;height:36px;background:rgba(255,255,255,0.08);border:1px solid var(--line-2);border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:14px">&lt;</div>
+          <div style="flex:1;height:36px;background:rgba(255,255,255,0.08);border:1px solid var(--line-2);border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:14px">&gt;</div>
+          <div style="flex:1;height:36px;background:rgba(255,255,255,0.08);border:1px solid var(--line-2);border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:14px">$</div>
+        </div>
+        <div style="text-align:center;font-size:11px;color:var(--ink-4);padding-top:6px">↑ symbols · letters &amp; space below</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Feature grid -->
+<section class="section">
+  <div class="wrap">
+    <div class="sec-head">
+      <span class="eyebrow">And the rest</span>
+      <h2>The full feature set.</h2>
+    </div>
+    <div class="feature-grid">
+      <div class="feature"><div class="icon"><span data-icon="folder" data-size="18"></span></div><h3>SFTP browser</h3><p>Drag-drop transfers, mass rename, parallel uploads. Works on slow connections.</p></div>
+      <div class="feature"><div class="icon"><span data-icon="tunnel" data-size="18"></span></div><h3>Port forwarding</h3><p>Local, remote, and SOCKS5 dynamic. Toggle from any device, traffic stats included.</p></div>
+      <div class="feature"><div class="icon"><span data-icon="code" data-size="18"></span></div><h3>Snippets &amp; templates</h3><p>Parameterized commands shared across the team. Mustache-style variables.</p></div>
+      <div class="feature"><div class="icon"><span data-icon="key" data-size="18"></span></div><h3>Identities &amp; certs</h3><p>ed25519, ECDSA, RSA, certificates. Per-host overrides. Hardware-key support.</p></div>
+      <div class="feature"><div class="icon"><span data-icon="users" data-size="18"></span></div><h3>Team workspaces</h3><p>Roles, audit log, single-sign-on via OIDC. Granular per-host permissions.</p></div>
+      <div class="feature"><div class="icon"><span data-icon="cpu" data-size="18"></span></div><h3>GPU-accelerated render</h3><p>WGPU-backed terminal. 120fps scrollback, smooth even on huge log dumps.</p></div>
+      <div class="feature"><div class="icon"><span data-icon="git" data-size="18"></span></div><h3>Git-native sync</h3><p>Optional: back your config with a Git repo. PR your firewall rules like code.</p></div>
+      <div class="feature"><div class="icon"><span data-icon="search" data-size="18"></span></div><h3>Universal search</h3><p>⌘K finds hosts, snippets, files, scrollback, even past sessions.</p></div>
+      <div class="feature"><div class="icon"><span data-icon="monitor" data-size="18"></span></div><h3>Themable</h3><p>Five built-in palettes plus full custom themes. Sync them across the team too.</p></div>
+    </div>
+  </div>
+</section>
+
+<!-- What we don't do -->
+<section class="section">
+  <div class="wrap">
+    <div style="background:var(--bg-2);border:1px solid var(--line);border-radius:18px;padding:48px">
+      <span class="eyebrow">Deliberately absent</span>
+      <h2 style="margin-top:14px">What Trominal does <em>not</em> do.</h2>
+      <p style="margin-top:14px;color:var(--ink-3);font-size:16px;max-width:640px">Bloat is a feature decision. We say no a lot.</p>
+      <div style="display:grid;grid-template-columns:repeat(2, 1fr);gap:14px;margin-top:28px">
+        <div style="display:flex;gap:12px;padding:14px;background:var(--bg-3);border:1px solid var(--line);border-radius:8px">
+          <span style="color:var(--danger);font-family:var(--mono);font-size:14px;font-weight:600">×</span>
+          <div><div style="font-weight:500">No telemetry</div><div style="font-size:13px;color:var(--ink-3);margin-top:2px">Zero analytics, zero usage pings, zero "anonymous" identifiers.</div></div>
+        </div>
+        <div style="display:flex;gap:12px;padding:14px;background:var(--bg-3);border:1px solid var(--line);border-radius:8px">
+          <span style="color:var(--danger);font-family:var(--mono);font-size:14px;font-weight:600">×</span>
+          <div><div style="font-weight:500">No third-party clouds</div><div style="font-size:13px;color:var(--ink-3);margin-top:2px">Your data is on your server. Period. No "optional" sync to ours.</div></div>
+        </div>
+        <div style="display:flex;gap:12px;padding:14px;background:var(--bg-3);border:1px solid var(--line);border-radius:8px">
+          <span style="color:var(--danger);font-family:var(--mono);font-size:14px;font-weight:600">×</span>
+          <div><div style="font-weight:500">No enterprise paywall</div><div style="font-size:13px;color:var(--ink-3);margin-top:2px">SAML, audit log, RBAC — all in the OSS build. Forever.</div></div>
+        </div>
+        <div style="display:flex;gap:12px;padding:14px;background:var(--bg-3);border:1px solid var(--line);border-radius:8px">
+          <span style="color:var(--danger);font-family:var(--mono);font-size:14px;font-weight:600">×</span>
+          <div><div style="font-weight:500">No agent on your servers</div><div style="font-size:13px;color:var(--ink-3);margin-top:2px">Trominal speaks plain SSH. No daemons, no sidecars, no auto-installers.</div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<div data-footer></div>
+<script src="chrome.js"></script>
+</body>
+</html>

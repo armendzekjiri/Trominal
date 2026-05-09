@@ -1,0 +1,117 @@
+---
+import Page from '@/layouts/Page.astro'
+import { SITE } from '@/lib/site'
+
+export const prerender = true
+
+const lastUpdated = '9 May 2026'
+---
+
+<Page
+  title="Terms"
+  description="Plain-English terms for trominal.app and the public demo backend."
+  active="terms"
+>
+  <header class="page-head">
+    <div class="wrap">
+      <span class="eyebrow"><span class="dot"></span>Terms</span>
+      <h1>Terms of use.</h1>
+      <p class="lede">Plain English. No surprise clauses. Last updated {lastUpdated}.</p>
+    </div>
+  </header>
+
+  <section class="section flush">
+    <div class="wrap">
+      <article class="prose" style="max-width:760px">
+        <p>
+          These terms cover the website at <strong>{SITE.domain}</strong> and the public demo
+          backend at <strong>{new URL(SITE.demo.backendUrl).host}</strong>. Trominal the
+          software — the source code at <a href={SITE.github.url} target="_blank" rel="noopener"
+            >github.com/{SITE.github.owner}/{SITE.github.repo}</a> — is licensed under
+          AGPL-3.0; the license text is the source of truth for source-code rights and
+          obligations.
+        </p>
+
+        <h2>1. The software</h2>
+        <p>
+          Trominal is published under the <a href="/license">GNU Affero General Public License
+          v3.0</a>. You may use, modify, and redistribute it under those terms — including
+          running modified versions, provided you make the modified source available to users
+          who interact with it over a network.
+        </p>
+        <p>
+          The software is provided "as is" without warranty of any kind. To the extent
+          permitted by law, the maintainers and contributors are not liable for any damages
+          arising from its use.
+        </p>
+
+        <h2>2. The demo backend</h2>
+
+        <h3>What the demo is</h3>
+        <p>
+          <code>{SITE.demo.backendUrl}</code> is a public Trominal instance we host so you can
+          try the product without setting up your own server. It is a <strong>real, hardened
+          instance</strong> with TLS, rate limiting, and 2FA available. It is also
+          <strong>ephemeral</strong>: the database is wiped periodically without notice.
+        </p>
+
+        <h3>What you may use the demo for</h3>
+        <ul>
+          <li>Evaluating Trominal end-to-end with one or two devices</li>
+          <li>Testing connection sharing, snippets, and identity workflows</li>
+          <li>Smoke-testing the desktop and web builds against a remote backend</li>
+          <li>Pointing your client at a known-good server while developing locally</li>
+        </ul>
+
+        <h3>What you may not use the demo for</h3>
+        <ul>
+          <li>Production workloads, customer data, or anything you can't afford to lose</li>
+          <li>Automated load testing, scraping, or bulk imports</li>
+          <li>Hosting content that violates third-party rights or applicable law</li>
+          <li>Attempts to defeat rate limiting, bypass authentication, or deny service to other users</li>
+          <li>Anything illegal under the laws of your jurisdiction or ours</li>
+        </ul>
+        <p>
+          We reserve the right to suspend or delete demo accounts that breach these terms,
+          without warning. We also reserve the right to take the demo offline, change its
+          terms, or reset its database — at any time, for any reason.
+        </p>
+
+        <h3>No SLA, no guarantees</h3>
+        <p>
+          The demo has no uptime guarantee, no support SLA, no data-recovery promise, and no
+          warranty. If you need any of those things, self-host.
+        </p>
+
+        <h2>3. Reporting abuse and security issues</h2>
+        <p>
+          If you believe someone is abusing the demo backend, or if you've found a security
+          vulnerability in Trominal, email <a href={`mailto:${SITE.contactEmail}`}
+            >{SITE.contactEmail}</a>. Don't open public issues for security problems — the
+          coordinated-disclosure process is documented in <a href="/security">SECURITY.md</a>.
+        </p>
+
+        <h2>4. Trademark</h2>
+        <p>
+          "Trominal" and the Trominal logo are unregistered marks of the project. Forks and
+          derivatives that change behavior in ways users would not expect from upstream should
+          rename and re-brand to avoid confusion. See <a href="/brand">the brand kit</a> for
+          guidance.
+        </p>
+
+        <h2>5. Changes to these terms</h2>
+        <p>
+          When these terms change, the date at the top updates and the diff lands in the
+          public repo. No silent edits.
+        </p>
+
+        <h2>6. Governing law and contact</h2>
+        <p>
+          The Trominal project is community-run; there is no parent corporation behind it.
+          For legal questions about the marketing site or the demo backend, email
+          <a href={`mailto:${SITE.contactEmail}`}>{SITE.contactEmail}</a>.
+        </p>
+      </article>
+    </div>
+  </section>
+</Page>
