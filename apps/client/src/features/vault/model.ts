@@ -74,6 +74,14 @@ export type AiProvider = 'anthropic' | 'openai' | 'ollama' | 'custom'
 
 export type AiFeatureToggles = {
   inlineSuggestions: boolean
+  /**
+   * Auto-debounced inline suggestions: triggers as the user types instead of
+   * waiting for Ctrl+Space. Only effective while `inlineSuggestions` is also
+   * on. Off by default — burns API spend per keystroke pause and not every
+   * user wants that. Suppressed inside vim/tmux/sudo prompts via
+   * autoSuggestHeuristics.
+   */
+  autoSuggest: boolean
   askPanel: boolean
   explainCommand: boolean
   sendOutputContext: boolean
@@ -253,6 +261,7 @@ function stringValue(value: unknown): string {
 export function defaultAiFeatureToggles(): AiFeatureToggles {
   return {
     inlineSuggestions: true,
+    autoSuggest: false,
     askPanel: true,
     explainCommand: true,
     sendOutputContext: false,
@@ -289,6 +298,8 @@ function aiFeatureTogglesFromString(value: string): AiFeatureToggles {
         typeof features.inlineSuggestions === 'boolean'
           ? features.inlineSuggestions
           : fallback.inlineSuggestions,
+      autoSuggest:
+        typeof features.autoSuggest === 'boolean' ? features.autoSuggest : fallback.autoSuggest,
       askPanel: typeof features.askPanel === 'boolean' ? features.askPanel : fallback.askPanel,
       explainCommand:
         typeof features.explainCommand === 'boolean'

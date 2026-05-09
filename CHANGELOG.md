@@ -9,6 +9,19 @@ Security-relevant changes are tagged `security:`.
 
 ## [Unreleased]
 
+### Added — Phase 7C: Auto-debounced inline AI completion
+
+- New opt-in `autoSuggest` AI feature toggle that fires inline command
+  suggestions ~700 ms after the user pauses typing, in addition to the
+  existing Ctrl+Space manual trigger.
+- Pure heuristics module (`autoSuggestHeuristics`) suppresses auto-trigger
+  inside vim/tmux/less (alternate-screen buffer), at password and passphrase
+  prompts, at confirmation prompts (`(yes/no)?`, `[Y/n]?`), when the user has
+  not typed at least two characters, while the SSH session is still streaming
+  output, and for 5 s after a manual Esc dismissal.
+- Off by default since auto-trigger sends an API request per typing pause,
+  with a settings-tab description noting the cost trade-off.
+
 ### Added — Phase 8A: Teams backend foundation
 
 - Backend `teams` / `team_members` schema with ULIDs, encrypted ciphertext

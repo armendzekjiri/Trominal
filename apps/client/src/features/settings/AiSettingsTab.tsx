@@ -19,6 +19,11 @@ const FEATURE_LABELS: Record<keyof AiFeatureToggles, { label: string; descriptio
     label: 'Inline command suggestions',
     description: 'Ghost-text completion in the terminal. Tab to accept, Esc to dismiss. (Phase 7B)',
   },
+  autoSuggest: {
+    label: 'Auto-suggest while typing',
+    description:
+      'Trigger inline suggestions automatically when you pause typing. Suppressed inside vim/tmux and at password prompts. Sends an API request per typing pause, so it can add up — leave off if you watch your spend. Requires inline command suggestions.',
+  },
   askPanel: {
     label: 'Ask AI panel',
     description: 'Slide-in chat in the terminal workspace. Available now.',
