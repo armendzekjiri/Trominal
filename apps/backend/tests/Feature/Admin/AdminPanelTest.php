@@ -63,7 +63,7 @@ final class AdminPanelTest extends TestCase
             ->get('/admin')
             ->assertOk();
 
-        self::assertSame($admin->email, $admin->fresh()->getFilamentName());
+        self::assertSame($admin->email, $admin->getFilamentName());
     }
 
     public function test_filament_does_not_expose_a_registration_page(): void
