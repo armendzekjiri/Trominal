@@ -3,6 +3,9 @@ mod local_shell;
 mod secure;
 mod sftp;
 
+use tauri::menu::{Menu, MenuItem, Submenu};
+use tauri::{Emitter, Manager};
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     // The updater plugin requires `plugins.updater` in tauri.conf.json with
@@ -17,6 +20,53 @@ pub fn run() {
     let builder = builder.plugin(tauri_plugin_updater::Builder::new().build());
 
     builder
+        .setup(|app| {
+            // Native "Tab" submenu so users can cycle terminal tabs from
+            // the OS menu bar with Ctrl+Tab / Ctrl+Shift+Tab — same
+            // accelerators VS Code, browsers, and Termius use. The clicks
+            // emit Tauri events that TerminalPage listens for; we don't
+            // try to keep a live list of every open tab in the menu
+            // because that would mean rebuilding the menu on every tab
+            // change. Next/Previous covers the common case cleanly.
+            let handle = app.handle();
+            let next_tab =
+                MenuItem::with_id(handle, "tab-next", "Next Tab", true, Some("Ctrl+Tab"))?;
+            let prev_tab = MenuItem::with_id(
+                handle,
+                "tab-prev",
+                "Previous Tab",
+                true,
+                Some("Ctrl+Shift+Tab"),
+            )?;
+            let tab_submenu = Submenu::with_id_and_items(
+                handle,
+                "tab",
+                "Tab",
+                true,
+                &[&next_tab, &prev_tab],
+            )?;
+            // Start from the platform-default menu (App / Edit / Window /
+            // Help on macOS, sensible defaults on other platforms) so
+            // standard accelerators like Cmd+Q and Cmd+C keep working,
+            // then append our Tab submenu on the right.
+            let menu = Menu::default(handle)?;
+            menu.append(&tab_submenu)?;
+            app.set_menu(menu)?;
+            Ok(())
+        })
+        .on_menu_event(|app, event| match event.id().0.as_str() {
+            "tab-next" => {
+                if let Some(window) = app.get_webview_window("main") {
+                    let _ = window.emit("tab://next", ());
+                }
+            }
+            "tab-prev" => {
+                if let Some(window) = app.get_webview_window("main") {
+                    let _ = window.emit("tab://prev", ());
+                }
+            }
+            _ => {}
+        })
         .manage(std::sync::Arc::new(trominal_core::LocalShellState::default()))
         .manage(std::sync::Arc::new(sftp::SftpState::default()))
         .plugin(tauri_plugin_opener::init())
