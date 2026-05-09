@@ -4,8 +4,18 @@ mod sftp;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    tauri::Builder::default()
-        .plugin(tauri_plugin_updater::Builder::new().build())
+    // The updater plugin requires `plugins.updater` in tauri.conf.json with
+    // valid `endpoints` + `pubkey`. The release workflow injects those via
+    // `--config` at build time (see .github/workflows/release.yml), so the
+    // committed config doesn't carry the placeholder. Loading the plugin in
+    // a debug build would therefore panic with `invalid type: null` on every
+    // `pnpm dev:client` start, so we skip it — the user only ever triggers
+    // an update from a release build anyway.
+    let builder = tauri::Builder::default();
+    #[cfg(not(debug_assertions))]
+    let builder = builder.plugin(tauri_plugin_updater::Builder::new().build());
+
+    builder
         .manage(std::sync::Arc::new(local_shell::LocalShellState::default()))
         .manage(std::sync::Arc::new(sftp::SftpState::default()))
         .plugin(tauri_plugin_opener::init())
