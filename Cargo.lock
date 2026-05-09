@@ -4370,6 +4370,7 @@ dependencies = [
  "tauri-plugin-opener",
  "tauri-plugin-updater",
  "thiserror 2.0.18",
+ "trominal-core",
 ]
 
 [[package]]

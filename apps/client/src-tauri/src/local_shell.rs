@@ -1,5 +1,4 @@
 use portable_pty::{native_pty_system, Child as PtyChild, CommandBuilder, MasterPty, PtySize};
-use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::env;
 use std::fs::{self, OpenOptions};
@@ -14,6 +13,11 @@ use std::thread;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 use tauri::{AppHandle, Emitter, State};
 use thiserror::Error;
+use trominal_core::{
+    LocalShellClosed, LocalShellData, SshConnectRequest, SshKeyInstallRequest,
+    SshKeyInstallResponse, SshKeyTestRequest, SshKeyTestResponse, SshTunnelOpenRequest,
+    SshTunnelOpenResponse, SshTunnelSpec, SshTunnelStatusResponse,
+};
 
 #[derive(Default)]
 pub struct LocalShellState {
@@ -43,18 +47,6 @@ enum LocalShellError {
     Locked,
 }
 
-#[derive(Clone, Serialize)]
-struct LocalShellData {
-    session_id: String,
-    data: Vec<u8>,
-}
-
-#[derive(Clone, Serialize)]
-struct LocalShellClosed {
-    session_id: String,
-    reason: String,
-}
-
 struct PtyGeometry {
     cols: u16,
     rows: u16,
@@ -68,96 +60,6 @@ struct PtyEvents {
 struct PtyCommand {
     command: CommandBuilder,
     temp_paths: Vec<PathBuf>,
-}
-
-#[derive(Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct SshConnectRequest {
-    session_id: String,
-    host: String,
-    port: u16,
-    username: String,
-    cols: u16,
-    rows: u16,
-    private_key_pem: Option<Vec<u8>>,
-}
-
-#[derive(Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct SshKeyTestRequest {
-    host: String,
-    port: u16,
-    username: String,
-    private_key_pem: Vec<u8>,
-}
-
-#[derive(Serialize)]
-pub struct SshKeyTestResponse {
-    works: bool,
-}
-
-#[derive(Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct SshKeyInstallRequest {
-    host: String,
-    port: u16,
-    username: String,
-    public_key: String,
-    password: Vec<u8>,
-}
-
-#[derive(Serialize)]
-pub struct SshKeyInstallResponse {
-    installed: bool,
-    method: String,
-}
-
-#[derive(Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct SshTunnelOpenRequest {
-    session_id: String,
-    host: String,
-    port: u16,
-    username: String,
-    private_key_pem: Vec<u8>,
-    tunnel: SshTunnelSpec,
-}
-
-#[derive(Deserialize)]
-#[serde(
-    tag = "kind",
-    rename_all = "kebab-case",
-    rename_all_fields = "camelCase"
-)]
-pub enum SshTunnelSpec {
-    Local {
-        bind_host: String,
-        bind_port: u16,
-        target_host: String,
-        target_port: u16,
-    },
-    Remote {
-        bind_host: String,
-        bind_port: u16,
-        target_host: String,
-        target_port: u16,
-    },
-    Socks {
-        bind_host: String,
-        bind_port: u16,
-    },
-}
-
-#[derive(Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct SshTunnelOpenResponse {
-    session_id: String,
-}
-
-#[derive(Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct SshTunnelStatusResponse {
-    running: bool,
 }
 
 #[tauri::command]
