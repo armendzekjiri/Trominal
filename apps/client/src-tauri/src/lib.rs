@@ -1,3 +1,4 @@
+mod event_sink;
 mod local_shell;
 mod secure;
 mod sftp;
@@ -16,7 +17,7 @@ pub fn run() {
     let builder = builder.plugin(tauri_plugin_updater::Builder::new().build());
 
     builder
-        .manage(std::sync::Arc::new(local_shell::LocalShellState::default()))
+        .manage(std::sync::Arc::new(trominal_core::LocalShellState::default()))
         .manage(std::sync::Arc::new(sftp::SftpState::default()))
         .plugin(tauri_plugin_opener::init())
         .invoke_handler(tauri::generate_handler![

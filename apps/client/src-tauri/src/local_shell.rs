@@ -1,5 +1,13 @@
-use portable_pty::{native_pty_system, Child as PtyChild, CommandBuilder, MasterPty, PtySize};
-use std::collections::HashMap;
+//! Tauri command surface for local-shell, SSH-over-system-ssh, and SSH
+//! tunnel sessions. After Phase 10 M1.2 the PTY session machinery and
+//! shared state live in [`trominal_core`]; this module now hosts:
+//!
+//! - the `#[tauri::command]` glue that the existing frontend already speaks,
+//! - SSH-specific command construction (key files, RSA compat options),
+//! - SSH tunnel orchestration via `std::process::Command`,
+//! - SSH key auth probe + authorized-key install helpers.
+
+use portable_pty::{native_pty_system, CommandBuilder, PtySize};
 use std::env;
 use std::fs::{self, OpenOptions};
 use std::io::{Read, Write};
@@ -8,59 +16,19 @@ use std::os::unix::fs::OpenOptionsExt;
 use std::path::{Path, PathBuf};
 use std::process::{Child as ProcessChild, Command as ProcessCommand, Stdio};
 use std::sync::mpsc;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 use std::thread;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
-use tauri::{AppHandle, Emitter, State};
-use thiserror::Error;
+use tauri::{AppHandle, State};
 use trominal_core::{
-    LocalShellClosed, LocalShellData, SshConnectRequest, SshKeyInstallRequest,
-    SshKeyInstallResponse, SshKeyTestRequest, SshKeyTestResponse, SshTunnelOpenRequest,
-    SshTunnelOpenResponse, SshTunnelSpec, SshTunnelStatusResponse,
+    cleanup_temp_paths, close_session, open_pty_session, require_session_id, resize_session,
+    write_session, LocalShellError, LocalShellState, PtyCommand, PtyEvents, PtyGeometry,
+    SshConnectRequest, SshKeyInstallRequest, SshKeyInstallResponse, SshKeyTestRequest,
+    SshKeyTestResponse, SshTunnelOpenRequest, SshTunnelOpenResponse, SshTunnelSpec,
+    SshTunnelStatusResponse, TunnelSession,
 };
 
-#[derive(Default)]
-pub struct LocalShellState {
-    sessions: Mutex<HashMap<String, LocalShellSession>>,
-    tunnels: Mutex<HashMap<String, TunnelSession>>,
-}
-
-struct LocalShellSession {
-    master: Box<dyn MasterPty + Send>,
-    writer: Box<dyn Write + Send>,
-    child: Box<dyn PtyChild + Send + Sync>,
-    temp_paths: Vec<PathBuf>,
-}
-
-struct TunnelSession {
-    child: ProcessChild,
-    temp_paths: Vec<PathBuf>,
-}
-
-#[derive(Debug, Error)]
-enum LocalShellError {
-    #[error("local shell session was not found")]
-    MissingSession,
-    #[error("local shell operation failed: {0}")]
-    Operation(String),
-    #[error("local shell state is unavailable")]
-    Locked,
-}
-
-struct PtyGeometry {
-    cols: u16,
-    rows: u16,
-}
-
-struct PtyEvents {
-    data: &'static str,
-    closed: &'static str,
-}
-
-struct PtyCommand {
-    command: CommandBuilder,
-    temp_paths: Vec<PathBuf>,
-}
+use crate::event_sink::TauriEventSink;
 
 #[tauri::command]
 pub fn local_shell_open(
@@ -71,8 +39,8 @@ pub fn local_shell_open(
     rows: u16,
 ) -> Result<String, String> {
     open_pty_session(
-        app,
-        state,
+        TauriEventSink::new(app),
+        Arc::clone(state.inner()),
         session_id,
         shell_command(),
         Vec::new(),
@@ -82,6 +50,7 @@ pub fn local_shell_open(
             closed: "local-shell://closed",
         },
     )
+    .map_err(|err| err.to_string())
 }
 
 #[tauri::command]
@@ -90,7 +59,7 @@ pub fn ssh_connect(
     state: State<'_, Arc<LocalShellState>>,
     request: SshConnectRequest,
 ) -> Result<String, String> {
-    let session_id = require_session_id(request.session_id)?;
+    let session_id = require_session_id(request.session_id).map_err(|err| err.to_string())?;
     let pty_command = ssh_command(
         &session_id,
         request.host,
@@ -100,8 +69,8 @@ pub fn ssh_connect(
     )?;
 
     open_pty_session(
-        app,
-        state,
+        TauriEventSink::new(app),
+        Arc::clone(state.inner()),
         session_id,
         pty_command.command,
         pty_command.temp_paths,
@@ -114,6 +83,7 @@ pub fn ssh_connect(
             closed: "ssh://closed",
         },
     )
+    .map_err(|err| err.to_string())
 }
 
 #[tauri::command]
@@ -132,7 +102,8 @@ pub fn ssh_tunnel_open(
     state: State<'_, Arc<LocalShellState>>,
     request: SshTunnelOpenRequest,
 ) -> Result<SshTunnelOpenResponse, String> {
-    let session_id = require_session_id(request.session_id.clone())?;
+    let session_id =
+        require_session_id(request.session_id.clone()).map_err(|err| err.to_string())?;
     let tunnel = open_ssh_tunnel(&session_id, request)?;
     let mut tunnels = state
         .tunnels
@@ -152,7 +123,7 @@ pub fn ssh_tunnel_close(
     state: State<'_, Arc<LocalShellState>>,
     session_id: String,
 ) -> Result<(), String> {
-    let session_id = require_session_id(session_id)?;
+    let session_id = require_session_id(session_id).map_err(|err| err.to_string())?;
     let session = state
         .tunnels
         .lock()
@@ -179,7 +150,7 @@ pub fn ssh_tunnel_status(
     state: State<'_, Arc<LocalShellState>>,
     session_id: String,
 ) -> Result<SshTunnelStatusResponse, String> {
-    let session_id = require_session_id(session_id)?;
+    let session_id = require_session_id(session_id).map_err(|err| err.to_string())?;
     let mut tunnels = state
         .tunnels
         .lock()
@@ -202,85 +173,13 @@ pub fn ssh_tunnel_status(
     Ok(SshTunnelStatusResponse { running: false })
 }
 
-fn open_pty_session(
-    app: AppHandle,
-    state: State<'_, Arc<LocalShellState>>,
-    session_id: String,
-    command: CommandBuilder,
-    temp_paths: Vec<PathBuf>,
-    geometry: PtyGeometry,
-    events: PtyEvents,
-) -> Result<String, String> {
-    let cols = geometry.cols.max(1);
-    let rows = geometry.rows.max(1);
-    let id = require_session_id(session_id)?;
-    let pty_system = native_pty_system();
-    let pair = pty_system
-        .openpty(PtySize {
-            rows,
-            cols,
-            pixel_width: 0,
-            pixel_height: 0,
-        })
-        .map_err(|err| {
-            cleanup_temp_paths(&temp_paths);
-            LocalShellError::Operation(err.to_string()).to_string()
-        })?;
-
-    let mut child = pair.slave.spawn_command(command).map_err(|err| {
-        cleanup_temp_paths(&temp_paths);
-        LocalShellError::Operation(err.to_string()).to_string()
-    })?;
-
-    let reader = match pair.master.try_clone_reader() {
-        Ok(reader) => reader,
-        Err(err) => {
-            let _ = child.kill();
-            cleanup_temp_paths(&temp_paths);
-            return Err(LocalShellError::Operation(err.to_string()).to_string());
-        }
-    };
-    let writer = match pair.master.take_writer() {
-        Ok(writer) => writer,
-        Err(err) => {
-            let _ = child.kill();
-            cleanup_temp_paths(&temp_paths);
-            return Err(LocalShellError::Operation(err.to_string()).to_string());
-        }
-    };
-    let state_for_reader = Arc::clone(state.inner());
-
-    let mut sessions = match state.sessions.lock() {
-        Ok(sessions) => sessions,
-        Err(_) => {
-            let _ = child.kill();
-            cleanup_temp_paths(&temp_paths);
-            return Err(LocalShellError::Locked.to_string());
-        }
-    };
-    sessions.insert(
-        id.clone(),
-        LocalShellSession {
-            master: pair.master,
-            writer,
-            child,
-            temp_paths,
-        },
-    );
-    drop(sessions);
-
-    spawn_reader(app, state_for_reader, id.clone(), reader, events);
-
-    Ok(id)
-}
-
 #[tauri::command]
 pub fn local_shell_write(
     state: State<'_, Arc<LocalShellState>>,
     session_id: String,
     data: Vec<u8>,
 ) -> Result<(), String> {
-    write_session(state, session_id, data)
+    write_session(state.inner(), &session_id, &data).map_err(|err| err.to_string())
 }
 
 #[tauri::command]
@@ -289,27 +188,7 @@ pub fn ssh_write(
     session_id: String,
     data: Vec<u8>,
 ) -> Result<(), String> {
-    write_session(state, session_id, data)
-}
-
-fn write_session(
-    state: State<'_, Arc<LocalShellState>>,
-    session_id: String,
-    data: Vec<u8>,
-) -> Result<(), String> {
-    let mut sessions = state
-        .sessions
-        .lock()
-        .map_err(|_| LocalShellError::Locked.to_string())?;
-    let session = sessions
-        .get_mut(&session_id)
-        .ok_or(LocalShellError::MissingSession)
-        .map_err(|err| err.to_string())?;
-
-    session
-        .writer
-        .write_all(&data)
-        .map_err(|err| LocalShellError::Operation(err.to_string()).to_string())
+    write_session(state.inner(), &session_id, &data).map_err(|err| err.to_string())
 }
 
 #[tauri::command]
@@ -319,7 +198,7 @@ pub fn local_shell_resize(
     cols: u16,
     rows: u16,
 ) -> Result<(), String> {
-    resize_session(state, session_id, cols, rows)
+    resize_session(state.inner(), &session_id, cols, rows).map_err(|err| err.to_string())
 }
 
 #[tauri::command]
@@ -329,34 +208,7 @@ pub fn ssh_resize(
     cols: u16,
     rows: u16,
 ) -> Result<(), String> {
-    resize_session(state, session_id, cols, rows)
-}
-
-fn resize_session(
-    state: State<'_, Arc<LocalShellState>>,
-    session_id: String,
-    cols: u16,
-    rows: u16,
-) -> Result<(), String> {
-    let sessions = state
-        .sessions
-        .lock()
-        .map_err(|_| LocalShellError::Locked.to_string())?;
-    let session = sessions
-        .get(&session_id)
-        .ok_or(LocalShellError::MissingSession)
-        .map_err(|err| err.to_string())?;
-
-    session
-        .master
-        .resize(PtySize {
-            rows: rows.max(1),
-            cols: cols.max(1),
-            pixel_width: 0,
-            pixel_height: 0,
-        })
-        .map_err(|err| LocalShellError::Operation(err.to_string()))
-        .map_err(|err| err.to_string())
+    resize_session(state.inner(), &session_id, cols, rows).map_err(|err| err.to_string())
 }
 
 #[tauri::command]
@@ -364,100 +216,12 @@ pub fn local_shell_close(
     state: State<'_, Arc<LocalShellState>>,
     session_id: String,
 ) -> Result<(), String> {
-    close_session(state, session_id)
+    close_session(state.inner(), &session_id).map_err(|err| err.to_string())
 }
 
 #[tauri::command]
 pub fn ssh_close(state: State<'_, Arc<LocalShellState>>, session_id: String) -> Result<(), String> {
-    close_session(state, session_id)
-}
-
-fn close_session(state: State<'_, Arc<LocalShellState>>, session_id: String) -> Result<(), String> {
-    let session = state
-        .sessions
-        .lock()
-        .map_err(|_| LocalShellError::Locked.to_string())?
-        .remove(&session_id);
-
-    if let Some(mut session) = session {
-        let kill_result = session
-            .child
-            .kill()
-            .map_err(|err| LocalShellError::Operation(err.to_string()))
-            .map_err(|err| err.to_string());
-        cleanup_temp_paths(&session.temp_paths);
-        kill_result?;
-    }
-
-    Ok(())
-}
-
-fn spawn_reader(
-    app: AppHandle,
-    state: Arc<LocalShellState>,
-    session_id: String,
-    mut reader: Box<dyn Read + Send>,
-    events: PtyEvents,
-) {
-    std::thread::spawn(move || {
-        let mut buffer = [0_u8; 8192];
-
-        loop {
-            match reader.read(&mut buffer) {
-                Ok(0) => {
-                    emit_closed(&app, events.closed, &session_id, "closed".to_string());
-                    remove_session(&state, &session_id);
-                    break;
-                }
-                Ok(size) => {
-                    let _ = app.emit(
-                        events.data,
-                        LocalShellData {
-                            session_id: session_id.clone(),
-                            data: buffer[..size].to_vec(),
-                        },
-                    );
-                }
-                Err(err) => {
-                    emit_closed(&app, events.closed, &session_id, err.to_string());
-                    remove_session(&state, &session_id);
-                    break;
-                }
-            }
-        }
-    });
-}
-
-fn emit_closed(app: &AppHandle, event: &'static str, session_id: &str, reason: String) {
-    let _ = app.emit(
-        event,
-        LocalShellClosed {
-            session_id: session_id.to_string(),
-            reason,
-        },
-    );
-}
-
-fn remove_session(state: &LocalShellState, session_id: &str) {
-    if let Ok(mut sessions) = state.sessions.lock() {
-        if let Some(session) = sessions.remove(session_id) {
-            cleanup_temp_paths(&session.temp_paths);
-        }
-    }
-}
-
-pub(crate) fn cleanup_temp_paths(paths: &[PathBuf]) {
-    for path in paths {
-        let _ = fs::remove_file(path);
-    }
-}
-
-fn require_session_id(session_id: String) -> Result<String, String> {
-    if session_id.is_empty() {
-        return Err(LocalShellError::Operation("session id is required".to_string()).to_string());
-    }
-
-    Ok(session_id)
+    close_session(state.inner(), &session_id).map_err(|err| err.to_string())
 }
 
 fn shell_command() -> CommandBuilder {
@@ -1138,7 +902,8 @@ fn default_shell() -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::{is_rsa_private_key, tunnel_forward_args, user_safe_ssh_error, SshTunnelSpec};
+    use super::{is_rsa_private_key, tunnel_forward_args, user_safe_ssh_error};
+    use trominal_core::SshTunnelSpec;
 
     #[test]
     fn detects_rsa_private_key_pem_headers() {

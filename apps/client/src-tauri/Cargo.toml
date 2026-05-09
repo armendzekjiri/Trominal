@@ -22,9 +22,9 @@ tauri-build = { version = "2", features = [] }
 trominal-core = { path = "../../../crates/trominal-core" }
 tauri = { version = "2", features = [] }
 tauri-plugin-opener = "2"
-serde = { version = "1", features = ["derive"] }
-serde_json = "1"
-portable-pty = "0.9"
+serde = { workspace = true }
+serde_json = { workspace = true }
+portable-pty = { workspace = true }
 
 # Secure storage backed by the OS keychain (macOS Keychain / Windows Credential
 # Manager / Linux Secret Service). Pinned to 3.x because 4.x makes the Error
