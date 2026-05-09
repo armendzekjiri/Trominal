@@ -100,4 +100,48 @@ describe('openAiCompatibleAdapter', () => {
 
     expect(chunks).toEqual([{ kind: 'error', message: 'invalid api key' }])
   })
+
+  describe('listModels', () => {
+    it('returns sorted ids and filters out embeddings/audio/image families', async () => {
+      const fetchSpy = globalThis.fetch as unknown as ReturnType<typeof vi.fn>
+      fetchSpy.mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            data: [
+              { id: 'gpt-4o-mini' },
+              { id: 'text-embedding-3-large' },
+              { id: 'whisper-1' },
+              { id: 'gpt-4o' },
+              { id: 'dall-e-3' },
+              { id: 'tts-1' },
+            ],
+          }),
+          { status: 200, headers: { 'content-type': 'application/json' } },
+        ),
+      )
+
+      const models = await openAiCompatibleAdapter.listModels({
+        endpoint: 'https://api.example.com/v1',
+        model: '',
+        apiKey: 'sk-x',
+      })
+
+      expect(models.map((entry) => entry.id)).toEqual(['gpt-4o', 'gpt-4o-mini'])
+    })
+
+    it('throws on a non-2xx response so the caller can surface the error', async () => {
+      const fetchSpy = globalThis.fetch as unknown as ReturnType<typeof vi.fn>
+      fetchSpy.mockResolvedValueOnce(
+        new Response(JSON.stringify({ error: { message: 'invalid api key' } }), { status: 401 }),
+      )
+
+      await expect(
+        openAiCompatibleAdapter.listModels({
+          endpoint: 'https://api.example.com/v1',
+          model: '',
+          apiKey: 'bad',
+        }),
+      ).rejects.toThrow('invalid api key')
+    })
+  })
 })

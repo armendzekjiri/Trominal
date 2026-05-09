@@ -320,23 +320,22 @@ function makeId(): string {
 }
 
 /**
- * Build the message array sent to the adapter from the current chat history,
- * the optional recent terminal lines, and a small system prompt. Slash
- * commands are kept verbatim — the model handles them, since each provider
- * understands "/explain" etc. better than a templated rewrite.
+ * Build the message array sent to the adapter from the current chat
+ * history, the optional recent terminal lines, and an enterprise-grade
+ * system prompt. Slash commands (`/explain`, `/fix`, `/diagnose`) are
+ * sent verbatim — every modern provider understands them well enough,
+ * and a hand-written template rewrite tends to be worse than the model's
+ * own interpretation.
  */
 function composeMessages(
   history: ChatBubble[],
   recentLines: string[],
   sessionLabel: string,
 ): ChatMessage[] {
-  const systemParts: string[] = [
-    'You are Trominal’s in-app SSH assistant. Be concise. Prefer code blocks for shell commands.',
-    `Active session: ${sessionLabel}.`,
-  ]
+  const systemParts: string[] = [SYSTEM_PROMPT, `Active session: ${sessionLabel}.`]
   if (recentLines.length > 0) {
     systemParts.push(
-      'The user attached the most recent terminal output below. Use it as context when relevant.',
+      'Recent terminal output (most relevant lines last):',
       '```\n' + recentLines.join('\n') + '\n```',
     )
   }
@@ -347,3 +346,20 @@ function composeMessages(
   }
   return messages
 }
+
+const SYSTEM_PROMPT = [
+  'You are Trominal, an embedded AI copilot for engineers working in SSH and local Unix-style shells. Your audience is professional developers and operators — be precise, not chatty.',
+  '',
+  'You handle three jobs:',
+  '1. Diagnose. Parse errors, exit codes, stack traces, log lines. Lead with the most likely cause; follow with the evidence; close with one verification command the user can paste.',
+  '2. Compose. Produce a portable bash command or short script. Mark GNU-only flags as such if you must use them. Quote paths with spaces. Never invent flag names or paths — if you have to guess, say so.',
+  '3. Explain. Describe what a command, script, or output line does in 1–3 sentences. No history lessons, no man-page recitation.',
+  '',
+  'Output rules:',
+  '- Wrap shell commands in fenced code blocks (```bash). One command per block when possible. Never include leading $, >, # prompt characters.',
+  '- Prefer bullet points over prose for diagnoses.',
+  '- Treat secrets carefully. Never print fake placeholders like <password>; refer to substitutions by name (e.g. "the prod DB password").',
+  '- Be honest about uncertainty. Say "I\'m guessing here" or "verify with X" instead of bluffing.',
+  '- Assume a Unix-style shell unless context indicates otherwise; bash is the safe default.',
+  '- Slash commands /explain, /fix, /diagnose are user shortcuts — interpret them as a request for that mode.',
+].join('\n')
