@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<title>Install — Trominal</title>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet"/>
+<link rel="stylesheet" href="site.css"/>
+<style>
+  .platforms { display:grid; grid-template-columns:repeat(4,1fr); gap:10px; }
+  .plat-tab {
+    background:var(--bg-3); border:1px solid var(--line); border-radius:8px;
+    padding:14px; cursor:pointer; transition:border-color .15s, background .15s;
+    text-align:center;
+  }
+  .plat-tab.active { border-color:var(--accent-line); background:var(--accent-soft); }
+  .plat-tab .icon { font-size:24px; margin-bottom:6px; display:block; }
+  .plat-tab .name { font-weight:500; font-size:14px; }
+  .plat-tab .ver { font-family:var(--mono); font-size:11px; color:var(--ink-4); margin-top:4px; }
+  .install-block { display:none; }
+  .install-block.active { display:block; }
+</style>
+</head>
+<body>
+<div data-header="install"></div>
+
+<header class="page-head">
+  <div class="wrap">
+    <span class="eyebrow"><span class="dot"></span>Install · v1.4.2</span>
+    <h1>Pick your platform.</h1>
+    <p class="lede">Server first, client second. Both take about two minutes — most of which is waiting for Docker to pull.</p>
+  </div>
+</header>
+
+<section class="section flush">
+  <div class="wrap">
+    <h2 style="margin-bottom:24px">1. Install the server</h2>
+    <p class="muted" style="margin-bottom:18px;max-width:640px">Run the server somewhere your team can reach — a VPS, a homelab box, your laptop, doesn't matter. It needs port 8443 and a writable volume.</p>
+
+    <div class="terminal" style="max-width:760px">
+      <div class="head"><div class="lights"><span style="background:#f17a7a"></span><span style="background:#e0b870"></span><span style="background:#7dd3a0"></span></div><span class="mono">~/infra</span></div>
+      <div class="body">
+        <div class="row"><span class="term-c-dim"># Quickstart with Docker</span></div>
+        <div class="row"><span class="term-prompt">$</span> docker run -d --name trominal \</div>
+        <div class="row">&nbsp;&nbsp;&nbsp;&nbsp;-p <span class="term-c-yellow">8443</span>:<span class="term-c-yellow">8443</span> \</div>
+        <div class="row">&nbsp;&nbsp;&nbsp;&nbsp;-v trominal-data:/var/trominal \</div>
+        <div class="row">&nbsp;&nbsp;&nbsp;&nbsp;ghcr.io/trominal/server:<span class="term-c-cyan">1.4.2</span></div>
+        <div class="row" style="color:var(--accent)">→ trominal v1.4.2 listening on :8443</div>
+        <div class="row" style="color:var(--ink-5)">→ initial admin password: <span class="term-c-yellow">acme-foxtrot-21</span></div>
+        <div class="row">&nbsp;</div>
+        <div class="row"><span class="term-c-dim"># Or with docker compose · helm · nix · systemd</span></div>
+        <div class="row" style="color:var(--ink-3)">→ see <span class="term-c-blue">docs.trominal.dev/server</span></div>
+      </div>
+    </div>
+
+    <div style="margin-top:18px;display:flex;gap:10px;flex-wrap:wrap">
+      <a href="docs.html#docker-compose" class="btn btn-secondary">docker-compose</a>
+      <a href="docs.html#helm" class="btn btn-secondary">Helm chart</a>
+      <a href="docs.html#nixos" class="btn btn-secondary">NixOS module</a>
+      <a href="docs.html#systemd" class="btn btn-secondary">systemd</a>
+    </div>
+  </div>
+</section>
+
+<section class="section">
+  <div class="wrap">
+    <h2 style="margin-bottom:24px">2. Install the client</h2>
+
+    <div class="platforms">
+      <div class="plat-tab active" onclick="showPlat(this,'mac')"><span class="icon">⌘</span><div class="name">macOS</div><div class="ver">Sonoma+ · Universal</div></div>
+      <div class="plat-tab" onclick="showPlat(this,'linux')"><span class="icon">🐧</span><div class="name">Linux</div><div class="ver">x86_64 · arm64</div></div>
+      <div class="plat-tab" onclick="showPlat(this,'win')"><span class="icon">⊞</span><div class="name">Windows</div><div class="ver">10+ · x86_64</div></div>
+      <div class="plat-tab" onclick="showPlat(this,'ios')"><span class="icon"></span><div class="name">iOS</div><div class="ver">iOS 17+ · iPad</div></div>
+    </div>
+
+    <!-- macOS -->
+    <div class="install-block active" data-plat="mac" style="margin-top:24px">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:18px">
+        <div class="card">
+          <h3 style="font-size:15px;margin-bottom:10px">Homebrew</h3>
+          <div class="code-block" style="font-size:13px">$ brew install trominal/tap/trominal</div>
+          <p class="muted" style="font-size:13px;margin-top:10px">Auto-updates. Includes the GUI app and the <span class="mono">trominal</span> CLI.</p>
+        </div>
+        <div class="card">
+          <h3 style="font-size:15px;margin-bottom:10px">Direct download</h3>
+          <div style="display:flex;flex-direction:column;gap:8px">
+            <a href="#" class="btn btn-primary" style="justify-content:flex-start"><span data-icon="download" data-size="14"></span> Trominal-1.4.2-arm64.dmg <span class="mono" style="margin-left:auto;color:rgba(8,19,13,0.6)">68 MB</span></a>
+            <a href="#" class="btn btn-secondary" style="justify-content:flex-start"><span data-icon="download" data-size="14"></span> Trominal-1.4.2-x86_64.dmg <span class="mono" style="margin-left:auto;color:var(--ink-4)">71 MB</span></a>
+          </div>
+          <p class="muted" style="font-size:12px;margin-top:10px">SHA256 · Apple-notarized · <a href="#" style="color:var(--accent)">verify</a></p>
+        </div>
+      </div>
+      <div style="margin-top:18px;background:var(--bg-2);border:1px solid var(--line);border-radius:10px;padding:14px;display:flex;gap:12px;align-items:flex-start">
+        <span style="color:var(--accent)" data-icon="check" data-size="16"></span>
+        <div><strong style="font-weight:500">Pair with your server:</strong> <span class="mono" style="color:var(--ink-2)">trominal pair https://trominal.acme.internal</span></div>
+      </div>
+    </div>
+
+    <!-- Linux -->
+    <div class="install-block" data-plat="linux" style="margin-top:24px">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:18px">
+        <div class="card">
+          <h3 style="font-size:15px;margin-bottom:10px">Distro packages</h3>
+          <div class="code-block" style="font-size:12px"># Debian / Ubuntu
+$ curl -fsSL trominal.dev/install.sh | sh
+$ apt install trominal
+
+# Arch
+$ paru -S trominal-bin
+
+# Fedora
+$ dnf install trominal</div>
+        </div>
+        <div class="card">
+          <h3 style="font-size:15px;margin-bottom:10px">Universal</h3>
+          <div style="display:flex;flex-direction:column;gap:8px">
+            <a href="#" class="btn btn-secondary" style="justify-content:flex-start"><span data-icon="download" data-size="14"></span> Flatpak <span class="mono" style="margin-left:auto;color:var(--ink-4)">flathub</span></a>
+            <a href="#" class="btn btn-secondary" style="justify-content:flex-start"><span data-icon="download" data-size="14"></span> AppImage <span class="mono" style="margin-left:auto;color:var(--ink-4)">82 MB</span></a>
+            <a href="#" class="btn btn-secondary" style="justify-content:flex-start"><span data-icon="download" data-size="14"></span> tarball <span class="mono" style="margin-left:auto;color:var(--ink-4)">.tar.gz</span></a>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Windows -->
+    <div class="install-block" data-plat="win" style="margin-top:24px">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:18px">
+        <div class="card">
+          <h3 style="font-size:15px;margin-bottom:10px">winget &amp; scoop</h3>
+          <div class="code-block" style="font-size:13px">$ winget install Trominal
+$ scoop install trominal</div>
+        </div>
+        <div class="card">
+          <h3 style="font-size:15px;margin-bottom:10px">Installer</h3>
+          <a href="#" class="btn btn-primary" style="justify-content:flex-start"><span data-icon="download" data-size="14"></span> Trominal-1.4.2-setup.exe <span class="mono" style="margin-left:auto;color:rgba(8,19,13,0.6)">76 MB</span></a>
+          <p class="muted" style="font-size:12px;margin-top:10px">EV-signed · MSI also available</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- iOS -->
+    <div class="install-block" data-plat="ios" style="margin-top:24px">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:18px">
+        <div class="card">
+          <h3 style="font-size:15px;margin-bottom:10px">App Store</h3>
+          <a href="#" class="btn btn-primary" style="justify-content:flex-start">Download on the App Store</a>
+          <p class="muted" style="font-size:13px;margin-top:10px">Free, no in-app purchases. iPhone &amp; iPad. Apple Vision compatible.</p>
+        </div>
+        <div class="card">
+          <h3 style="font-size:15px;margin-bottom:10px">TestFlight beta</h3>
+          <a href="#" class="btn btn-secondary" style="justify-content:flex-start">Join TestFlight</a>
+          <p class="muted" style="font-size:13px;margin-top:10px">Builds straight off <span class="mono">main</span>. Expect rough edges.</p>
+        </div>
+      </div>
+    </div>
+
+    <hr class="rule" style="margin:48px 0"/>
+
+    <h2>3. Pair the client with your server</h2>
+    <p class="muted" style="margin-top:14px;max-width:640px">Open the app, paste your server URL, log in with the initial admin password (printed by the server on first run). The vault is created on-device and the master password never touches the wire.</p>
+  </div>
+</section>
+
+<section class="section">
+  <div class="wrap">
+    <div class="card" style="padding:36px;text-align:center">
+      <h3>Need something different?</h3>
+      <p class="muted" style="margin-top:10px">Source builds, Nix flakes, ARM Linux, Raspberry Pi — it's all there. <a href="docs.html" style="color:var(--accent)">Browse the docs</a> or <a href="contact.html" style="color:var(--accent)">ask in Discord</a>.</p>
+    </div>
+  </div>
+</section>
+
+<div data-footer></div>
+<script src="chrome.js"></script>
+<script>
+function showPlat(el, name) {
+  document.querySelectorAll('.plat-tab').forEach(t => t.classList.remove('active'));
+  el.classList.add('active');
+  document.querySelectorAll('.install-block').forEach(b => b.classList.remove('active'));
+  document.querySelector('[data-plat="' + name + '"]').classList.add('active');
+}
+</script>
+</body>
+</html>

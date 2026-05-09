@@ -1,0 +1,30 @@
+---
+import { fetchGithubStats, FALLBACK_STATS } from '@/lib/github'
+
+let version = FALLBACK_STATS.latestVersion
+try {
+  const stats = await fetchGithubStats()
+  if (stats.latestVersion) version = stats.latestVersion
+} catch {
+  // ignore — fallback used
+}
+---
+
+<span style="color:var(--ink-3)" data-version-target>{version}</span>
+
+<script>
+  async function refresh() {
+    try {
+      const res = await fetch('/api/stats.json', { cache: 'no-store' })
+      if (!res.ok) return
+      const data = (await res.json()) as { latestVersion?: string | null }
+      if (!data.latestVersion) return
+      document.querySelectorAll<HTMLElement>('[data-version-target]').forEach((el) => {
+        el.textContent = data.latestVersion!
+      })
+    } catch {
+      /* noop */
+    }
+  }
+  refresh()
+</script>

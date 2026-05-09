@@ -1,0 +1,37 @@
+---
+import Docs from '@/layouts/Docs.astro'
+import { DOCS, getDoc, getDocNeighbors } from '@/lib/docs'
+import { renderRepoMarkdown } from '@/lib/markdown'
+
+export const prerender = true
+
+export function getStaticPaths() {
+  return DOCS.map((doc) => ({
+    params: { slug: doc.slug },
+    props: { doc },
+  }))
+}
+
+interface Props {
+  doc: (typeof DOCS)[number]
+}
+
+const { doc } = Astro.props as Props
+const fullDoc = getDoc(doc.slug)!
+const { prev, next } = getDocNeighbors(doc.slug)
+
+const { html, headings } = renderRepoMarkdown(fullDoc.source)
+---
+
+<Docs
+  title={fullDoc.title}
+  description={fullDoc.description}
+  editPath={fullDoc.source}
+  toc={headings}
+  prev={prev ? { slug: prev.slug, title: prev.title } : undefined}
+  next={next ? { slug: next.slug, title: next.title } : undefined}
+  allDocs={DOCS.map((d) => ({ slug: d.slug, title: d.title }))}
+  currentSlug={fullDoc.slug}
+>
+  <Fragment set:html={html} />
+</Docs>

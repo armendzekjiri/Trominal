@@ -1,0 +1,69 @@
+---
+import '@/styles/global.css'
+import { SITE } from '@/lib/site'
+
+interface Props {
+  title: string
+  description?: string
+  ogImage?: string
+  noIndex?: boolean
+}
+
+const {
+  title,
+  description = SITE.description,
+  ogImage = '/og-default.png',
+  noIndex = false,
+} = Astro.props
+
+const fullTitle = title === SITE.name ? `${SITE.name} — ${SITE.tagline}` : `${title} — ${SITE.name}`
+const canonical = new URL(Astro.url.pathname, SITE.url).toString()
+const ogImageUrl = new URL(ogImage, SITE.url).toString()
+---
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="generator" content={Astro.generator} />
+    <link rel="canonical" href={canonical} />
+    {noIndex && <meta name="robots" content="noindex" />}
+
+    <title>{fullTitle}</title>
+    <meta name="description" content={description} />
+
+    <link rel="icon" type="image/x-icon" href="/favicon.ico" />
+    <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png" />
+    <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png" />
+    <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
+    <link rel="manifest" href="/site.webmanifest" />
+    <meta name="theme-color" content="#0e0d0b" />
+
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content={canonical} />
+    <meta property="og:title" content={fullTitle} />
+    <meta property="og:description" content={description} />
+    <meta property="og:image" content={ogImageUrl} />
+    <meta property="og:site_name" content={SITE.name} />
+
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content={fullTitle} />
+    <meta name="twitter:description" content={description} />
+    <meta name="twitter:image" content={ogImageUrl} />
+
+    <link rel="alternate" type="application/rss+xml" title={SITE.name} href="/rss.xml" />
+
+    <!--
+      Analytics: Cloudflare Real User Measurements (RUM) is enabled with
+      auto-injection at the zone level (Cloudflare → Speed → Optimization →
+      Real User Measurements). The beacon is injected by Cloudflare's edge
+      on every response, so we don't include it manually here. If you ever
+      switch RUM to "Enable with JS Snippet installation" (manual mode),
+      paste the snippet Cloudflare gives you into this <head>.
+    -->
+  </head>
+  <body>
+    <slot />
+  </body>
+</html>

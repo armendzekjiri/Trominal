@@ -1,0 +1,98 @@
+---
+import Page from '@/layouts/Page.astro'
+import { Image } from 'astro:assets'
+import { SITE } from '@/lib/site'
+
+// Drop screenshots into website/src/assets/screenshots/ — any png/jpg/jpeg/webp/avif.
+// Filename becomes the title (kebab-case → Title Case). The section is hidden if empty.
+const modules = import.meta.glob<{ default: ImageMetadata }>(
+  '../assets/screenshots/*.{png,jpg,jpeg,webp,avif}',
+  { eager: true },
+)
+
+const shots = Object.entries(modules)
+  .map(([path, mod]) => {
+    const filename = path.split('/').pop() ?? path
+    const stem = filename.replace(/\.[^.]+$/, '')
+    const title = stem
+      .replace(/[-_]+/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim()
+      .replace(/\b\w/g, (c) => c.toUpperCase())
+    return { src: mod.default, title, alt: title }
+  })
+  .sort((a, b) => a.title.localeCompare(b.title))
+
+const hasShots = shots.length > 0
+---
+
+<Page
+  title="Screenshots"
+  description="Real Trominal screens — hosts, terminal, snippets, identities, settings."
+  active="screenshots"
+>
+  <header class="page-head">
+    <div class="wrap">
+      <span class="eyebrow"><span class="dot"></span>Screenshots</span>
+      <h1>The actual product, in actual pixels.</h1>
+      <p class="lede">
+        No mockups, no Figma frames — just screen captures from real builds. Drop a new image
+        into the repo and it lands here on the next deploy.
+      </p>
+    </div>
+  </header>
+
+  <section class="section flush">
+    <div class="wrap">
+      {
+        hasShots ? (
+          <div
+            style="display:grid;grid-template-columns:repeat(auto-fill,minmax(360px,1fr));gap:18px"
+          >
+            {shots.map((s) => (
+              <figure
+                style="margin:0;background:var(--bg-2);border:1px solid var(--line);border-radius:14px;overflow:hidden"
+              >
+                <Image
+                  src={s.src}
+                  alt={s.alt}
+                  loading="lazy"
+                  style="display:block;width:100%;height:auto"
+                />
+                <figcaption
+                  style="padding:12px 14px;font-size:13px;color:var(--ink-2);border-top:1px solid var(--line);font-family:var(--mono)"
+                >
+                  {s.title}
+                </figcaption>
+              </figure>
+            ))}
+          </div>
+        ) : (
+          <div
+            class="card"
+            style="text-align:center;padding:48px 24px;max-width:680px;margin:0 auto"
+          >
+            <h3 style="margin-bottom:10px">No screenshots yet</h3>
+            <p class="muted" style="margin-bottom:18px">
+              Trominal is in early development — screenshots will appear here as features ship.
+              Until then, follow along on
+              <a href={SITE.github.url} style="color:var(--accent)" target="_blank" rel="noopener">
+                GitHub
+              </a>
+              or check the latest
+              <a href="/changelog" style="color:var(--accent)">
+                changelog
+              </a>
+              .
+            </p>
+            <p class="muted" style="font-size:12px">
+              Maintainer note: drop PNG / JPG / WebP files into
+              <code class="mono" style="color:var(--accent)">website/src/assets/screenshots/</code>
+              — this page renders them automatically.
+            </p>
+          </div>
+        )
+      }
+    </div>
+  </section>
+</Page>

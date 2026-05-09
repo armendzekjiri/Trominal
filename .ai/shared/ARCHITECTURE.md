@@ -45,7 +45,7 @@
 
 The single `app` container serves both the API (`/api/v1/*`, `/api/server-info`, etc.) and the Filament admin panel (`/admin/*`). Same Laravel codebase, different routes/middleware.
 
-## The two surfaces
+## The three surfaces
 
 ```
 ┌─────────────────────────────────────────┐  ┌────────────────────────────────────┐
@@ -71,6 +71,26 @@ The single `app` container serves both the API (`/api/v1/*`, `/api/server-info`,
 │                                         │  │  • Start SSH sessions              │
 │                                         │  │  • View terminal content           │
 └─────────────────────────────────────────┘  └────────────────────────────────────┘
+
+┌────────────────────────────────────────────────────────────────────────────────┐
+│  MARKETING SITE & DOCS (Astro + MDX, Cloudflare Pages)                         │
+│                                                                                │
+│  Used by: prospective users, contributors, operators reading docs              │
+│  URL:     https://trominal.app                                                 │
+│  Auth:    public                                                               │
+│                                                                                │
+│  Hosts:                                                                        │
+│  • Landing page, features, screenshots, install guide                          │
+│  • Public demo info → backend.trominal.app                                     │
+│  • Full docs sourced from /docs/*.md and root markdown                         │
+│  • Changelog, roadmap, security threat model, brand kit, privacy, terms        │
+│                                                                                │
+│  Live data:                                                                    │
+│  • /api/stats.json — Cloudflare Worker, KV-cached 10 min                       │
+│  • Pulls stars / contributors / latest release from GitHub                     │
+│                                                                                │
+│  Independent of: backend instance lifecycle, client release cadence            │
+└────────────────────────────────────────────────────────────────────────────────┘
 ```
 
 ## Data flow: signup + master password setup

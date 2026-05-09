@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<title>Privacy — Trominal</title>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet"/>
+<link rel="stylesheet" href="site.css"/>
+</head>
+<body>
+<div data-header="privacy"></div>
+
+<header class="page-head">
+  <div class="wrap">
+    <span class="eyebrow"><span class="dot"></span>Privacy</span>
+    <h1>The shortest privacy policy you'll read this year.</h1>
+    <p class="lede">Trominal is self-hosted and ships with no telemetry. There is, in the literal sense, almost nothing to disclose. Last updated May 6, 2026.</p>
+  </div>
+</header>
+
+<section class="section flush">
+  <div class="wrap">
+    <div class="two-col">
+      <aside class="toc">
+        <h6>On this page</h6>
+        <a href="#tldr" class="active">TL;DR</a>
+        <a href="#what-we-collect">What we collect</a>
+        <a href="#what-we-dont">What we don't collect</a>
+        <a href="#self-hosted">Your self-hosted server</a>
+        <a href="#ai">AI providers</a>
+        <a href="#updates">Update checks</a>
+        <a href="#crash-reports">Crash reports</a>
+        <a href="#cookies">Cookies on this site</a>
+        <a href="#contact">Contact</a>
+      </aside>
+      <article class="prose">
+        <h2 id="tldr">TL;DR</h2>
+        <p>Trominal is an SSH client. It runs on your machine, talks to a server you control, and connects to hosts you've configured. <strong>We do not collect or transmit any data about your usage of the app.</strong> No analytics, no usage pings, no anonymous identifiers, no crash reports unless you opt in.</p>
+        <p>If that's all you needed to know, you can close this tab. If you want the details:</p>
+
+        <h2 id="what-we-collect">What <em>we</em> collect</h2>
+        <p>We — meaning the Trominal project maintainers operating <code>trominal.dev</code> — collect the following:</p>
+        <ul>
+          <li><strong>This website's server logs.</strong> Standard request logs (IP, user-agent, path, timestamp) retained for 14 days, used to investigate abuse and outages. We don't have analytics installed.</li>
+          <li><strong>Communication you initiate.</strong> If you email us, file an issue, or join the Discord, we read those messages. Obviously.</li>
+        </ul>
+        <p>That's the entire list.</p>
+
+        <h2 id="what-we-dont">What we don't collect</h2>
+        <ul>
+          <li>Your hosts, addresses, fingerprints, or any SSH config.</li>
+          <li>Your snippets, terminal output, or shell history.</li>
+          <li>Your identities, private keys, or certificates.</li>
+          <li>App usage events of any kind. There is no "anonymous" telemetry — there is no telemetry at all.</li>
+          <li>Your IP address from inside the app. The desktop and mobile clients do not phone home.</li>
+        </ul>
+
+        <h2 id="self-hosted">Your self-hosted server</h2>
+        <p>When you run a Trominal server (<code>ghcr.io/trominal/server</code>) inside your own infrastructure, that server stores:</p>
+        <ul>
+          <li>Hosts, host groups, and tags you've configured.</li>
+          <li>Snippets you and your team have created.</li>
+          <li>Encrypted identity blobs (sealed client-side with your master password before upload — the server cannot read them).</li>
+          <li>Per-user audit logs of mutations: who added a host, who shared a snippet, who connected and when. Configurable retention; default 90 days.</li>
+        </ul>
+        <p>This data lives on disk wherever you've mounted the data volume. The maintainers cannot see it, access it, or recover it for you. That's the point.</p>
+
+        <h2 id="ai">AI providers</h2>
+        <p>If you turn on AI assistance, prompts and the terminal context you opt to share are sent to whatever provider you've configured — Anthropic, OpenAI, or your own LLM endpoint. <strong>Trominal is not in that path.</strong> Requests go directly from your client to the provider; we never see them.</p>
+        <p>By default, AI is off and "send terminal context" is off. Redaction rules strip common secret formats (private keys, AWS keys, JWTs, hex-encoded tokens) before any data leaves the device.</p>
+
+        <h2 id="updates">Update checks</h2>
+        <p>The desktop client checks for updates by fetching a static JSON manifest from <code>releases.trominal.dev</code>. The request includes only the standard headers any HTTP client sends. We don't log it, we don't analyze it, and you can disable update checks in Settings → Connection.</p>
+
+        <h2 id="crash-reports">Crash reports</h2>
+        <p>If the app crashes, you'll see a dialog asking whether to send the crash report. Off by default. If you opt in, we receive a stack trace, app version, and OS version — no terminal contents, no hostnames, no identifying information from the app's data.</p>
+
+        <h2 id="cookies">Cookies on this site</h2>
+        <p>This website (<code>trominal.dev</code>) sets <strong>zero cookies</strong> and includes <strong>zero third-party scripts</strong>. The only fonts are loaded from Google Fonts, which has its own policies. If you want to avoid even that, the source is on GitHub — fork it and self-host the fonts.</p>
+
+        <h2 id="contact">Contact</h2>
+        <p>Questions? <a href="contact.html">Email us</a> or file an issue on <a href="https://github.com/trominal/trominal" target="_blank" rel="noopener">GitHub</a>. For security disclosures, see our <a href="security.html">security policy</a>.</p>
+
+        <p class="muted" style="margin-top:48px;font-size:13px;border-top:1px solid var(--line);padding-top:18px">This policy is licensed CC-BY 4.0 — fork it for your own project. Past versions live in the <a href="https://github.com/trominal/trominal/blob/main/site/privacy.html">git history</a>.</p>
+      </article>
+    </div>
+  </div>
+</section>
+
+<div data-footer></div>
+<script src="chrome.js"></script>
+</body>
+</html>

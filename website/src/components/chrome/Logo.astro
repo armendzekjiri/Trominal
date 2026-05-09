@@ -1,0 +1,20 @@
+---
+interface Props {
+  /** When `wordmark` is false, render only the icon. */
+  wordmark?: boolean
+  /** Size in px applied to icon and text. */
+  size?: number
+  class?: string
+}
+
+const { wordmark = true, size = 15, class: className } = Astro.props
+---
+
+<a href="/" class:list={['brand', className]} aria-label="Trominal">
+  <span class="prompt">&gt;</span>
+  <span
+    aria-hidden="true"
+    style={`width:${size}px;height:${size}px;display:inline-block;border-radius:3px;background:var(--accent);box-shadow:0 0 12px rgba(125,211,160,0.45)`}
+  ></span>
+  {wordmark && <span style={`font-size:${size}px`}>trominal</span>}
+</a>

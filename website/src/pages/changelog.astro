@@ -1,0 +1,55 @@
+---
+import Page from '@/layouts/Page.astro'
+import { renderRepoMarkdown } from '@/lib/markdown'
+import { SITE } from '@/lib/site'
+
+export const prerender = true
+
+const { html } = renderRepoMarkdown('CHANGELOG.md')
+---
+
+<Page
+  title="Changelog"
+  description="Every notable change in Trominal — versioned releases and unreleased work."
+  active="changelog"
+>
+  <header class="page-head">
+    <div class="wrap">
+      <span class="eyebrow"><span class="dot"></span>Changelog</span>
+      <h1>What's new in Trominal.</h1>
+      <p class="lede">
+        Auto-generated from <a
+          href={`${SITE.github.url}/blob/main/CHANGELOG.md`}
+          target="_blank"
+          rel="noopener"
+          style="color:var(--accent);border-bottom:1px solid var(--accent-line)">CHANGELOG.md</a> in the repo. Format follows <em>Keep a Changelog</em>.
+      </p>
+    </div>
+  </header>
+
+  <section class="section flush">
+    <div class="wrap">
+      <article class="prose changelog-prose" set:html={html} />
+    </div>
+  </section>
+</Page>
+
+<style>
+  .changelog-prose :global(h2) {
+    margin-top: 56px;
+    padding-top: 24px;
+    border-top: 1px solid var(--line);
+  }
+  .changelog-prose :global(h2:first-child) {
+    border-top: none;
+    padding-top: 0;
+  }
+  .changelog-prose :global(h3) {
+    color: var(--accent);
+    font-family: var(--mono);
+    font-size: 14px;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    margin-top: 24px;
+  }
+</style>

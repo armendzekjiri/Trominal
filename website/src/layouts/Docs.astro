@@ -1,0 +1,176 @@
+---
+import Page from './Page.astro'
+import Icon from '@/components/chrome/Icon.astro'
+import { SITE } from '@/lib/site'
+
+interface DocItem {
+  slug: string
+  title: string
+}
+
+interface Props {
+  title: string
+  description?: string
+  /** Path of the source file in the repo (relative to repo root) for "Edit on GitHub". */
+  editPath?: string
+  toc?: { depth: number; slug: string; text: string }[]
+  prev?: DocItem
+  next?: DocItem
+  allDocs?: DocItem[]
+  currentSlug?: string
+}
+
+const {
+  title,
+  description,
+  editPath,
+  toc = [],
+  prev,
+  next,
+  allDocs = [],
+  currentSlug,
+} = Astro.props
+
+const editUrl = editPath
+  ? `${SITE.github.url}/edit/main/${editPath.replace(/^\//, '')}`
+  : null
+---
+
+<Page title={title} description={description} active="docs">
+  <section class="page-head">
+    <div class="wrap">
+      <span class="eyebrow"><span class="dot"></span>Docs</span>
+      <h1>{title}</h1>
+      {description && <p class="lede">{description}</p>}
+    </div>
+  </section>
+
+  <section style="padding: 48px 0 96px">
+    <div class="wrap">
+      <div
+        style="display:grid;grid-template-columns:240px minmax(0,1fr) 220px;gap:48px;align-items:start"
+        class="docs-grid"
+      >
+        <!-- Sidebar nav -->
+        <aside style="position:sticky;top:84px">
+          <h6
+            style="font-family:var(--mono);font-size:11px;text-transform:uppercase;letter-spacing:0.1em;color:var(--ink-4);margin:0 0 12px"
+          >
+            Documentation
+          </h6>
+          <nav style="display:flex;flex-direction:column;gap:2px">
+            {
+              allDocs.map((doc) => (
+                <a
+                  href={`/docs/${doc.slug}`}
+                  style={`padding:6px 10px;border-radius:5px;font-size:13px;color:${doc.slug === currentSlug ? 'var(--accent)' : 'var(--ink-3)'};${doc.slug === currentSlug ? 'background:var(--accent-soft);' : ''}`}
+                >
+                  {doc.title}
+                </a>
+              ))
+            }
+          </nav>
+          {
+            editUrl && (
+              <a
+                href={editUrl}
+                target="_blank"
+                rel="noopener"
+                style="display:inline-flex;align-items:center;gap:6px;margin-top:24px;font-family:var(--mono);font-size:11px;color:var(--ink-3);padding:6px 10px;border:1px solid var(--line);border-radius:5px"
+              >
+                <Icon name="git" size={11} /> Edit on GitHub
+              </a>
+            )
+          }
+        </aside>
+
+        <!-- Main content -->
+        <article class="prose" style="max-width:none">
+          <slot />
+
+          {
+            (prev || next) && (
+              <hr class="rule" style="margin:48px 0 24px" />
+              <div style="display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap">
+                {prev ? (
+                  <a
+                    href={`/docs/${prev.slug}`}
+                    class="card hover"
+                    style="flex:1;min-width:240px;padding:14px 16px"
+                  >
+                    <div
+                      style="font-family:var(--mono);font-size:11px;text-transform:uppercase;letter-spacing:0.1em;color:var(--ink-4)"
+                    >
+                      ← Previous
+                    </div>
+                    <div style="margin-top:6px;color:var(--ink);font-size:14px;font-weight:500">
+                      {prev.title}
+                    </div>
+                  </a>
+                ) : (
+                  <span />
+                )}
+                {next ? (
+                  <a
+                    href={`/docs/${next.slug}`}
+                    class="card hover"
+                    style="flex:1;min-width:240px;padding:14px 16px;text-align:right"
+                  >
+                    <div
+                      style="font-family:var(--mono);font-size:11px;text-transform:uppercase;letter-spacing:0.1em;color:var(--ink-4)"
+                    >
+                      Next →
+                    </div>
+                    <div style="margin-top:6px;color:var(--ink);font-size:14px;font-weight:500">
+                      {next.title}
+                    </div>
+                  </a>
+                ) : (
+                  <span />
+                )}
+              </div>
+            )
+          }
+        </article>
+
+        <!-- TOC -->
+        {
+          toc.length > 0 && (
+            <aside class="toc">
+              <h6>On this page</h6>
+              {toc
+                .filter((h) => h.depth >= 2 && h.depth <= 3)
+                .map((h) => (
+                  <a
+                    href={`#${h.slug}`}
+                    style={`padding-left:${(h.depth - 2) * 12 + 12}px`}
+                  >
+                    {h.text}
+                  </a>
+                ))}
+            </aside>
+          )
+        }
+      </div>
+    </div>
+  </section>
+</Page>
+
+<style>
+  @media (max-width: 1100px) {
+    .docs-grid {
+      grid-template-columns: 220px minmax(0, 1fr) !important;
+    }
+    .docs-grid .toc {
+      display: none;
+    }
+  }
+  @media (max-width: 900px) {
+    .docs-grid {
+      grid-template-columns: 1fr !important;
+    }
+    .docs-grid > aside {
+      position: static !important;
+    }
+  }
+</style>

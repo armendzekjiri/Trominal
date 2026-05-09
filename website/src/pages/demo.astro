@@ -1,0 +1,257 @@
+---
+import Page from '@/layouts/Page.astro'
+import Icon from '@/components/chrome/Icon.astro'
+import { SITE } from '@/lib/site'
+---
+
+<Page
+  title="Try the demo"
+  description="A real, secure Trominal instance you can point your client at — without setting up your own server."
+  active="demo"
+>
+  <header class="page-head">
+    <div class="wrap">
+      <span class="eyebrow"><span class="dot"></span>Public demo</span>
+      <h1>A real instance, ready when you are.</h1>
+      <p class="lede">
+        Don't want to spin up Docker just to kick the tires? Point any Trominal client at our
+        public demo backend.
+      </p>
+    </div>
+  </header>
+
+  <section class="section flush">
+    <div class="wrap">
+      <div
+        style="display:grid;grid-template-columns:1.1fr 1fr;gap:48px;align-items:start"
+        class="demo-grid"
+      >
+        <div>
+          <div
+            class="card"
+            style="background:linear-gradient(135deg, var(--bg-3), var(--bg-2));border-color:var(--accent-line);position:relative;overflow:hidden;padding:32px"
+          >
+            <div
+              style="position:absolute;inset:0;background:radial-gradient(400px 200px at 100% 0%, rgba(125,211,160,0.08), transparent 70%);pointer-events:none"
+            ></div>
+            <span class="eyebrow" style="position:relative">
+              <Icon name="globe" size={11} /> Demo backend
+            </span>
+            <div
+              class="mono"
+              style="margin-top:14px;font-size:22px;color:var(--ink);font-weight:500;position:relative"
+            >
+              {SITE.demo.backendUrl}
+            </div>
+            <p style="margin-top:14px;color:var(--ink-2);max-width:520px;position:relative">
+              Hosted by us, secured the same way a production Trominal instance would be.
+              Open registration is on, so you can sign up directly from any client.
+            </p>
+            <div
+              style="margin-top:22px;display:flex;gap:10px;flex-wrap:wrap;position:relative"
+            >
+              <a
+                href={SITE.demo.backendUrl}
+                target="_blank"
+                rel="noopener"
+                class="btn btn-primary"
+              >
+                <Icon name="arrow_right" size={14} /> Open backend.trominal.app
+              </a>
+              <a href="/install" class="btn btn-secondary">Get a client first</a>
+            </div>
+          </div>
+
+          <div style="margin-top:28px">
+            <h2 style="font-size:24px">How to point your client at the demo</h2>
+            <ol
+              class="prose"
+              style="margin-top:14px;padding-left:0;list-style:none;counter-reset:step"
+            >
+              <li
+                style="display:flex;gap:14px;padding:12px 0;border-top:1px solid var(--line);counter-increment:step"
+              >
+                <span
+                  style="font-family:var(--mono);font-size:13px;color:var(--accent);min-width:28px"
+                >
+                  01
+                </span>
+                <div>
+                  <strong style="font-weight:500;color:var(--ink)">
+                    Install a Trominal client
+                  </strong>
+                  <div style="color:var(--ink-3);font-size:14px;margin-top:4px">
+                    Desktop or self-hosted web build — see
+                    <a href="/install" style="color:var(--accent)">/install</a>.
+                  </div>
+                </div>
+              </li>
+              <li
+                style="display:flex;gap:14px;padding:12px 0;border-top:1px solid var(--line);counter-increment:step"
+              >
+                <span
+                  style="font-family:var(--mono);font-size:13px;color:var(--accent);min-width:28px"
+                >
+                  02
+                </span>
+                <div>
+                  <strong style="font-weight:500;color:var(--ink)">
+                    On the first-launch screen, paste the URL
+                  </strong>
+                  <div style="color:var(--ink-3);font-size:14px;margin-top:4px">
+                    Enter <code class="mono">{SITE.demo.backendUrl}</code> as your server URL.
+                    The client will fetch <code class="mono">/api/server-info</code> and
+                    confirm the instance.
+                  </div>
+                </div>
+              </li>
+              <li
+                style="display:flex;gap:14px;padding:12px 0;border-top:1px solid var(--line);counter-increment:step"
+              >
+                <span
+                  style="font-family:var(--mono);font-size:13px;color:var(--accent);min-width:28px"
+                >
+                  03
+                </span>
+                <div>
+                  <strong style="font-weight:500;color:var(--ink)">
+                    Register an account and set a master password
+                  </strong>
+                  <div style="color:var(--ink-3);font-size:14px;margin-top:4px">
+                    Use a throwaway email if you'd like — your master password is never sent
+                    to the server.
+                  </div>
+                </div>
+              </li>
+              <li
+                style="display:flex;gap:14px;padding:12px 0;border-top:1px solid var(--line);counter-increment:step"
+              >
+                <span
+                  style="font-family:var(--mono);font-size:13px;color:var(--accent);min-width:28px"
+                >
+                  04
+                </span>
+                <div>
+                  <strong style="font-weight:500;color:var(--ink)">
+                    Add a host and connect
+                  </strong>
+                  <div style="color:var(--ink-3);font-size:14px;margin-top:4px">
+                    SSH out to one of your own machines, save snippets, share a config across
+                    devices.
+                  </div>
+                </div>
+              </li>
+            </ol>
+          </div>
+        </div>
+
+        <!-- Side: what's safe / what isn't -->
+        <aside style="display:flex;flex-direction:column;gap:14px">
+          <div class="card" style="padding:22px">
+            <div
+              style="display:flex;align-items:center;gap:8px;color:var(--accent);margin-bottom:12px"
+            >
+              <Icon name="check" size={16} />
+              <strong style="font-weight:500;color:var(--accent)">Safe to test on the demo</strong>
+            </div>
+            <ul
+              style="list-style:none;padding-left:0;margin:0;display:flex;flex-direction:column;gap:8px"
+            >
+              <li style="display:flex;gap:10px;font-size:14px;color:var(--ink-2)">
+                <span style="color:var(--accent)">·</span>
+                <span>Connecting to your own SSH hosts</span>
+              </li>
+              <li style="display:flex;gap:10px;font-size:14px;color:var(--ink-2)">
+                <span style="color:var(--accent)">·</span>
+                <span>Sharing snippets and host configs</span>
+              </li>
+              <li style="display:flex;gap:10px;font-size:14px;color:var(--ink-2)">
+                <span style="color:var(--accent)">·</span>
+                <span>Multi-device sync across the same demo account</span>
+              </li>
+              <li style="display:flex;gap:10px;font-size:14px;color:var(--ink-2)">
+                <span style="color:var(--accent)">·</span>
+                <span>Trying the AI integration with your own API key</span>
+              </li>
+              <li style="display:flex;gap:10px;font-size:14px;color:var(--ink-2)">
+                <span style="color:var(--accent)">·</span>
+                <span>Smoke-testing the desktop and web builds end-to-end</span>
+              </li>
+            </ul>
+          </div>
+
+          <div class="card" style="padding:22px;border-color:rgba(224,184,112,0.3)">
+            <div
+              style="display:flex;align-items:center;gap:8px;color:var(--warn);margin-bottom:12px"
+            >
+              <Icon name="eye_off" size={16} />
+              <strong style="font-weight:500;color:var(--warn)">Don't use the demo for</strong>
+            </div>
+            <ul
+              style="list-style:none;padding-left:0;margin:0;display:flex;flex-direction:column;gap:8px"
+            >
+              <li style="display:flex;gap:10px;font-size:14px;color:var(--ink-2)">
+                <span style="color:var(--warn)">·</span>
+                <span>Production work or anything you can't afford to re-create</span>
+              </li>
+              <li style="display:flex;gap:10px;font-size:14px;color:var(--ink-2)">
+                <span style="color:var(--warn)">·</span>
+                <span>Long-term storage of important snippets or identities</span>
+              </li>
+              <li style="display:flex;gap:10px;font-size:14px;color:var(--ink-2)">
+                <span style="color:var(--warn)">·</span>
+                <span>SSO into customer infrastructure or production hosts</span>
+              </li>
+              <li style="display:flex;gap:10px;font-size:14px;color:var(--ink-2)">
+                <span style="color:var(--warn)">·</span>
+                <span>Anything that needs an SLA or uptime guarantee</span>
+              </li>
+            </ul>
+          </div>
+
+          <div
+            class="card"
+            style="padding:22px;background:var(--bg-2);border-color:var(--line)"
+          >
+            <div
+              style="font-family:var(--mono);font-size:11px;text-transform:uppercase;letter-spacing:0.1em;color:var(--ink-4);margin-bottom:10px"
+            >
+              The fine print
+            </div>
+            <p style="font-size:13.5px;color:var(--ink-3);line-height:1.55">
+              The demo is a real, hardened Trominal instance with TLS, rate limiting, and 2FA
+              available. <strong style="color:var(--ink-2);font-weight:500">
+              The database is wiped periodically without warning.</strong>
+              When you want to keep what you build, self-host instead — that's what Trominal
+              is designed for.
+            </p>
+            <p style="font-size:13.5px;color:var(--ink-3);line-height:1.55;margin-top:10px">
+              Acceptable use: see <a href="/terms" style="color:var(--accent)">/terms</a>.
+              Privacy: see <a href="/privacy" style="color:var(--accent)">/privacy</a>.
+            </p>
+          </div>
+        </aside>
+      </div>
+    </div>
+  </section>
+
+  <section class="section">
+    <div class="wrap">
+      <div class="card" style="padding:36px;text-align:center">
+        <h3>Ready to make it permanent?</h3>
+        <p class="muted" style="margin-top:10px">
+          Self-hosting takes about two minutes. <a href="/install" style="color:var(--accent)">
+          Install your own server</a> — your data stays on your machine, forever.
+        </p>
+      </div>
+    </div>
+  </section>
+</Page>
+
+<style>
+  @media (max-width: 1000px) {
+    .demo-grid {
+      grid-template-columns: 1fr !important;
+    }
+  }
+</style>

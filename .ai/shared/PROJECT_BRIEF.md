@@ -720,7 +720,41 @@ Tunnels and SFTP are separate product areas because they serve different workflo
 
 ---
 
-## 14. Working Agreement
+## 14. Marketing Site & Public Demo
+
+### 14.1 Surfaces
+
+There is a **third user-facing surface** beyond the client app and admin panel:
+
+- **Marketing site & docs** — `https://trominal.app` — Astro 5 + MDX site living in `/website/`. Hosts the landing page, install guide, full documentation (sourced from `/docs/*.md` and root markdown files), changelog, roadmap, security threat model, brand kit, privacy, terms, license, and a dedicated demo page.
+- **Public demo backend** — `https://backend.trominal.app` — a real, hardened Trominal instance we host so people can try the product without spinning up Docker. Database is **wiped periodically without notice**; not for production use. Open registration is enabled.
+
+### 14.2 Locked decisions for the website
+
+| Decision        | Value                                                            |
+| --------------- | ---------------------------------------------------------------- |
+| Stack           | Astro 5 + MDX + Tailwind 3, hybrid output                        |
+| Adapter         | `@astrojs/cloudflare`                                            |
+| Hosting         | Cloudflare Pages + Workers                                       |
+| Live data       | `/api/stats.json` Worker route, KV-cached 10 min                 |
+| Analytics       | Cloudflare Web Analytics (privacy-friendly, no cookies)          |
+| Fonts           | Self-hosted via `@fontsource/*` — no Google Fonts at runtime     |
+| Design tokens   | Mirror `.ai/design/` — dark warm charcoal, accent green, JetBrains Mono |
+| License banner  | AGPL-3.0 everywhere — never MIT                                  |
+| Demo policy     | Public, secure, ephemeral (DB wiped periodically), no SLA        |
+
+### 14.3 Hard rules
+
+- No fake testimonials, no fake company logos, no fake star counts. "Built in the open" section pulls live numbers from GitHub.
+- Privacy and terms pages are real and reflect the actual demo behavior. When demo behavior changes, update both and bump `lastUpdated`.
+- `website/design-reference/` is the original visual source — read-only, do not modify.
+- All version/star/release strings on the site come from `fetchGithubStats()`, never hardcoded.
+
+See `.ai/skills/website.md` for full guidance and `website/README.md` for deployment.
+
+---
+
+## 15. Working Agreement
 
 - **Start with Phase 0.** Do not skip ahead.
 - After each phase: run all tests, commit with conventional message, push, summarize what changed, **ask before starting the next phase**.

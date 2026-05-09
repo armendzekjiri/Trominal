@@ -1,0 +1,114 @@
+---
+import Page from '@/layouts/Page.astro'
+import Icon from '@/components/chrome/Icon.astro'
+import { DOCS } from '@/lib/docs'
+import { SITE } from '@/lib/site'
+
+export const prerender = true
+
+const grouped = DOCS.reduce<Record<string, typeof DOCS>>((acc, d) => {
+  acc[d.category] ??= []
+  acc[d.category].push(d)
+  return acc
+}, {})
+
+const categoryOrder = ['Getting Started', 'Operate', 'Build', 'Reference'] as const
+
+const categoryIcon: Record<string, 'bolt' | 'shield' | 'code' | 'book'> = {
+  'Getting Started': 'bolt',
+  Operate: 'shield',
+  Build: 'code',
+  Reference: 'book',
+}
+---
+
+<Page
+  title="Documentation"
+  description="Trominal documentation — self-hosting, admin guide, architecture, security, release process, contributing."
+  active="docs"
+>
+  <header class="page-head">
+    <div class="wrap">
+      <span class="eyebrow"><span class="dot"></span>Docs</span>
+      <h1>The full manual.</h1>
+      <p class="lede">
+        Self-hosting, operations, contributor on-ramps, and architecture references — all
+        sourced directly from the repo, so nothing here can drift out of date silently.
+      </p>
+    </div>
+  </header>
+
+  <section class="section flush">
+    <div class="wrap">
+      <div style="display:flex;flex-direction:column;gap:36px">
+        {
+          categoryOrder.map((cat) => {
+            const items = grouped[cat]
+            if (!items) return null
+            return (
+              <div>
+                <div
+                  style="display:flex;align-items:center;gap:10px;margin-bottom:14px"
+                >
+                  <span
+                    style="width:32px;height:32px;border-radius:8px;background:var(--accent-soft);border:1px solid var(--accent-line);display:inline-flex;align-items:center;justify-content:center;color:var(--accent)"
+                  >
+                    <Icon name={categoryIcon[cat]} size={16} />
+                  </span>
+                  <h2 style="font-size:22px">{cat}</h2>
+                </div>
+                <div
+                  style="display:grid;grid-template-columns:repeat(2,1fr);gap:14px"
+                  class="docs-cards"
+                >
+                  {items.map((doc) => (
+                    <a
+                      href={`/docs/${doc.slug}`}
+                      class="card hover"
+                      style="text-decoration:none;padding:24px;display:flex;flex-direction:column;gap:8px"
+                    >
+                      <div
+                        style="display:flex;align-items:center;justify-content:space-between;gap:10px"
+                      >
+                        <h3 style="font-size:17px">{doc.title}</h3>
+                        <Icon name="arrow_right" size={14} />
+                      </div>
+                      <p style="color:var(--ink-3);font-size:14px;line-height:1.55">
+                        {doc.description}
+                      </p>
+                      <div
+                        class="mono"
+                        style="font-size:11px;color:var(--ink-4);margin-top:auto;padding-top:8px"
+                      >
+                        {doc.source}
+                      </div>
+                    </a>
+                  ))}
+                </div>
+              </div>
+            )
+          })
+        }
+      </div>
+
+      <div class="card" style="padding:32px;text-align:center;margin-top:48px">
+        <h3>Spot a typo?</h3>
+        <p class="muted" style="margin-top:10px">
+          Every doc page has an "Edit on GitHub" link in its sidebar. PRs against the
+          markdown source land here on the next deploy.
+          <a href={SITE.github.url} target="_blank" rel="noopener" style="color:var(--accent)">
+            Browse the repo
+          </a>.
+        </p>
+      </div>
+    </div>
+  </section>
+</Page>
+
+<style>
+  @media (max-width: 800px) {
+    .docs-cards {
+      grid-template-columns: 1fr !important;
+    }
+  }
+</style>

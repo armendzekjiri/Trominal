@@ -1,0 +1,91 @@
+---
+import Logo from './Logo.astro'
+import Icon from './Icon.astro'
+import LatestVersion from './LatestVersion.astro'
+import { SITE } from '@/lib/site'
+
+const year = new Date().getFullYear()
+---
+
+<footer class="site-footer">
+  <div class="wrap">
+    <div class="foot-grid">
+      <div class="foot-col">
+        <Logo />
+        <p class="muted" style="font-size:13px;max-width:300px;margin-top:14px">
+          A self-hosted SSH client for teams. Open source · AGPL-3.0 · zero telemetry.
+        </p>
+        <div style="display:flex;gap:10px;margin-top:18px">
+          <a
+            href={SITE.github.url}
+            target="_blank"
+            rel="noopener"
+            class="btn btn-secondary"
+            style="height:32px;padding:0 12px;font-size:13px"
+          >
+            <Icon name="github" size={13} /> GitHub
+          </a>
+          <a
+            href={SITE.github.discussionsUrl}
+            target="_blank"
+            rel="noopener"
+            class="btn btn-secondary"
+            style="height:32px;padding:0 12px;font-size:13px"
+          >
+            <Icon name="users" size={13} /> Discussions
+          </a>
+        </div>
+      </div>
+
+      <div class="foot-col">
+        <h5>Product</h5>
+        <a href="/features">Features</a>
+        <a href="/screenshots">Screenshots</a>
+        <a href="/install">Install</a>
+        <a href="/demo">Try the demo</a>
+        <a href="/changelog">Changelog</a>
+        <a href="/roadmap">Roadmap</a>
+      </div>
+
+      <div class="foot-col">
+        <h5>Resources</h5>
+        <a href="/docs">Documentation</a>
+        <a href="/docs/self-hosting">Self-hosting</a>
+        <a href={SITE.github.url} target="_blank" rel="noopener">Source code</a>
+        <a href="/security">Security</a>
+        <a href="/brand">Brand kit</a>
+      </div>
+
+      <div class="foot-col">
+        <h5>Community</h5>
+        <a href="/contribute">Contribute</a>
+        <a href={SITE.github.discussionsUrl} target="_blank" rel="noopener">Discussions</a>
+        <a href={SITE.github.issuesUrl} target="_blank" rel="noopener">Issues</a>
+      </div>
+
+      <div class="foot-col">
+        <h5>Project</h5>
+        <a href="/contact">Contact</a>
+        <a href="/privacy">Privacy</a>
+        <a href="/terms">Terms</a>
+        <a href="/license">AGPL-3.0</a>
+      </div>
+    </div>
+
+    <div class="foot-bottom">
+      <div class="left">
+        <span>$ trominal --version</span>
+        <LatestVersion />
+      </div>
+      <div class="right">
+        <span>© {year} Trominal contributors</span>
+        <span style="display:inline-flex;align-items:center;gap:6px">
+          <span
+            style="width:6px;height:6px;border-radius:50%;background:var(--accent);box-shadow:0 0 6px var(--accent)"
+          ></span>
+          self-hosted, in the open
+        </span>
+      </div>
+    </div>
+  </div>
+</footer>

@@ -1,0 +1,129 @@
+---
+import Icon from '@/components/chrome/Icon.astro'
+import { fetchGithubStats, FALLBACK_STATS } from '@/lib/github'
+import { formatStarCount, formatDate } from '@/lib/format'
+
+let stats = FALLBACK_STATS
+try {
+  stats = await fetchGithubStats()
+} catch {
+  /* fallback used */
+}
+
+const releaseLine = stats.latestVersion
+  ? stats.latestReleaseDate
+    ? `${stats.latestVersion} — released ${formatDate(stats.latestReleaseDate)}`
+    : stats.latestVersion
+  : 'Open source · Self-hosted SSH for teams'
+---
+
+<section class="hero">
+  <div class="wrap">
+    <div class="hero-grid">
+      <div>
+        <span class="eyebrow"><span class="dot"></span>{releaseLine}</span>
+        <h1>The SSH&nbsp;client your terminal&nbsp;deserves.</h1>
+        <p class="lede">
+          Trominal is an open-source, self-hosted SSH client for teams. Sync your hosts,
+          snippets, and identities across desktop and mobile — without sending a single byte to
+          anyone else's server.
+        </p>
+        <div class="actions">
+          <a href="/install" class="btn btn-primary btn-lg">
+            <Icon name="download" size={15} /> Install Trominal
+          </a>
+          <a
+            href="https://github.com/armendzekjiri/Trominal"
+            target="_blank"
+            rel="noopener"
+            class="btn btn-secondary btn-lg"
+          >
+            <Icon name="github" size={15} /> Star on GitHub
+            <span class="mono" style="color:var(--ink-3);font-size:13px" data-stars-target>
+              {formatStarCount(stats.stars)}
+            </span>
+          </a>
+        </div>
+        <div class="meta">
+          <span><Icon name="check" size={13} /> macOS · Linux · Windows · Web</span>
+          <span><Icon name="shield" size={13} /> AGPL-3.0</span>
+          <span><Icon name="eye_off" size={13} /> Zero telemetry</span>
+        </div>
+      </div>
+
+      <!-- Animated terminal preview -->
+      <div
+        class="terminal"
+        style="box-shadow: 0 30px 80px rgba(0,0,0,0.4), 0 0 0 1px rgba(125,211,160,0.06);"
+      >
+        <div class="head">
+          <div class="lights">
+            <span style="background:#f17a7a"></span>
+            <span style="background:#e0b870"></span>
+            <span style="background:#7dd3a0"></span>
+          </div>
+          <span class="mono" style="color:var(--ink-2)">deploy@web-01.prod</span>
+          <span style="flex:1"></span>
+          <span
+            class="tag accent"
+            style="height:18px;padding:0 7px;font-size:10px"
+          >
+            <span
+              style="width:5px;height:5px;border-radius:50%;background:var(--accent)"
+            ></span>22ms
+          </span>
+        </div>
+        <div class="body">
+          <div class="row"><span class="term-c-dim"># last login via Trominal</span></div>
+          <div class="row">
+            <span class="term-prompt">deploy@web-01:~$</span>
+            <span class="term-c-green">git</span> <span class="term-c-cyan">status</span>
+          </div>
+          <div class="row">
+            <span class="term-c-dim">On branch </span><span class="term-c-green">main</span>
+          </div>
+          <div class="row">
+            <span class="term-c-dim">  modified: </span>
+            <span class="term-c-yellow">config/database.yml</span>
+          </div>
+          <div class="row">
+            <span class="term-c-dim">  modified: </span>
+            <span class="term-c-yellow">sessions_controller.rb</span>
+          </div>
+          <div class="row">&nbsp;</div>
+          <div class="row">
+            <span class="term-prompt">deploy@web-01:~$</span>
+            <span class="term-c-green">tail</span> -f log/prod.log
+          </div>
+          <div class="row">
+            <span class="term-c-dim">[14:22:09]</span>
+            <span class="term-c-green">INFO</span> GET /api/v1/users/42 → 200
+          </div>
+          <div class="row">
+            <span class="term-c-dim">[14:22:11]</span>
+            <span class="term-c-yellow">WARN</span> Slow query (412ms) on sessions
+          </div>
+          <div class="row">
+            <span class="term-c-dim">[14:22:14]</span>
+            <span class="term-c-red">ERROR</span> Postgres: too many connections
+          </div>
+          <div
+            class="row"
+            style="margin-top:6px;background:rgba(125,211,160,0.06);padding:6px 8px;border-left:2px solid var(--accent);border-radius:0 4px 4px 0"
+          >
+            <span style="color:var(--accent);font-size:11px;font-weight:500">⌁ Trominal AI</span>
+            <span style="color:var(--ink-2)"> Postgres has hit max_connections.</span>
+          </div>
+          <div class="row" style="margin-top:6px">
+            <span class="term-prompt">deploy@web-01:~$</span>
+            <span style="color:var(--ink-2)">psql</span>
+            <span class="term-c-dim" style="font-style:italic">-h db.prod.acme -U postgres</span>
+            <span
+              style="display:inline-block;width:7px;height:13px;background:var(--accent);margin-left:1px;vertical-align:-2px;animation:blink 1s step-end infinite"
+            ></span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
