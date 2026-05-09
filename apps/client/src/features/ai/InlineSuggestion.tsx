@@ -5,6 +5,9 @@ import { useAuth } from '@/stores/auth'
 import { useAiSettings } from '@/features/vault/hooks'
 import { adapterFor, collectChatText, type AdapterConfig } from './adapters'
 import { readRecentLines } from './recentLines'
+import { evaluateAutoSuggest } from './autoSuggestHeuristics'
+
+const AUTO_DEBOUNCE_MS = 700
 
 type InlineSuggestionProps = {
   terminal: Terminal
@@ -20,10 +23,13 @@ type SuggestionState =
 const encoder = new TextEncoder()
 
 /**
- * Ctrl+Space-triggered command-suggestion overlay rendered above the active
- * xterm. Manual trigger keeps us out of fights with vim/tmux/sudo prompts
- * that an auto-debounced strategy would lose. Tab accepts the suggestion
- * (writes it through the SSH session), Esc dismisses it.
+ * Inline command-suggestion overlay rendered above the active xterm. The
+ * primary trigger is Ctrl+Space; Phase 7C adds an opt-in auto-debounced
+ * trigger that fires after the user pauses typing. The auto path is
+ * suppressed inside vim/tmux/sudo prompts via autoSuggestHeuristics so it
+ * doesn't fight with those modes. Tab accepts the suggestion (writes it
+ * through the SSH session), Esc dismisses it (and starts a cooldown so we
+ * don't immediately re-fire).
  *
  * Gated by `ai.use` permission and the `inlineSuggestions` feature toggle —
  * if either is off, the hook installs no key handler and renders nothing.
@@ -33,6 +39,7 @@ export function InlineSuggestion({ terminal, session }: InlineSuggestionProps) {
   const hasPermission = useAuth((s) => s.hasPermission)
   const enabled =
     hasPermission('ai.use') && settings !== null && settings.features.inlineSuggestions
+  const autoSuggestEnabled = enabled && settings !== null && settings.features.autoSuggest
 
   const [state, setState] = useState<SuggestionState>({ kind: 'idle' })
   // Track the in-flight controller so triggering a fresh suggestion or
@@ -108,9 +115,16 @@ export function InlineSuggestion({ terminal, session }: InlineSuggestionProps) {
       }
     }
 
-    function dismiss(): void {
+    let lastDismissedAt = 0
+    let lastServerOutputAt = Date.now()
+    let debounceTimer: ReturnType<typeof setTimeout> | null = null
+
+    function dismiss(reason: 'esc' | 'typing' = 'esc'): void {
       abortRef.current?.abort()
       abortRef.current = null
+      // Only Esc starts the cooldown — typing-driven dismissal should let
+      // the next debounce tick re-fire as soon as the user pauses again.
+      if (reason === 'esc') lastDismissedAt = Date.now()
       setState({ kind: 'idle' })
     }
 
@@ -138,20 +152,55 @@ export function InlineSuggestion({ terminal, session }: InlineSuggestionProps) {
       // Esc dismisses any state but idle (so it never steals a real Esc press).
       if (current.kind !== 'idle' && event.key === 'Escape' && event.type === 'keydown') {
         event.preventDefault()
-        dismiss()
+        dismiss('esc')
         return false
       }
       return true
     }
 
     terminal.attachCustomKeyEventHandler(handler)
+
+    function maybeAutoTrigger(): void {
+      const cell = currentCellPosition(terminal)
+      if (cell === null) return
+      const lastLine = readLastBufferLine(terminal)
+      const decision = evaluateAutoSuggest({
+        isAlternateScreen: terminal.buffer.active.type === 'alternate',
+        lastLine,
+        typedSincePromptStart: extractTypedSegment(lastLine),
+        msSinceDismissal: Date.now() - lastDismissedAt,
+        msSinceLastServerOutput: Date.now() - lastServerOutputAt,
+      })
+      if (!decision.ok) return
+      void trigger()
+    }
+
+    const dataDisp = autoSuggestEnabled
+      ? terminal.onData(() => {
+          // User typed: any visible suggestion is now stale. Drop it and
+          // queue a fresh trigger after the debounce window.
+          if (stateRef.current.kind !== 'idle') dismiss('typing')
+          if (debounceTimer !== null) clearTimeout(debounceTimer)
+          debounceTimer = setTimeout(maybeAutoTrigger, AUTO_DEBOUNCE_MS)
+        })
+      : null
+
+    const writeDisp = autoSuggestEnabled
+      ? terminal.onWriteParsed(() => {
+          lastServerOutputAt = Date.now()
+        })
+      : null
+
     return () => {
       // No detach API; replace with a permissive no-op handler so the next
       // mount can install its own.
       terminal.attachCustomKeyEventHandler(() => true)
+      if (debounceTimer !== null) clearTimeout(debounceTimer)
+      dataDisp?.dispose()
+      writeDisp?.dispose()
       abortRef.current?.abort()
     }
-  }, [terminal, session, enabled, settings])
+  }, [terminal, session, enabled, autoSuggestEnabled, settings])
 
   if (!enabled || state.kind === 'idle') return null
   return <Overlay terminal={terminal} state={state} />
@@ -177,6 +226,30 @@ function Overlay({ terminal, state }: { terminal: Terminal; state: SuggestionSta
       {message}
     </div>
   )
+}
+
+/**
+ * The last visible row of the active buffer, trimmed of trailing spaces.
+ * Used by auto-suggest heuristics to inspect the prompt + typed text.
+ */
+function readLastBufferLine(terminal: Terminal): string {
+  const buffer = terminal.buffer.active
+  // cursorY is viewport-relative in xterm 5+, baseY is the absolute index of
+  // the viewport top, so baseY + cursorY is the absolute row to read.
+  const row = buffer.baseY + buffer.cursorY
+  const line = buffer.getLine(row)
+  if (line === undefined) return ''
+  return line.translateToString(true)
+}
+
+/**
+ * Extract whatever the user has typed after the prompt sigil on the current
+ * line. We split on the trailing prompt sigil + space; everything after is
+ * the in-progress command.
+ */
+export function extractTypedSegment(line: string): string {
+  const match = /[$#>%❯→]\s+([^\n]*)$/u.exec(line)
+  return match?.[1] ?? ''
 }
 
 /** Cell-grid coordinates of the current cursor in viewport space, or null if unavailable. */

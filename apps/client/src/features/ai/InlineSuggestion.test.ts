@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { sanitiseSuggestion } from './InlineSuggestion'
+import { extractTypedSegment, sanitiseSuggestion } from './InlineSuggestion'
 
 describe('sanitiseSuggestion', () => {
   it('returns a single command verbatim', () => {
@@ -27,5 +27,25 @@ describe('sanitiseSuggestion', () => {
   it('returns an empty string for blank input', () => {
     expect(sanitiseSuggestion('')).toBe('')
     expect(sanitiseSuggestion('   ')).toBe('')
+  })
+})
+
+describe('extractTypedSegment', () => {
+  it('returns the text typed after a $ prompt sigil', () => {
+    expect(extractTypedSegment('user@host:~$ git st')).toBe('git st')
+  })
+
+  it('returns the text typed after a # root prompt', () => {
+    expect(extractTypedSegment('root@box:/etc# systemctl restart nginx')).toBe(
+      'systemctl restart nginx',
+    )
+  })
+
+  it('returns an empty string when the user has not typed anything yet', () => {
+    expect(extractTypedSegment('user@host:~$ ')).toBe('')
+  })
+
+  it('returns an empty string when there is no prompt sigil', () => {
+    expect(extractTypedSegment('Loading file…')).toBe('')
   })
 })

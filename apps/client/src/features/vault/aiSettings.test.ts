@@ -31,6 +31,7 @@ describe('AiSettings encrypt/decrypt round-trip', () => {
       apiKey: 'sk-secret-token-do-not-leak',
       features: {
         inlineSuggestions: true,
+        autoSuggest: true,
         askPanel: true,
         explainCommand: false,
         sendOutputContext: true,
