@@ -11,7 +11,7 @@ import {
   SplitSquareHorizontal,
   X,
 } from 'lucide-react'
-import { useRef, useState } from 'react'
+import { useCallback, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
 import { Dot } from '@/components/ui/dot'
@@ -99,34 +99,44 @@ function DesktopTerminalPage() {
   const [terminalElement, setTerminalElement] = useState<HTMLDivElement | null>(null)
   const [pendingPrompt, setPendingPrompt] = useState<PendingPrompt | null>(null)
 
+  // Stable handler so XtermPane's terminal lifecycle effect isn't torn
+  // down on every parent re-render. The setters from useState are
+  // already stable, so empty deps are correct.
+  const handleTerminalReady = useCallback((terminal: Terminal, element: HTMLDivElement) => {
+    setActiveTerminal(terminal)
+    setTerminalElement(element)
+    return () => {
+      setActiveTerminal(null)
+      setTerminalElement(null)
+    }
+  }, [])
+
   function addHostTab(host: HostItem): void {
     const id = crypto.randomUUID()
-    setTabs((current) => [
-      ...current,
-      {
-        id,
-        kind: 'host',
-        host,
-        status: 'closed',
-        session: null,
-      },
-    ])
+    const tab: TerminalTab = {
+      id,
+      kind: 'host',
+      host,
+      status: 'closed',
+      session: null,
+    }
+    setTabs((current) => [...current, tab])
     setActiveId(id)
+    void connect(tab)
   }
 
   function addLocalTab(): void {
     const id = crypto.randomUUID()
-    setTabs((current) => [
-      ...current,
-      {
-        id,
-        kind: 'local',
-        title: 'Local shell',
-        status: 'closed',
-        session: null,
-      },
-    ])
+    const tab: TerminalTab = {
+      id,
+      kind: 'local',
+      title: 'Local shell',
+      status: 'closed',
+      session: null,
+    }
+    setTabs((current) => [...current, tab])
     setActiveId(id)
+    void connect(tab)
   }
 
   async function connect(tab: TerminalTab): Promise<void> {
@@ -321,14 +331,7 @@ function DesktopTerminalPage() {
                 session={active.session}
                 title={tabTitle(active)}
                 terminalRef={terminalRef}
-                onTerminalReady={(terminal, element) => {
-                  setActiveTerminal(terminal)
-                  setTerminalElement(element)
-                  return () => {
-                    setActiveTerminal(null)
-                    setTerminalElement(null)
-                  }
-                }}
+                onTerminalReady={handleTerminalReady}
               />
               {canUseAi && activeTerminal !== null && (
                 <InlineSuggestion terminal={activeTerminal} session={active.session} />
