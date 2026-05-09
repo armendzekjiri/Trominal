@@ -9,6 +9,13 @@ import { terminalThemeFor, useAppearance } from '@/stores/appearance'
 type XtermPaneProps = {
   session: SshSession | null
   /**
+   * True when this pane belongs to the active tab. While inactive the
+   * pane is hidden via CSS; on transition to active we re-fit the
+   * geometry (the element width/height was effectively 0 while hidden)
+   * and re-focus the terminal so keystrokes land in the right place.
+   */
+  isActive: boolean
+  /**
    * Optional ref the parent can use to peek at the live xterm instance —
    * needed by the Ask AI panel to read the last N lines of scrollback. The
    * pane assigns the current Terminal on mount and clears it on unmount.
@@ -24,9 +31,15 @@ type XtermPaneProps = {
 
 const encoder = new TextEncoder()
 
-export function XtermPane({ session, terminalRef: externalRef, onTerminalReady }: XtermPaneProps) {
+export function XtermPane({
+  session,
+  isActive,
+  terminalRef: externalRef,
+  onTerminalReady,
+}: XtermPaneProps) {
   const elementRef = useRef<HTMLDivElement | null>(null)
   const terminalRef = useRef<Terminal | null>(null)
+  const fitRef = useRef<FitAddon | null>(null)
   const terminalFontSize = useAppearance((state) => state.terminalFontSize)
   const terminalPalette = useAppearance((state) => state.terminalPalette)
   const terminalTheme = useMemo(() => terminalThemeFor(terminalPalette), [terminalPalette])
@@ -82,6 +95,7 @@ export function XtermPane({ session, terminalRef: externalRef, onTerminalReady }
     terminal.open(element)
     fit.fit()
     terminalRef.current = terminal
+    fitRef.current = fit
     const externalSlot = externalRefRef.current
     if (externalSlot !== undefined) {
       externalSlot.current = terminal
@@ -109,12 +123,29 @@ export function XtermPane({ session, terminalRef: externalRef, onTerminalReady }
       resizeObserver.disconnect()
       terminal.dispose()
       terminalRef.current = null
+      fitRef.current = null
       const slot = externalRefRef.current
       if (slot !== undefined) {
         slot.current = null
       }
     }
   }, [terminalFontSize, terminalTheme])
+
+  // Becoming the active tab: the pane was hidden (display:none) so
+  // FitAddon's last call computed against a 0×0 element. Re-fit on the
+  // next frame once layout has settled, then return focus.
+  useEffect(() => {
+    if (!isActive) return undefined
+    const terminal = terminalRef.current
+    const fit = fitRef.current
+    if (terminal === null || fit === null) return undefined
+    const handle = requestAnimationFrame(() => {
+      fit.fit()
+      sessionRef.current?.resize(terminal.cols, terminal.rows)
+      terminal.focus()
+    })
+    return () => cancelAnimationFrame(handle)
+  }, [isActive])
 
   // Session subscription: re-runs whenever a new session is attached
   // without disturbing the terminal instance. Also re-focuses on every

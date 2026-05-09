@@ -89,12 +89,22 @@ function DesktopTerminalPage() {
   const [askAiOpen, setAskAiOpen] = useState(false)
   const terminalRef = useRef<Terminal | null>(null)
   const canUseAi = useAuth((s) => s.hasPermission('ai.use'))
-  // Track the live xterm + its host element in state so the inline-suggestion
-  // and context-menu overlays (mounted as siblings of XtermPane) re-render
-  // when tabs are switched. The ref above is for late-binding consumers.
-  const [activeTerminal, setActiveTerminal] = useState<Terminal | null>(null)
-  const [terminalElement, setTerminalElement] = useState<HTMLDivElement | null>(null)
+  // Each tab keeps its own live Terminal so its scrollback stays isolated;
+  // switching tabs is a CSS show/hide, not a session swap on a shared
+  // Terminal (which would carry stale screen content into the new tab).
+  const [terminalsByTab, setTerminalsByTab] = useState<
+    Map<string, { terminal: Terminal; element: HTMLDivElement }>
+  >(() => new Map())
+  const activeEntry = activeId === null ? undefined : terminalsByTab.get(activeId)
+  const activeTerminal = activeEntry?.terminal ?? null
+  const terminalElement = activeEntry?.element ?? null
   const [pendingPrompt, setPendingPrompt] = useState<PendingPrompt | null>(null)
+  // Keep the late-binding terminalRef pointed at the active tab's xterm so
+  // AskAi (which reads scrollback) always sees the right one. Refresh in
+  // a passive effect — never write a ref during render.
+  useEffect(() => {
+    terminalRef.current = activeTerminal
+  }, [activeTerminal])
 
   // Wire the native "Tab" menu bar items (Ctrl+Tab / Ctrl+Shift+Tab) to
   // our tab store. The Rust side emits these events; the OS catches the
@@ -147,17 +157,27 @@ function DesktopTerminalPage() {
     }
   }, [hostMenuOpen])
 
-  // Stable handler so XtermPane's terminal lifecycle effect isn't torn
-  // down on every parent re-render. The setters from useState are
-  // already stable, so empty deps are correct.
-  const handleTerminalReady = useCallback((terminal: Terminal, element: HTMLDivElement) => {
-    setActiveTerminal(terminal)
-    setTerminalElement(element)
-    return () => {
-      setActiveTerminal(null)
-      setTerminalElement(null)
-    }
-  }, [])
+  // One ready handler per tab id — registers the tab's terminal in the
+  // map on mount, removes it on unmount. Returns a stable function from a
+  // memoized factory so XtermPane's lifecycle effect isn't torn down by a
+  // changing handler reference.
+  const makeTerminalReadyHandler = useCallback(
+    (tabId: string) => (terminal: Terminal, element: HTMLDivElement) => {
+      setTerminalsByTab((prev) => {
+        const next = new Map(prev)
+        next.set(tabId, { terminal, element })
+        return next
+      })
+      return () => {
+        setTerminalsByTab((prev) => {
+          const next = new Map(prev)
+          next.delete(tabId)
+          return next
+        })
+      }
+    },
+    [],
+  )
 
   // Mirror live state into refs so the auto-open effect can read the
   // newest tabs and the freshest addHostTab without listing them as deps
@@ -457,11 +477,26 @@ function DesktopTerminalPage() {
           </div>
           <div className="flex min-h-0 flex-1">
             <div className="relative flex-1 min-h-0 overflow-hidden">
-              <XtermPane
-                session={active.session}
-                terminalRef={terminalRef}
-                onTerminalReady={handleTerminalReady}
-              />
+              {/* One Terminal per tab, kept mounted across switches so each
+                  tab keeps its own scrollback and current screen state.
+                  Inactive tabs are hidden via CSS rather than unmounted —
+                  unmounting would dispose the xterm and lose buffer. */}
+              {tabs.map((tab) => {
+                const isTabActive = tab.id === active.id
+                return (
+                  <div
+                    key={tab.id}
+                    className={cn('absolute inset-0', isTabActive ? 'block' : 'hidden')}
+                    aria-hidden={!isTabActive}
+                  >
+                    <XtermPane
+                      session={tab.session}
+                      isActive={isTabActive}
+                      onTerminalReady={makeTerminalReadyHandler(tab.id)}
+                    />
+                  </div>
+                )
+              })}
               {canUseAi && activeTerminal !== null && (
                 <InlineSuggestion terminal={activeTerminal} session={active.session} />
               )}
