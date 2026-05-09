@@ -5,8 +5,14 @@ members = [
     "crates/trominal-core",
     "crates/trominal-helper",
 ]
-# `packages/crypto/parity` is intentionally excluded — it's a standalone cross-
-# platform fixture verifier with its own pinned deps that runs only in CI.
+# `packages/crypto/parity` is a standalone cross-platform fixture verifier
+# with its own pinned deps that runs only in CI. Cargo auto-includes any
+# nested `Cargo.toml` it finds under the workspace root unless that path
+# is explicitly listed in `exclude`, so listing it here keeps `cargo test
+# --manifest-path packages/crypto/parity/Cargo.toml` (the parity job)
+# happy without dragging the crate into the main `cargo check --workspace`
+# lockfile.
+exclude = ["packages/crypto/parity"]
 
 [workspace.package]
 version = "0.1.0"
