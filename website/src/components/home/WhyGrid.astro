@@ -1,0 +1,64 @@
+---
+import Icon from '@/components/chrome/Icon.astro'
+
+const features = [
+  {
+    icon: 'server',
+    title: 'Self-hosted by default',
+    body: 'Run the Trominal server in a Docker container next to your other infra. Your hosts, keys, and snippets never leave your network.',
+  },
+  {
+    icon: 'users',
+    title: 'Team-first sync',
+    body: 'Share host configs and snippets across the team without copy-pasting <span class="mono">~/.ssh/config</span>. Role-based access, audit logs, the works.',
+  },
+  {
+    icon: 'sparkles',
+    title: 'AI that respects context',
+    body: 'Inline ghost-text suggestions trained on your shell history — running fully on-device or against your own LLM endpoint. No prompts shipped to vendors.',
+  },
+  {
+    icon: 'keyboard',
+    title: 'Mobile that doesn\'t suck',
+    body: 'A custom keyboard purpose-built for SSH. Pipe, tilde, ctrl, escape — all one tap away. Snippets and AI are right above the keys.',
+  },
+  {
+    icon: 'lock',
+    title: 'End-to-end encrypted vault',
+    body: 'Identities and secrets are sealed with a master password before they hit the wire. Even your server admin can\'t read them.',
+  },
+  {
+    icon: 'git',
+    title: 'Open source, AGPL-3.0',
+    body: 'Audit it, fork it, patch it. We ship binaries, but the truth is on GitHub. No EULA, no rug-pulls, no enterprise tier.',
+  },
+] as const
+---
+
+<section class="section">
+  <div class="wrap">
+    <div class="sec-head" style="text-align:center;margin-left:auto;margin-right:auto">
+      <span class="eyebrow">Why Trominal</span>
+      <h2 style="margin:14px auto 0">Built for the way infra teams actually work.</h2>
+      <p style="margin:14px auto 0">
+        Closed-source SSH clients hold your hosts hostage. Trominal flips that — your data sits
+        on your server, your team shares one source of truth, and every line of code is on
+        GitHub.
+      </p>
+    </div>
+
+    <div class="feature-grid">
+      {
+        features.map((f) => (
+          <div class="feature">
+            <div class="icon">
+              <Icon name={f.icon} size={18} />
+            </div>
+            <h3>{f.title}</h3>
+            <p set:html={f.body} />
+          </div>
+        ))
+      }
+    </div>
+  </div>
+</section>

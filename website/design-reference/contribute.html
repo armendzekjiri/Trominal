@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<title>Contribute — Trominal</title>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet"/>
+<link rel="stylesheet" href="site.css"/>
+</head>
+<body>
+<div data-header="contribute"></div>
+
+<header class="page-head">
+  <div class="wrap">
+    <span class="eyebrow"><span class="dot"></span>Contribute</span>
+    <h1>Trominal is built by people who use it.</h1>
+    <p class="lede">Whether you're filing your first bug report or rewriting the SSH transport, there's a way in. Here's a map.</p>
+    <div style="margin-top:24px;display:flex;gap:10px;flex-wrap:wrap">
+      <a href="https://github.com/trominal/trominal" target="_blank" rel="noopener" class="btn btn-primary"><span data-icon="github" data-size="14"></span> Browse the repo</a>
+      <a href="#good-first-issues" class="btn btn-secondary">Good first issues</a>
+    </div>
+  </div>
+</header>
+
+<!-- Stats strip -->
+<section style="padding:36px 0;border-bottom:1px solid var(--line)">
+  <div class="wrap">
+    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:32px;text-align:center">
+      <div><div style="font-family:var(--mono);font-size:32px;color:var(--accent);font-weight:600">8.4k</div><div class="muted" style="font-size:12px;margin-top:4px">stars</div></div>
+      <div><div style="font-family:var(--mono);font-size:32px;color:var(--ink);font-weight:600">412</div><div class="muted" style="font-size:12px;margin-top:4px">contributors</div></div>
+      <div><div style="font-family:var(--mono);font-size:32px;color:var(--ink);font-weight:600">2.1k</div><div class="muted" style="font-size:12px;margin-top:4px">PRs merged</div></div>
+      <div><div style="font-family:var(--mono);font-size:32px;color:var(--ink);font-weight:600">63</div><div class="muted" style="font-size:12px;margin-top:4px">releases</div></div>
+    </div>
+  </div>
+</section>
+
+<!-- Ways to help -->
+<section class="section flush">
+  <div class="wrap">
+    <div class="sec-head">
+      <span class="eyebrow">Ways in</span>
+      <h2>Pick a depth.</h2>
+    </div>
+    <div class="feature-grid">
+      <div class="feature">
+        <div class="icon"><span data-icon="bolt" data-size="18"></span></div>
+        <h3>Report a bug</h3>
+        <p>Found something weird? Open a GitHub issue using the bug template. Include OS, app version (<span class="mono">trominal --version</span>), and a repro.</p>
+        <a href="https://github.com/trominal/trominal/issues/new?template=bug.yml" target="_blank" rel="noopener" class="btn btn-secondary" style="margin-top:14px;height:32px;padding:0 12px;font-size:13px">Open bug report <span data-icon="arrow_right" data-size="12"></span></a>
+      </div>
+      <div class="feature">
+        <div class="icon"><span data-icon="book" data-size="18"></span></div>
+        <h3>Improve the docs</h3>
+        <p>Typo, broken example, missing platform note? Docs live in <span class="mono">/docs</span>. Edit on GitHub and PR — no local setup needed.</p>
+        <a href="https://github.com/trominal/trominal/tree/main/docs" target="_blank" rel="noopener" class="btn btn-secondary" style="margin-top:14px;height:32px;padding:0 12px;font-size:13px">Edit docs <span data-icon="arrow_right" data-size="12"></span></a>
+      </div>
+      <div class="feature">
+        <div class="icon"><span data-icon="code" data-size="18"></span></div>
+        <h3>Write code</h3>
+        <p>Server is Go. Desktop is Tauri + TypeScript. iOS is Swift. Pick your stack, run the dev loop, ship a PR. No CLA — just sign the DCO.</p>
+        <a href="#dev-setup" class="btn btn-secondary" style="margin-top:14px;height:32px;padding:0 12px;font-size:13px">Dev setup <span data-icon="arrow_right" data-size="12"></span></a>
+      </div>
+      <div class="feature">
+        <div class="icon"><span data-icon="globe" data-size="18"></span></div>
+        <h3>Translate</h3>
+        <p>Localization lives in Crowdin. We currently ship 14 languages. Add a new one or proofread an existing — every string improves.</p>
+        <a href="#" class="btn btn-secondary" style="margin-top:14px;height:32px;padding:0 12px;font-size:13px">Open Crowdin <span data-icon="arrow_right" data-size="12"></span></a>
+      </div>
+      <div class="feature">
+        <div class="icon"><span data-icon="users" data-size="18"></span></div>
+        <h3>Help in the community</h3>
+        <p>Answer questions in Discussions or Discord. Triage issues. Reproduce bugs. Welcome newcomers. This is at least half of what keeps the project healthy.</p>
+        <a href="#" class="btn btn-secondary" style="margin-top:14px;height:32px;padding:0 12px;font-size:13px">Join Discord <span data-icon="arrow_right" data-size="12"></span></a>
+      </div>
+      <div class="feature">
+        <div class="icon"><span data-icon="heart" data-size="18"></span></div>
+        <h3>Sponsor</h3>
+        <p>Trominal has zero VC and zero ads. Maintainer time is funded entirely by GitHub Sponsors and OpenCollective. $5/mo keeps the lights on.</p>
+        <a href="#" class="btn btn-secondary" style="margin-top:14px;height:32px;padding:0 12px;font-size:13px">Sponsor <span data-icon="arrow_right" data-size="12"></span></a>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Dev setup -->
+<section class="section" id="dev-setup">
+  <div class="wrap">
+    <div class="sec-head">
+      <span class="eyebrow">Dev setup</span>
+      <h2>From clone to running app, in three commands.</h2>
+      <p>Fully reproducible — every dep is pinned in <span class="mono">flake.nix</span> and <span class="mono">.tool-versions</span>.</p>
+    </div>
+
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:18px">
+      <div class="terminal">
+        <div class="head"><div class="lights"><span style="background:#f17a7a"></span><span style="background:#e0b870"></span><span style="background:#7dd3a0"></span></div><span class="mono">trominal/server</span></div>
+        <div class="body">
+          <div class="row"><span class="term-c-dim"># Server (Go 1.22)</span></div>
+          <div class="row"><span class="term-prompt">$</span> git clone github.com/trominal/trominal</div>
+          <div class="row"><span class="term-prompt">$</span> <span class="term-c-green">cd</span> trominal/server</div>
+          <div class="row"><span class="term-prompt">$</span> make dev</div>
+          <div class="row" style="color:var(--accent)">→ trominal-server :8443 · hot reload on</div>
+        </div>
+      </div>
+      <div class="terminal">
+        <div class="head"><div class="lights"><span style="background:#f17a7a"></span><span style="background:#e0b870"></span><span style="background:#7dd3a0"></span></div><span class="mono">trominal/desktop</span></div>
+        <div class="body">
+          <div class="row"><span class="term-c-dim"># Desktop (Tauri + Vite)</span></div>
+          <div class="row"><span class="term-prompt">$</span> <span class="term-c-green">cd</span> ../desktop</div>
+          <div class="row"><span class="term-prompt">$</span> pnpm install</div>
+          <div class="row"><span class="term-prompt">$</span> pnpm tauri dev</div>
+          <div class="row" style="color:var(--accent)">→ vite :5173 · tauri window opens</div>
+        </div>
+      </div>
+    </div>
+
+    <div style="margin-top:32px;background:var(--bg-3);border:1px solid var(--line);border-radius:12px;overflow:hidden">
+      <table class="t" style="border:none;border-radius:0">
+        <thead>
+          <tr>
+            <th>Component</th>
+            <th>Stack</th>
+            <th>Where</th>
+            <th>Difficulty</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr><td><strong>Server</strong></td><td class="mono">Go 1.22 · sqlite · gRPC</td><td class="mono">/server</td><td><span class="tag warn">moderate</span></td></tr>
+          <tr><td><strong>Desktop</strong></td><td class="mono">Tauri · TS · React · WGPU</td><td class="mono">/desktop</td><td><span class="tag warn">moderate</span></td></tr>
+          <tr><td><strong>iOS</strong></td><td class="mono">Swift · SwiftUI · Network.framework</td><td class="mono">/ios</td><td><span class="tag" style="background:rgba(241,122,122,0.1);border-color:rgba(241,122,122,0.3);color:var(--danger)">deep</span></td></tr>
+          <tr><td><strong>CLI</strong></td><td class="mono">Go 1.22</td><td class="mono">/cli</td><td><span class="tag accent">easy</span></td></tr>
+          <tr><td><strong>Docs</strong></td><td class="mono">Markdown · Astro</td><td class="mono">/docs</td><td><span class="tag accent">easy</span></td></tr>
+          <tr><td><strong>Website</strong></td><td class="mono">Plain HTML · Astro</td><td class="mono">/site</td><td><span class="tag accent">easy</span></td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<!-- Good first issues -->
+<section class="section" id="good-first-issues">
+  <div class="wrap">
+    <div class="sec-head">
+      <span class="eyebrow">Onboarding ramps</span>
+      <h2>Good first issues, hand-picked.</h2>
+      <p>Tagged <span class="mono">good-first-issue</span> on GitHub. Maintainers have already scoped them and will help you land the PR.</p>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:8px">
+      <a href="#" class="card hover" style="display:flex;align-items:center;gap:14px;text-decoration:none">
+        <span class="tag accent" style="font-family:var(--mono)">#1842</span>
+        <div style="flex:1"><div style="color:var(--ink);font-weight:500">Add <span class="mono">--no-color</span> flag to <span class="mono">trominal pair</span></div><div class="muted" style="font-size:13px;margin-top:2px">CLI · Go · ~30 lines · easy</div></div>
+        <span class="tag">good-first-issue</span>
+        <span data-icon="arrow_right" data-size="14" style="color:var(--ink-3)"></span>
+      </a>
+      <a href="#" class="card hover" style="display:flex;align-items:center;gap:14px;text-decoration:none">
+        <span class="tag accent" style="font-family:var(--mono)">#1903</span>
+        <div style="flex:1"><div style="color:var(--ink);font-weight:500">Snippet variables don't escape backticks correctly</div><div class="muted" style="font-size:13px;margin-top:2px">Desktop · TS · ~80 lines · moderate</div></div>
+        <span class="tag">good-first-issue</span>
+        <span data-icon="arrow_right" data-size="14" style="color:var(--ink-3)"></span>
+      </a>
+      <a href="#" class="card hover" style="display:flex;align-items:center;gap:14px;text-decoration:none">
+        <span class="tag accent" style="font-family:var(--mono)">#1925</span>
+        <div style="flex:1"><div style="color:var(--ink);font-weight:500">SFTP browser shows wrong icon for symlinks to dirs</div><div class="muted" style="font-size:13px;margin-top:2px">Desktop · TS · ~10 lines · easy</div></div>
+        <span class="tag">good-first-issue</span>
+        <span data-icon="arrow_right" data-size="14" style="color:var(--ink-3)"></span>
+      </a>
+      <a href="#" class="card hover" style="display:flex;align-items:center;gap:14px;text-decoration:none">
+        <span class="tag accent" style="font-family:var(--mono)">#1968</span>
+        <div style="flex:1"><div style="color:var(--ink);font-weight:500">Document the audit-log retention setting in <span class="mono">trominal.toml</span></div><div class="muted" style="font-size:13px;margin-top:2px">Docs · Markdown · ~1 page · easy</div></div>
+        <span class="tag">good-first-issue</span>
+        <span data-icon="arrow_right" data-size="14" style="color:var(--ink-3)"></span>
+      </a>
+      <a href="#" class="card hover" style="display:flex;align-items:center;gap:14px;text-decoration:none">
+        <span class="tag accent" style="font-family:var(--mono)">#2011</span>
+        <div style="flex:1"><div style="color:var(--ink);font-weight:500">Mobile keyboard: long-press <span class="mono">-</span> for <span class="mono">--</span> shortcut</div><div class="muted" style="font-size:13px;margin-top:2px">iOS · Swift · ~40 lines · moderate</div></div>
+        <span class="tag">good-first-issue</span>
+        <span data-icon="arrow_right" data-size="14" style="color:var(--ink-3)"></span>
+      </a>
+    </div>
+  </div>
+</section>
+
+<!-- Code of Conduct -->
+<section class="section">
+  <div class="wrap">
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:18px">
+      <div class="card">
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px"><span style="width:32px;height:32px;border-radius:8px;background:var(--accent-soft);color:var(--accent);display:flex;align-items:center;justify-content:center" data-icon="users" data-size="16"></span><h3>Code of Conduct</h3></div>
+        <p style="color:var(--ink-3);font-size:14px">We follow the Contributor Covenant 2.1. Bigotry, harassment, and bad-faith engagement get you banned. Disagreement and strong opinions are fine and welcome.</p>
+        <a href="#" style="color:var(--accent);font-size:14px;margin-top:14px;display:inline-flex;align-items:center;gap:6px">Read the full text <span data-icon="arrow_right" data-size="13"></span></a>
+      </div>
+      <div class="card">
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px"><span style="width:32px;height:32px;border-radius:8px;background:var(--accent-soft);color:var(--accent);display:flex;align-items:center;justify-content:center" data-icon="check" data-size="16"></span><h3>Sign-off (DCO)</h3></div>
+        <p style="color:var(--ink-3);font-size:14px">No CLA. We use the Developer Certificate of Origin — sign your commits with <span class="mono">git commit -s</span> to confirm you have the right to contribute the code.</p>
+        <a href="#" style="color:var(--accent);font-size:14px;margin-top:14px;display:inline-flex;align-items:center;gap:6px">DCO explainer <span data-icon="arrow_right" data-size="13"></span></a>
+      </div>
+    </div>
+  </div>
+</section>
+
+<div data-footer></div>
+<script src="chrome.js"></script>
+</body>
+</html>

@@ -1,0 +1,30 @@
+{
+  "name": "@trominal/website",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Trominal marketing site and documentation (trominal.app).",
+  "license": "AGPL-3.0-only",
+  "scripts": {
+    "dev": "astro dev",
+    "build": "astro build",
+    "preview": "astro preview",
+    "astro": "astro",
+    "typecheck": "astro check"
+  },
+  "dependencies": {
+    "@astrojs/cloudflare": "^11.0.4",
+    "@astrojs/mdx": "^3.1.9",
+    "@astrojs/tailwind": "^5.1.4",
+    "@fontsource/inter": "^5.1.1",
+    "@fontsource/jetbrains-mono": "^5.1.2",
+    "astro": "^4.16.18",
+    "marked": "^14.1.4",
+    "tailwindcss": "^3.4.17"
+  },
+  "devDependencies": {
+    "@astrojs/check": "^0.9.9",
+    "@types/node": "^20.17.10",
+    "typescript": "^5.7.2"
+  }
+}

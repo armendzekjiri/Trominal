@@ -1,0 +1,19 @@
+---
+import Page from '@/layouts/Page.astro'
+import Hero from '@/components/home/Hero.astro'
+import WhyGrid from '@/components/home/WhyGrid.astro'
+import AppShowcase from '@/components/home/AppShowcase.astro'
+import InstallTease from '@/components/home/InstallTease.astro'
+import BuiltInTheOpen from '@/components/home/BuiltInTheOpen.astro'
+import CTA from '@/components/home/CTA.astro'
+import { SITE } from '@/lib/site'
+---
+
+<Page title={SITE.name} active="home">
+  <Hero />
+  <WhyGrid />
+  <AppShowcase />
+  <InstallTease />
+  <BuiltInTheOpen />
+  <CTA />
+</Page>

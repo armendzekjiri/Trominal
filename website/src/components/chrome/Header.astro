@@ -1,0 +1,45 @@
+---
+import Logo from './Logo.astro'
+import Icon from './Icon.astro'
+import StarCount from './StarCount.astro'
+import { NAV_ITEMS, SITE, type NavKey } from '@/lib/site'
+
+interface Props {
+  active?: NavKey
+}
+
+const { active } = Astro.props
+---
+
+<header class="site-header">
+  <div class="wrap">
+    <Logo />
+    <nav class="nav">
+      {
+        NAV_ITEMS.map((item) => {
+          const key = item.href.replace(/^\//, '') as NavKey
+          const isActive =
+            active === key || (active === 'docs' && item.href === '/docs')
+          return (
+            <a href={item.href} class={isActive ? 'active' : ''}>
+              {item.label}
+            </a>
+          )
+        })
+      }
+    </nav>
+    <div class="cta-row">
+      <a
+        href={SITE.github.url}
+        class="btn btn-ghost"
+        target="_blank"
+        rel="noopener"
+        aria-label="View on GitHub"
+      >
+        <Icon name="github" size={14} />
+        <StarCount class="mono" />
+      </a>
+      <a href="/install" class="btn btn-primary">Install</a>
+    </div>
+  </div>
+</header>

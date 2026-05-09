@@ -1,0 +1,124 @@
+---
+import Page from '@/layouts/Page.astro'
+import Icon from '@/components/chrome/Icon.astro'
+import { SITE } from '@/lib/site'
+---
+
+<Page
+  title="Contact"
+  description="Reach out about Trominal — questions, feedback, security disclosures."
+  active="contact"
+>
+  <header class="page-head">
+    <div class="wrap">
+      <span class="eyebrow"><span class="dot"></span>Contact</span>
+      <h1>Get in touch.</h1>
+      <p class="lede">
+        Trominal is small and direct — the same people writing code answer the email.
+      </p>
+    </div>
+  </header>
+
+  <section class="section flush">
+    <div class="wrap">
+      <div
+        style="display:grid;grid-template-columns:repeat(3,1fr);gap:18px"
+        class="contact-grid"
+      >
+        <div class="card" style="padding:24px">
+          <div
+            style="width:36px;height:36px;border-radius:8px;background:var(--accent-soft);border:1px solid var(--accent-line);display:flex;align-items:center;justify-content:center;color:var(--accent);margin-bottom:14px"
+          >
+            <Icon name="mail" size={18} />
+          </div>
+          <h3>General contact</h3>
+          <p style="margin-top:8px;color:var(--ink-3);font-size:14px">
+            Product questions, partnerships, anything else.
+          </p>
+          <a
+            href={`mailto:${SITE.contactEmail}`}
+            class="mono"
+            style="display:inline-block;margin-top:14px;font-size:14px;color:var(--accent);border-bottom:1px solid var(--accent-line)"
+          >
+            {SITE.contactEmail}
+          </a>
+        </div>
+
+        <div class="card" style="padding:24px">
+          <div
+            style="width:36px;height:36px;border-radius:8px;background:var(--accent-soft);border:1px solid var(--accent-line);display:flex;align-items:center;justify-content:center;color:var(--accent);margin-bottom:14px"
+          >
+            <Icon name="users" size={18} />
+          </div>
+          <h3>Discussions</h3>
+          <p style="margin-top:8px;color:var(--ink-3);font-size:14px">
+            Open-ended questions, ideas, show-and-tell. The fastest way to reach maintainers
+            and the wider community.
+          </p>
+          <a
+            href={SITE.github.discussionsUrl}
+            target="_blank"
+            rel="noopener"
+            class="btn btn-secondary"
+            style="margin-top:14px"
+          >
+            <Icon name="github" size={14} /> GitHub Discussions
+          </a>
+        </div>
+
+        <div class="card" style="padding:24px">
+          <div
+            style="width:36px;height:36px;border-radius:8px;background:var(--accent-soft);border:1px solid var(--accent-line);display:flex;align-items:center;justify-content:center;color:var(--accent);margin-bottom:14px"
+          >
+            <Icon name="bolt" size={18} />
+          </div>
+          <h3>Bugs &amp; feature requests</h3>
+          <p style="margin-top:8px;color:var(--ink-3);font-size:14px">
+            File them on GitHub Issues so they're tracked publicly and don't get lost in an
+            inbox.
+          </p>
+          <a
+            href={SITE.github.issuesUrl}
+            target="_blank"
+            rel="noopener"
+            class="btn btn-secondary"
+            style="margin-top:14px"
+          >
+            <Icon name="github" size={14} /> Open an issue
+          </a>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="section">
+    <div class="wrap">
+      <div
+        class="card"
+        style="padding:32px;border-color:rgba(224,184,112,0.3);background:rgba(224,184,112,0.04)"
+      >
+        <div
+          style="display:flex;align-items:center;gap:10px;color:var(--warn);margin-bottom:12px"
+        >
+          <Icon name="shield" size={16} />
+          <strong style="font-weight:500;color:var(--warn)">Security disclosure</strong>
+        </div>
+        <p style="color:var(--ink-2);font-size:15px;line-height:1.6;max-width:680px">
+          Found a vulnerability? <strong style="color:var(--ink)">Don't open a public issue.</strong>
+          Email <a href={`mailto:${SITE.contactEmail}`} class="mono" style="color:var(--accent)">
+          {SITE.contactEmail}</a> with the details, or follow our coordinated disclosure
+          process documented in <a href="/security" style="color:var(--accent)">SECURITY.md</a>.
+          We'll acknowledge within 72 hours.
+        </p>
+      </div>
+    </div>
+  </section>
+</Page>
+
+<style>
+  @media (max-width: 900px) {
+    .contact-grid {
+      grid-template-columns: 1fr !important;
+    }
+  }
+</style>

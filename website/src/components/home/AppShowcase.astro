@@ -1,0 +1,269 @@
+---
+import Icon from '@/components/chrome/Icon.astro'
+---
+
+<section class="section">
+  <div class="wrap">
+    <div class="sec-head">
+      <span class="eyebrow">The terminal, reimagined</span>
+      <h2>Hosts, snippets, files, tunnels — one window, one keyboard shortcut.</h2>
+      <p>
+        Tabs and splits you'd expect, plus a sidebar that actually understands your
+        infrastructure: grouped by environment, color-coded by tags, searchable by anything.
+      </p>
+    </div>
+
+    <div
+      style="border-radius:14px;overflow:hidden;border:1px solid var(--line);background:#0a0907;box-shadow:0 40px 100px rgba(0,0,0,0.5)"
+    >
+      <div
+        style="height:38px;background:#15140f;border-bottom:1px solid var(--line);display:flex;align-items:center;padding:0 14px;gap:10px;font-family:var(--mono);font-size:12px;color:var(--ink-3)"
+      >
+        <div style="display:flex;gap:6px">
+          <span style="width:11px;height:11px;border-radius:50%;background:#f17a7a"></span>
+          <span style="width:11px;height:11px;border-radius:50%;background:#e0b870"></span>
+          <span style="width:11px;height:11px;border-radius:50%;background:#7dd3a0"></span>
+        </div>
+        <span style="margin-left:auto;color:var(--ink-2)">
+          <span class="mono" style="color:var(--accent)">&gt;</span> trominal · acme.internal
+        </span>
+        <span style="margin-left:auto"></span>
+      </div>
+      <div
+        style="display:grid;grid-template-columns:240px 1fr 280px;height:520px"
+        class="showcase-grid"
+      >
+        <!-- sidebar -->
+        <aside
+          style="background:#15140f;border-right:1px solid var(--line);padding:14px 10px;overflow:hidden;font-size:13px"
+        >
+          <div
+            style="display:flex;align-items:center;gap:8px;padding:6px 8px;background:rgba(255,255,255,0.04);border-radius:6px;color:var(--ink-3);margin-bottom:14px"
+          >
+            <Icon name="search" size={13} />
+            <span style="font-size:12px">Search hosts…</span>
+            <span class="kbd" style="margin-left:auto">⌘K</span>
+          </div>
+          <div
+            style="font-family:var(--mono);font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-4);padding:8px 8px 6px;display:flex;align-items:center;gap:6px"
+          >
+            <span style="width:5px;height:5px;border-radius:50%;background:#f17a7a"></span>
+            Production
+          </div>
+          <div
+            style="display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:5px;background:var(--accent-soft);color:var(--ink);border-left:2px solid var(--accent)"
+          >
+            <span style="width:6px;height:6px;border-radius:50%;background:var(--accent)"></span>
+            <span class="mono" style="font-size:12px">web-01.prod</span>
+          </div>
+          <div
+            style="display:flex;align-items:center;gap:8px;padding:6px 8px;color:var(--ink-3)"
+          >
+            <span style="width:6px;height:6px;border-radius:50%;background:var(--accent)"></span>
+            <span class="mono" style="font-size:12px">web-02.prod</span>
+          </div>
+          <div
+            style="display:flex;align-items:center;gap:8px;padding:6px 8px;color:var(--ink-3)"
+          >
+            <span style="width:6px;height:6px;border-radius:50%;background:var(--ink-5)"></span>
+            <span class="mono" style="font-size:12px">db-primary</span>
+          </div>
+          <div
+            style="font-family:var(--mono);font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-4);padding:14px 8px 6px;display:flex;align-items:center;gap:6px"
+          >
+            <span style="width:5px;height:5px;border-radius:50%;background:#e0b870"></span>
+            Staging
+          </div>
+          <div
+            style="display:flex;align-items:center;gap:8px;padding:6px 8px;color:var(--ink-3)"
+          >
+            <span style="width:6px;height:6px;border-radius:50%;background:var(--ink-5)"></span>
+            <span class="mono" style="font-size:12px">stage-app</span>
+          </div>
+          <div
+            style="display:flex;align-items:center;gap:8px;padding:6px 8px;color:#f17a7a"
+          >
+            <span style="width:6px;height:6px;border-radius:50%;background:#f17a7a"></span>
+            <span class="mono" style="font-size:12px">stage-worker</span>
+          </div>
+          <div
+            style="font-family:var(--mono);font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-4);padding:14px 8px 6px;display:flex;align-items:center;gap:6px"
+          >
+            <span style="width:5px;height:5px;border-radius:50%;background:#c897e0"></span>
+            Personal
+          </div>
+          <div
+            style="display:flex;align-items:center;gap:8px;padding:6px 8px;color:var(--ink-3)"
+          >
+            <span style="width:6px;height:6px;border-radius:50%;background:var(--ink-5)"></span>
+            <span class="mono" style="font-size:12px">homelab-nas</span>
+          </div>
+        </aside>
+
+        <!-- terminal -->
+        <main
+          style="background:#0a0907;display:flex;flex-direction:column;overflow:hidden"
+        >
+          <div
+            style="display:flex;align-items:center;gap:6px;padding:8px 12px;border-bottom:1px solid var(--line);background:#15140f"
+          >
+            <div
+              style="display:flex;align-items:center;gap:6px;padding:4px 10px;background:#0a0907;border:1px solid var(--accent-line);border-radius:5px;font-family:var(--mono);font-size:11px"
+            >
+              <span style="width:5px;height:5px;border-radius:50%;background:var(--accent)"
+              ></span>web-01.prod
+            </div>
+            <div
+              style="display:flex;align-items:center;gap:6px;padding:4px 10px;border:1px solid var(--line);border-radius:5px;font-family:var(--mono);font-size:11px;color:var(--ink-3)"
+            >
+              <span style="width:5px;height:5px;border-radius:50%;background:var(--accent)"
+              ></span>db-primary
+            </div>
+            <div
+              style="display:flex;align-items:center;gap:6px;padding:4px 10px;border:1px solid var(--line);border-radius:5px;font-family:var(--mono);font-size:11px;color:var(--ink-3)"
+            >
+              <span style="width:5px;height:5px;border-radius:50%;background:#e0b870"
+              ></span>k8s-master
+            </div>
+            <span
+              style="width:24px;height:24px;display:flex;align-items:center;justify-content:center;border-radius:5px;color:var(--ink-3)"
+              >+</span
+            >
+          </div>
+          <div
+            class="terminal"
+            style="border:none;border-radius:0;background:#0a0907;flex:1"
+          >
+            <div class="body" style="padding:14px 16px">
+              <div class="row">
+                <span class="term-prompt">deploy@web-01:~$</span>
+                <span class="term-c-green">cd</span> /srv/app &amp;&amp;
+                <span class="term-c-green">git</span>
+                <span class="term-c-cyan">log</span> --oneline -5
+              </div>
+              <div class="row">
+                <span class="term-c-yellow">a4f2c1e</span> Fix postgres connection pool
+                exhaustion
+              </div>
+              <div class="row">
+                <span class="term-c-yellow">b1d8e22</span> Add health endpoint for k8s
+                readiness
+              </div>
+              <div class="row">
+                <span class="term-c-yellow">c7e3a91</span> Bump rails 7.2 → 7.2.2
+              </div>
+              <div class="row">
+                <span class="term-c-yellow">d22f44a</span> Reduce session payload size
+              </div>
+              <div class="row">
+                <span class="term-c-yellow">e90c876</span> Cache user permissions for 60s
+              </div>
+              <div class="row">&nbsp;</div>
+              <div class="row">
+                <span class="term-prompt">deploy@web-01:/srv/app$</span>
+                <span class="term-c-green">kubectl</span> get pods -n production
+              </div>
+              <div class="row">
+                <span class="term-c-dim">
+                  NAME                       READY  STATUS    RESTARTS  AGE
+                </span>
+              </div>
+              <div class="row">
+                api-7d4f8c9-x2k1q          1/1    <span class="term-c-green">Running</span>
+                  0         4d
+              </div>
+              <div class="row">
+                api-7d4f8c9-m9p2r          1/1    <span class="term-c-green">Running</span>
+                  0         4d
+              </div>
+              <div class="row">
+                worker-6c8b1a-z4j8n        1/1    <span class="term-c-green">Running</span>
+                  2         2h
+              </div>
+              <div class="row">
+                worker-6c8b1a-q1m4p        0/1
+                <span class="term-c-red">CrashLoopBackOff</span> 8 12m
+              </div>
+              <div class="row">&nbsp;</div>
+              <div class="row" style="display:flex;align-items:center">
+                <span class="term-prompt">deploy@web-01:/srv/app$</span>&nbsp;
+                <span
+                  style="display:inline-block;width:7px;height:13px;background:var(--accent);animation:blink 1s step-end infinite"
+                ></span>
+              </div>
+            </div>
+          </div>
+        </main>
+
+        <!-- AI panel -->
+        <aside
+          style="background:#15140f;border-left:1px solid var(--line);padding:14px;overflow:hidden"
+        >
+          <div
+            style="display:flex;align-items:center;gap:6px;font-family:var(--mono);font-size:11px;color:var(--accent);text-transform:uppercase;letter-spacing:.1em;margin-bottom:12px"
+          >
+            <Icon name="sparkles" size={12} /> Trominal AI
+          </div>
+          <div
+            style="background:rgba(125,211,160,0.06);border:1px solid var(--accent-line);border-radius:8px;padding:10px;margin-bottom:8px;font-size:13px;color:var(--ink-2);line-height:1.5"
+          >
+            One worker pod is crash-looping. Tail its logs to find the cause:
+          </div>
+          <div
+            style="background:#0a0907;border:1px solid var(--line);border-radius:6px;padding:8px 10px;font-family:var(--mono);font-size:11.5px;color:var(--ink-2);display:flex;align-items:flex-start;gap:8px"
+          >
+            <span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">
+              <span class="term-c-green">kubectl</span> logs -n production worker-6c8b1a-q1m4p
+              --previous
+            </span>
+          </div>
+          <div style="margin-top:6px;display:flex;gap:6px">
+            <span class="kbd">⏎</span>
+            <span style="font-size:11px;color:var(--ink-3)">run</span>
+            <span class="kbd" style="margin-left:8px">⌘C</span>
+            <span style="font-size:11px;color:var(--ink-3)">copy</span>
+          </div>
+          <hr class="rule" style="margin:18px 0" />
+          <div
+            style="font-family:var(--mono);font-size:11px;color:var(--ink-4);text-transform:uppercase;letter-spacing:.1em;margin-bottom:8px"
+          >
+            Snippets
+          </div>
+          <div style="display:flex;flex-direction:column;gap:6px">
+            <div
+              style="background:var(--bg-3);border:1px solid var(--line);border-radius:6px;padding:8px 10px;font-family:var(--mono);font-size:11.5px;color:var(--ink-2)"
+            >
+              k8s · pod logs
+            </div>
+            <div
+              style="background:var(--bg-3);border:1px solid var(--line);border-radius:6px;padding:8px 10px;font-family:var(--mono);font-size:11.5px;color:var(--ink-2)"
+            >
+              psql · active sessions
+            </div>
+            <div
+              style="background:var(--bg-3);border:1px solid var(--line);border-radius:6px;padding:8px 10px;font-family:var(--mono);font-size:11.5px;color:var(--ink-2)"
+            >
+              nginx · reload
+            </div>
+          </div>
+        </aside>
+      </div>
+    </div>
+    <p class="muted" style="text-align:center;font-size:13px;margin-top:18px">
+      A representative view — see <a href="/screenshots">real screenshots</a> as Trominal ships features.
+    </p>
+  </div>
+</section>
+
+<style>
+  @media (max-width: 900px) {
+    .showcase-grid {
+      grid-template-columns: 1fr !important;
+      height: auto !important;
+    }
+    .showcase-grid > aside,
+    .showcase-grid > main {
+      height: auto;
+    }
+  }
+</style>

@@ -1,0 +1,247 @@
+---
+import Page from '@/layouts/Page.astro'
+import Icon from '@/components/chrome/Icon.astro'
+import { fetchGithubStats, FALLBACK_STATS } from '@/lib/github'
+import { SITE } from '@/lib/site'
+
+let stats = FALLBACK_STATS
+try {
+  stats = await fetchGithubStats()
+} catch {
+  /* fallback */
+}
+
+const platforms = [
+  {
+    icon: 'monitor' as const,
+    name: 'macOS',
+    sub: '12+ · Universal',
+    url: SITE.github.releasesUrl,
+    external: true,
+  },
+  {
+    icon: 'monitor' as const,
+    name: 'Linux',
+    sub: 'AppImage · deb · rpm',
+    url: SITE.github.releasesUrl,
+    external: true,
+  },
+  {
+    icon: 'monitor' as const,
+    name: 'Windows',
+    sub: '10+ · MSI installer',
+    url: SITE.github.releasesUrl,
+    external: true,
+  },
+  {
+    icon: 'globe' as const,
+    name: 'Web',
+    sub: 'Self-hosted alongside backend',
+    url: '/docs/self-hosting',
+    external: false,
+  },
+]
+---
+
+<Page
+  title="Install"
+  description="Run the Trominal server with Docker, then install the desktop or web client."
+  active="install"
+>
+  <header class="page-head">
+    <div class="wrap">
+      <span class="eyebrow">
+        <span class="dot"></span>Install · <span data-version-target>{stats.latestVersion ?? 'pre-release'}</span>
+      </span>
+      <h1>Pick your platform.</h1>
+      <p class="lede">
+        Server first, client second. Both take a couple of minutes — most of which is waiting
+        for Docker to pull.
+      </p>
+    </div>
+  </header>
+
+  <!-- 1. Server -->
+  <section class="section flush">
+    <div class="wrap">
+      <h2 style="margin-bottom:24px">1. Run the server</h2>
+      <p class="muted" style="margin-bottom:18px;max-width:640px">
+        Run the Trominal server somewhere your team can reach — a VPS, a homelab box, your
+        laptop. It needs ports for HTTP and WebSocket and a writable Postgres + Redis. The
+        repo's <code class="mono">docker-compose.yml</code> wires all of that up for you.
+      </p>
+
+      <div class="terminal" style="max-width:780px">
+        <div class="head">
+          <div class="lights">
+            <span style="background:#f17a7a"></span>
+            <span style="background:#e0b870"></span>
+            <span style="background:#7dd3a0"></span>
+          </div>
+          <span class="mono">~/infra</span>
+        </div>
+        <div class="body">
+          <div class="row"><span class="term-c-dim"># Clone the repo</span></div>
+          <div class="row">
+            <span class="term-prompt">$</span> git clone
+            <span class="term-c-green">{SITE.github.url}.git</span>
+          </div>
+          <div class="row">
+            <span class="term-prompt">$</span> cd Trominal
+          </div>
+          <div class="row">&nbsp;</div>
+          <div class="row"><span class="term-c-dim"># Configure and boot</span></div>
+          <div class="row">
+            <span class="term-prompt">$</span> cp .env.example .env
+            <span class="term-c-dim"># edit it: APP_KEY, DB password, mail</span>
+          </div>
+          <div class="row">
+            <span class="term-prompt">$</span> docker compose up -d
+          </div>
+          <div class="row" style="color:var(--accent)">
+            ✓ trominal up · http://localhost:8000
+          </div>
+          <div class="row">&nbsp;</div>
+          <div class="row"><span class="term-c-dim"># Open in your browser</span></div>
+          <div class="row" style="color:var(--ink-3)">
+            → <span class="term-c-blue">http://localhost:8000</span>
+            register first user (becomes admin)
+          </div>
+          <div class="row" style="color:var(--ink-3)">
+            → <span class="term-c-blue">http://localhost:8000/admin</span>
+            Filament panel for instance settings
+          </div>
+        </div>
+      </div>
+
+      <div style="margin-top:18px;display:flex;gap:10px;flex-wrap:wrap">
+        <a href="/docs/self-hosting" class="btn btn-primary">
+          <Icon name="book" size={14} /> Self-hosting guide
+        </a>
+        <a href="/docs/admin-guide" class="btn btn-secondary">Admin guide</a>
+        <a href="/docs/architecture" class="btn btn-secondary">Architecture</a>
+      </div>
+    </div>
+  </section>
+
+  <!-- 2. Client -->
+  <section class="section">
+    <div class="wrap">
+      <h2 style="margin-bottom:14px">2. Install a client</h2>
+      <p class="muted" style="margin-bottom:24px;max-width:640px">
+        The client is a Tauri 2 + React app, built once and shipped to every desktop platform —
+        plus the web. Same vault, same UI, same keyboard shortcuts.
+      </p>
+
+      <div
+        style="display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:28px"
+        class="platforms-grid"
+      >
+        {platforms.map((p) => (
+          <a
+            href={p.url}
+            target={p.external ? '_blank' : undefined}
+            rel={p.external ? 'noopener' : undefined}
+            class="card hover"
+            style="text-align:center;padding:18px 14px;text-decoration:none"
+          >
+            <div
+              style="width:44px;height:44px;border-radius:10px;background:var(--accent-soft);border:1px solid var(--accent-line);display:inline-flex;align-items:center;justify-content:center;color:var(--accent);margin-bottom:10px"
+            >
+              <Icon name={p.icon} size={20} />
+            </div>
+            <div style="font-weight:500;font-size:14px">{p.name}</div>
+            <div class="mono" style="font-size:11px;color:var(--ink-4);margin-top:4px">
+              {p.sub}
+            </div>
+          </a>
+        ))}
+      </div>
+
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:18px" class="install-cards">
+        <div class="card">
+          <h3 style="font-size:15px;margin-bottom:10px">Desktop binaries</h3>
+          <p class="muted" style="font-size:13px;margin-bottom:14px">
+            Built by GitHub Actions on every tagged release. Linux ships AppImage + .deb + .rpm,
+            macOS ships .dmg (universal), Windows ships .msi.
+          </p>
+          <a
+            href={stats.latestReleaseUrl ?? SITE.github.releasesUrl}
+            target="_blank"
+            rel="noopener"
+            class="btn btn-primary"
+          >
+            <Icon name="download" size={14} /> Latest release
+          </a>
+        </div>
+        <div class="card">
+          <h3 style="font-size:15px;margin-bottom:10px">Build from source</h3>
+          <pre class="code-block" style="font-size:12.5px;margin:0"><span class="comment"># Requires Rust + pnpm</span>
+$ git clone {SITE.github.url}.git
+$ cd Trominal
+$ pnpm install
+$ pnpm --filter @trominal/client tauri build</pre>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 3. Pair -->
+  <section class="section">
+    <div class="wrap">
+      <h2 style="margin-bottom:14px">3. Pair the client with your server</h2>
+      <p class="muted" style="margin-top:14px;max-width:640px">
+        Open the app, paste your server URL on the first-launch screen, and register the first
+        user — that user automatically becomes the instance admin. The vault is created on
+        device, and your master password never touches the wire.
+      </p>
+
+      <div
+        class="card"
+        style="margin-top:24px;max-width:760px;display:flex;gap:14px;align-items:flex-start"
+      >
+        <span style="color:var(--accent);flex-shrink:0;margin-top:2px">
+          <Icon name="sparkles" size={16} />
+        </span>
+        <div>
+          <strong style="font-weight:500">Don't have a server yet?</strong>
+          <a href="/demo" style="color:var(--accent);border-bottom:1px solid var(--accent-line)">
+            Try the public demo at backend.trominal.app
+          </a>
+          — a real, secure instance with a periodically reset database. Use it to test
+          connection sharing without spinning anything up.
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Need something different? -->
+  <section class="section">
+    <div class="wrap">
+      <div class="card" style="padding:36px;text-align:center">
+        <h3>Need something different?</h3>
+        <p class="muted" style="margin-top:10px">
+          ARM Linux, Raspberry Pi, custom reverse proxy, Kubernetes, Caddy automation — it's all
+          in the docs. <a href="/docs" style="color:var(--accent)">Browse the docs</a> or
+          <a href="/contact" style="color:var(--accent)">drop us a line</a>.
+        </p>
+      </div>
+    </div>
+  </section>
+</Page>
+
+<style>
+  @media (max-width: 900px) {
+    .platforms-grid {
+      grid-template-columns: 1fr 1fr !important;
+    }
+    .install-cards {
+      grid-template-columns: 1fr !important;
+    }
+  }
+  @media (max-width: 480px) {
+    .platforms-grid {
+      grid-template-columns: 1fr !important;
+    }
+  }
+</style>

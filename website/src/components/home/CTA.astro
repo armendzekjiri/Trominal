@@ -1,0 +1,35 @@
+---
+import Icon from '@/components/chrome/Icon.astro'
+import { SITE } from '@/lib/site'
+---
+
+<section class="section" style="border-bottom:1px solid var(--line)">
+  <div class="wrap">
+    <div
+      style="background:linear-gradient(135deg, var(--bg-3), var(--bg-2));border:1px solid var(--line-2);border-radius:18px;padding:64px 56px;text-align:center;position:relative;overflow:hidden"
+    >
+      <div
+        style="position:absolute;inset:0;background:radial-gradient(600px 300px at 50% 0%, rgba(125,211,160,0.10), transparent 70%);pointer-events:none"
+      ></div>
+      <span class="eyebrow" style="position:relative">Ready when you are</span>
+      <h2 style="margin-top:18px;position:relative">Bring your hosts home.</h2>
+      <p class="lede" style="margin:14px auto 0;max-width:540px;position:relative">
+        Trominal is free, open source, and self-hostable forever. Spin up a server in minutes —
+        bring the team in when you're ready.
+      </p>
+      <div
+        style="margin-top:30px;display:flex;justify-content:center;gap:10px;flex-wrap:wrap;position:relative"
+      >
+        <a href="/install" class="btn btn-primary btn-lg">
+          <Icon name="download" size={15} /> Install Trominal
+        </a>
+        <a href="/demo" class="btn btn-secondary btn-lg">
+          <Icon name="globe" size={15} /> Try the demo
+        </a>
+        <a href={SITE.github.url} target="_blank" rel="noopener" class="btn btn-ghost btn-lg">
+          <Icon name="github" size={15} /> View source
+        </a>
+      </div>
+    </div>
+  </div>
+</section>

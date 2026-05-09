@@ -1,0 +1,22 @@
+name = "trominal-website"
+compatibility_date = "2025-01-01"
+compatibility_flags = ["nodejs_compat"]
+
+# Cloudflare Workers + Static Assets. Astro's Cloudflare adapter outputs
+# the SSR worker to `dist/_worker.js/index.js` and the prerendered HTML
+# plus public/ assets to `dist/` directly.
+main = "./dist/_worker.js/index.js"
+
+[assets]
+directory = "./dist"
+binding = "ASSETS"
+not_found_handling = "404-page"
+
+# KV namespace for caching GitHub API responses (stars, releases).
+[[kv_namespaces]]
+binding = "TROMINAL_STATS"
+id = "a92e2e82ff994162ae74d86e95dc3108"
+preview_id = "992f1a71d02a433ba90c62fdd9d83a9f"
+
+[vars]
+GITHUB_REPO = "armendzekjiri/Trominal"
