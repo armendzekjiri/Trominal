@@ -44,12 +44,18 @@ Web SSH/SFTP/tunnel proxying is planned. When enabled, web transport requires tr
 
 ## Release Signing
 
-Tauri updater artifacts are signed with a private updater key in CI. The public key is embedded in release builds through the Tauri config supplied by `.github/workflows/release.yml`.
+Tauri updater artifacts are signed with a private updater key in CI. The public key is embedded in release builds through the Tauri config supplied by `.github/workflows/client-release.yml`.
 
 Keep these secrets in GitHub Actions:
 
 - `TAURI_SIGNING_PRIVATE_KEY`
 - `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`
+- `APPLE_CERTIFICATE`
+- `APPLE_CERTIFICATE_PASSWORD`
+- `APPLE_SIGNING_IDENTITY`
+- `APPLE_ID`
+- `APPLE_PASSWORD`
+- `APPLE_TEAM_ID`
 - `TAURI_UPDATER_PUBKEY`
 
 If the updater private key is lost, installed desktop clients cannot verify future updates signed by a replacement key.

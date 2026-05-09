@@ -69,6 +69,9 @@ export type MasterPasswordChangeRequest = {
 /** Public-facing instance metadata returned by GET /api/server-info. */
 export type ServerInfoResponse = {
   instance_name: string
+  backend_version: string
+  api_version: string
+  min_client_version: string
   registration_mode: 'single' | 'open' | 'invite' | 'closed'
   registration_open: boolean
   web_ssh_enabled: boolean

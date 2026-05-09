@@ -1,0 +1,77 @@
+name: Client CI
+
+on:
+  pull_request:
+    paths:
+      - 'apps/client/**'
+      - 'packages/**'
+      - 'package.json'
+      - 'pnpm-lock.yaml'
+      - 'pnpm-workspace.yaml'
+      - 'Cargo.toml'
+      - 'Cargo.lock'
+      - '.github/workflows/client-ci.yml'
+      - '.github/workflows/client-release.yml'
+  push:
+    branches:
+      - main
+      - 'phase/**'
+    paths:
+      - 'apps/client/**'
+      - 'packages/**'
+      - 'package.json'
+      - 'pnpm-lock.yaml'
+      - 'pnpm-workspace.yaml'
+      - 'Cargo.toml'
+      - 'Cargo.lock'
+      - '.github/workflows/client-ci.yml'
+      - '.github/workflows/client-release.yml'
+
+jobs:
+  client:
+    name: Client
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.9
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install Tauri Linux dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev patchelf
+
+      - name: Install pnpm dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Lint
+        run: pnpm lint:client
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      - name: Crypto unit tests
+        run: pnpm --filter @trominal/crypto test
+
+      - name: Client unit tests
+        run: pnpm test:client
+
+      - name: Build web client
+        run: pnpm --dir apps/client build
+
+      - name: Check Tauri crate
+        working-directory: apps/client/src-tauri
+        run: cargo check

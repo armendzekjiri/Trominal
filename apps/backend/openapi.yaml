@@ -13,6 +13,10 @@ paths:
       responses:
         '200':
           description: Server information.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServerInfo'
   /api/health:
     get:
       summary: Get basic health checks for the API, database, and Redis.
@@ -569,6 +573,32 @@ components:
       schema:
         type: string
   schemas:
+    ServerInfo:
+      type: object
+      required:
+        - instance_name
+        - backend_version
+        - api_version
+        - min_client_version
+        - registration_mode
+        - registration_open
+        - web_ssh_enabled
+      properties:
+        instance_name:
+          type: string
+        backend_version:
+          type: string
+        api_version:
+          type: string
+        min_client_version:
+          type: string
+        registration_mode:
+          type: string
+          enum: [single, open, invite, closed]
+        registration_open:
+          type: boolean
+        web_ssh_enabled:
+          type: boolean
     RegisterRequest:
       type: object
       required:

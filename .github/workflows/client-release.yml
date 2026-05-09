@@ -1,9 +1,9 @@
-name: Release
+name: Client Release
 
 on:
   push:
     tags:
-      - 'v*.*.*'
+      - 'client-v*.*.*'
 
 permissions:
   contents: write
@@ -16,6 +16,11 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Resolve client version
+        id: version
+        shell: bash
+        run: echo "version=${GITHUB_REF_NAME#client-v}" >> "$GITHUB_OUTPUT"
 
       - name: Setup Node
         uses: actions/setup-node@v4
@@ -36,7 +41,7 @@ jobs:
       - name: Upload web dist
         uses: actions/upload-artifact@v4
         with:
-          name: trominal-web-dist
+          name: trominal-web-dist-${{ steps.version.outputs.version }}
           path: apps/client/dist
 
   desktop:
@@ -63,6 +68,11 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Resolve client version
+        id: version
+        shell: bash
+        run: echo "version=${GITHUB_REF_NAME#client-v}" >> "$GITHUB_OUTPUT"
 
       - name: Setup Node
         uses: actions/setup-node@v4
@@ -99,7 +109,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
-          # Apple code signing & notarization (macOS only)
+          # Apple code signing and notarization are consumed only by macOS matrix jobs.
           APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
           APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
           APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
@@ -109,16 +119,16 @@ jobs:
         with:
           projectPath: apps/client
           tagName: ${{ github.ref_name }}
-          releaseName: Trominal ${{ github.ref_name }}
+          releaseName: Trominal Client ${{ steps.version.outputs.version }}
           releaseBody: |
-            Desktop installers, updater signatures, and updater latest.json for Trominal.
+            Desktop installers, updater signatures, and updater latest.json for Trominal Client ${{ steps.version.outputs.version }}.
 
-            The web build is attached to this workflow as the trominal-web-dist artifact.
+            The web build is attached to this workflow as the trominal-web-dist-${{ steps.version.outputs.version }} artifact.
           releaseDraft: true
-          prerelease: ${{ contains(github.ref_name, '-') }}
+          prerelease: ${{ contains(steps.version.outputs.version, '-') }}
           generateReleaseNotes: true
           uploadUpdaterJson: true
           args: >-
             ${{ matrix.args }}
             --config
-            '{"bundle":{"createUpdaterArtifacts":true},"plugins":{"updater":{"pubkey":"${{ secrets.TAURI_UPDATER_PUBKEY }}","endpoints":["https://github.com/${{ github.repository }}/releases/latest/download/latest.json"],"windows":{"installMode":"passive"}}}}'
+            '{"version":"${{ steps.version.outputs.version }}","bundle":{"createUpdaterArtifacts":true},"plugins":{"updater":{"pubkey":"${{ secrets.TAURI_UPDATER_PUBKEY }}","endpoints":["https://github.com/${{ github.repository }}/releases/latest/download/latest.json"],"windows":{"installMode":"passive"}}}}'

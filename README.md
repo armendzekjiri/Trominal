@@ -53,9 +53,10 @@ Read the full threat model in [`SECURITY.md`](SECURITY.md).
 ```bash
 git clone https://github.com/<your-org>/trominal.git
 cd trominal
-cp .env.example .env
-# Edit .env to set DOMAIN, DB password, etc.
+cp docker/env/backend.env.example .env
+# Edit .env to set APP_KEY, APP_URL, TROMINAL_SITE_ADDRESS, DB password, etc.
 docker compose up -d
+docker compose exec app php artisan migrate --seed --force
 ```
 
 Then:
@@ -66,6 +67,11 @@ Then:
 4. Visit `https://<your-domain>/admin` to manage your instance
 
 Full guide: [`docs/SELF_HOSTING.md`](docs/SELF_HOSTING.md).
+
+Backend and client releases are independent:
+
+- `backend-v2.1.1` publishes `ghcr.io/<owner>/trominal-backend:2.1.1`
+- `client-v1.8.0` builds web and desktop client artifacts
 
 ## Development
 

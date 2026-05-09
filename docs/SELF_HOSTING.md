@@ -1,6 +1,6 @@
 # Self-Hosting Trominal
 
-Trominal is self-hosted from one Laravel backend plus one client build. The first registered user becomes `admin` and `user`, and registration closes automatically in the default single-user mode.
+Trominal is self-hosted from one Laravel backend plus one client build. The backend can run by itself for API and `/admin` work; the first registered user becomes `admin` and `user`, and registration closes automatically in the default single-user mode.
 
 ## Requirements
 
@@ -10,6 +10,60 @@ Trominal is self-hosted from one Laravel backend plus one client build. The firs
 - PostgreSQL 16
 - Redis 7
 - Caddy, Nginx, or another TLS reverse proxy
+
+For the Docker backend package, Docker Engine with the Compose plugin is enough.
+
+## Backend Docker Deployment
+
+Copy the backend environment template and set secrets:
+
+```bash
+cp docker/env/backend.env.example .env
+```
+
+Required production edits:
+
+- `APP_KEY`: generate with `docker compose run --rm app php artisan key:generate --show`
+- `APP_URL`: public backend URL, for example `https://trominal.example.com`
+- `TROMINAL_SITE_ADDRESS`: Caddy site address, for example `trominal.example.com`
+- `POSTGRES_PASSWORD` and `DB_PASSWORD`: same strong password
+- `ALLOWED_ORIGINS`: deployed client origins and `tauri://localhost`
+- `TROMINAL_BACKEND_IMAGE`: released image tag, for example `ghcr.io/<owner>/trominal-backend:2.1.1`
+
+Start the backend stack:
+
+```bash
+docker compose up -d postgres redis
+docker compose up -d app queue scheduler ssh-proxy caddy
+docker compose exec app php artisan migrate --seed --force
+```
+
+Check health:
+
+```bash
+curl http://localhost/api/health
+curl http://localhost/api/server-info
+```
+
+The production Compose file runs:
+
+- `app`: Laravel PHP-FPM for `/api`, `/admin`, and Filament/Livewire
+- `queue`: Redis queue worker from the same backend image
+- `scheduler`: Laravel scheduler from the same backend image
+- `ssh-proxy`: WebSocket SSH proxy from the same backend image
+- `postgres`: PostgreSQL 16
+- `redis`: Redis 7
+- `caddy`: HTTP/TLS reverse proxy
+
+Update only the backend:
+
+```bash
+TROMINAL_BACKEND_IMAGE=ghcr.io/<owner>/trominal-backend:2.1.1 docker compose pull app queue scheduler ssh-proxy
+TROMINAL_BACKEND_IMAGE=ghcr.io/<owner>/trominal-backend:2.1.1 docker compose up -d app queue scheduler ssh-proxy
+docker compose exec app php artisan migrate --force
+```
+
+Backend tags use `backend-vX.Y.Z`. Client tags use `client-vX.Y.Z`; they do not need to match.
 
 ## Local Development
 
@@ -40,7 +94,7 @@ Open the client, enter the API base URL, and register the first user.
 
 ## Production Build
 
-Build the web client:
+Build the web client when releasing or deploying the client:
 
 ```bash
 pnpm install --frozen-lockfile
@@ -85,6 +139,9 @@ CACHE_STORE=redis
 QUEUE_CONNECTION=redis
 
 TROMINAL_REGISTRATION_MODE=single
+TROMINAL_BACKEND_VERSION=2.1.1
+TROMINAL_API_VERSION=v1
+TROMINAL_MIN_CLIENT_VERSION=1.6.0
 ALLOWED_ORIGINS=https://trominal.example.com,tauri://localhost
 ```
 
