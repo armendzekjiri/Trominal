@@ -8,6 +8,7 @@ namespace App\Models;
 use Database\Factories\UserFactory;
 use Filament\Auth\MultiFactor\App\Contracts\HasAppAuthentication;
 use Filament\Models\Contracts\FilamentUser;
+use Filament\Models\Contracts\HasName;
 use Filament\Panel;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Hidden;
@@ -34,7 +35,7 @@ use Spatie\Permission\Traits\HasRoles;
     'suspended_at',
 ])]
 #[Hidden(['password', 'remember_token', 'two_fa_secret_enc'])]
-class User extends Authenticatable implements FilamentUser, HasAppAuthentication
+class User extends Authenticatable implements FilamentUser, HasAppAuthentication, HasName
 {
     /** @use HasFactory<UserFactory> */
     use HasApiTokens, HasFactory, HasRoles, HasUlids, Notifiable, SoftDeletes;
@@ -63,6 +64,24 @@ class User extends Authenticatable implements FilamentUser, HasAppAuthentication
         return $panel->getId() === 'admin'
             && $this->suspended_at === null
             && $this->hasRole('admin');
+    }
+
+    /**
+     * Filament reads `name` directly via getAttributeValue() when a model
+     * doesn't implement HasName, but our registration flow accepts a null
+     * name (clients only collect email + master password), so the column
+     * is often null in practice. Returning email as the fallback keeps
+     * Filament's strict-typed getUserName() happy and shows something
+     * recognisable in the admin header.
+     */
+    public function getFilamentName(): string
+    {
+        $name = $this->name;
+        if (is_string($name) && $name !== '') {
+            return $name;
+        }
+
+        return $this->email;
     }
 
     public function getAppAuthenticationSecret(): ?string
