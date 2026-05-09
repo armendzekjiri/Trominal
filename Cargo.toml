@@ -1,0 +1,21 @@
+[workspace]
+resolver = "2"
+members = [
+    "apps/client/src-tauri",
+    "crates/trominal-core",
+    "crates/trominal-helper",
+]
+# `packages/crypto/parity` is intentionally excluded — it's a standalone cross-
+# platform fixture verifier with its own pinned deps that runs only in CI.
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+authors = ["ArmendIdeas"]
+license = "AGPL-3.0-only"
+
+[workspace.dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+thiserror = "2"
+tokio = { version = "1", features = ["full"] }
