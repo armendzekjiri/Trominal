@@ -11,6 +11,7 @@ export type {
   ChatMessage,
   ChatRequest,
   ChatRole,
+  ModelInfo,
 } from './types'
 export { collectChatText } from './types'
 

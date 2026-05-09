@@ -84,4 +84,52 @@ describe('anthropicAdapter', () => {
 
     expect(chunks).toEqual([{ kind: 'error', message: 'overloaded' }])
   })
+
+  describe('listModels', () => {
+    it('returns ids with the human-friendly display_name as label, newest first', async () => {
+      const fetchSpy = globalThis.fetch as unknown as ReturnType<typeof vi.fn>
+      fetchSpy.mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            data: [
+              { id: 'claude-3-haiku-20240307', display_name: 'Claude 3 Haiku' },
+              { id: 'claude-sonnet-4-6', display_name: 'Claude Sonnet 4.6' },
+              { id: 'claude-3-5-sonnet-20240620', display_name: 'Claude 3.5 Sonnet' },
+            ],
+          }),
+          { status: 200, headers: { 'content-type': 'application/json' } },
+        ),
+      )
+
+      const models = await anthropicAdapter.listModels({
+        endpoint: 'https://api.anthropic.com/v1',
+        model: '',
+        apiKey: 'sk-ant-x',
+      })
+
+      expect(models[0]).toEqual({ id: 'claude-sonnet-4-6', label: 'Claude Sonnet 4.6' })
+      expect(models.map((entry) => entry.id)).toEqual([
+        'claude-sonnet-4-6',
+        'claude-3-haiku-20240307',
+        'claude-3-5-sonnet-20240620',
+      ])
+    })
+
+    it('surfaces auth errors instead of swallowing them', async () => {
+      const fetchSpy = globalThis.fetch as unknown as ReturnType<typeof vi.fn>
+      fetchSpy.mockResolvedValueOnce(
+        new Response(JSON.stringify({ error: { message: 'authentication_error' } }), {
+          status: 401,
+        }),
+      )
+
+      await expect(
+        anthropicAdapter.listModels({
+          endpoint: 'https://api.anthropic.com/v1',
+          model: '',
+          apiKey: 'bad',
+        }),
+      ).rejects.toThrow('authentication_error')
+    })
+  })
 })

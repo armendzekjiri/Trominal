@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { Eye, EyeOff, Key, Loader2, Sparkles } from 'lucide-react'
+import { Eye, EyeOff, Key, Loader2, RefreshCw, Sparkles } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { TextInput } from '@/components/ui/text-input'
 import { cn } from '@/lib/cn'
@@ -10,7 +10,7 @@ import {
   type AiProvider,
   type AiSettingsInput,
 } from '@/features/vault/model'
-import { ADAPTERS, adapterFor, collectChatText } from '@/features/ai/adapters'
+import { ADAPTERS, adapterFor, collectChatText, type ModelInfo } from '@/features/ai/adapters'
 
 const PROVIDER_ORDER: AiProvider[] = ['anthropic', 'openai', 'ollama', 'custom']
 
@@ -45,6 +45,12 @@ type ConnectionState =
   | { kind: 'ok'; sample: string }
   | { kind: 'error'; message: string }
 
+type ModelsState =
+  | { kind: 'idle' }
+  | { kind: 'loading' }
+  | { kind: 'loaded'; models: ModelInfo[] }
+  | { kind: 'error'; message: string }
+
 export function AiSettingsTab() {
   const settingsQuery = useAiSettings()
   const saveSettings = useSaveAiSettings()
@@ -53,6 +59,7 @@ export function AiSettingsTab() {
   const [showApiKey, setShowApiKey] = useState(false)
   const [status, setStatus] = useState<string | null>(null)
   const [connection, setConnection] = useState<ConnectionState>({ kind: 'idle' })
+  const [models, setModels] = useState<ModelsState>({ kind: 'idle' })
 
   // Hydrate the form when the vault returns a persisted record. The
   // "adjust state during render" pattern keeps the lint rule happy and is
@@ -90,6 +97,37 @@ export function AiSettingsTab() {
       model: current.model || next.defaultModel,
     }))
     setConnection({ kind: 'idle' })
+    // The fetched model list is provider-specific; clear it on switch.
+    setModels({ kind: 'idle' })
+  }
+
+  async function fetchModels(): Promise<void> {
+    setModels({ kind: 'loading' })
+    const config = {
+      endpoint: draft.endpoint || adapter.defaultEndpoint,
+      model: draft.model,
+      apiKey: draft.apiKey,
+    }
+    const controller = new AbortController()
+    const timer = setTimeout(() => controller.abort(), 15_000)
+    try {
+      const list = await adapter.listModels(config, controller.signal)
+      if (list.length === 0) {
+        setModels({
+          kind: 'error',
+          message: 'Provider returned no models. Type a model name manually.',
+        })
+        return
+      }
+      setModels({ kind: 'loaded', models: list })
+    } catch (err) {
+      setModels({
+        kind: 'error',
+        message: err instanceof Error ? err.message : 'Could not fetch models.',
+      })
+    } finally {
+      clearTimeout(timer)
+    }
   }
 
   async function save(): Promise<void> {
@@ -197,13 +235,57 @@ export function AiSettingsTab() {
           placeholder={adapter.defaultEndpoint || 'https://api.example.com/v1'}
           hint={`Leave blank to use ${adapter.defaultEndpoint || 'the provider default'}.`}
         />
-        <TextInput
-          label="Model"
-          mono
-          value={draft.model}
-          onChange={(event) => setDraft({ ...draft, model: event.target.value })}
-          placeholder={adapter.defaultModel || 'model name'}
-        />
+        <div className="flex flex-col gap-2">
+          <div className="flex items-end gap-2">
+            <div className="flex-1">
+              <TextInput
+                label="Model"
+                mono
+                value={draft.model}
+                onChange={(event) => setDraft({ ...draft, model: event.target.value })}
+                placeholder={adapter.defaultModel || 'model name'}
+              />
+            </div>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => void fetchModels()}
+              disabled={models.kind === 'loading'}
+              aria-label="Fetch available models"
+            >
+              {models.kind === 'loading' ? (
+                <Loader2 size={13} className="animate-spin" />
+              ) : (
+                <RefreshCw size={13} />
+              )}
+              Get models
+            </Button>
+          </div>
+          {models.kind === 'loaded' && (
+            <div className="flex flex-col gap-1">
+              <select
+                value={draft.model}
+                onChange={(event) => setDraft({ ...draft, model: event.target.value })}
+                className="rounded-md border border-border-strong bg-surface px-2 py-1.5 font-mono text-[12px] text-fg outline-none focus:border-accent focus:ring-2 focus:ring-accent-ring"
+              >
+                <option value="">— pick from {models.models.length} models —</option>
+                {models.models.map((model) => (
+                  <option key={model.id} value={model.id}>
+                    {model.label !== undefined && model.label !== model.id
+                      ? `${model.label} (${model.id})`
+                      : model.id}
+                  </option>
+                ))}
+              </select>
+              <span className="text-[11px] text-fg-faint">
+                Pick from the dropdown or keep typing a custom model id above.
+              </span>
+            </div>
+          )}
+          {models.kind === 'error' && (
+            <span className="text-[11px] text-danger">{models.message}</span>
+          )}
+        </div>
         <TextInput
           label="API key"
           type={showApiKey ? 'text' : 'password'}

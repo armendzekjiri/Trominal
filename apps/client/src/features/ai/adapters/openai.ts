@@ -1,5 +1,24 @@
-import type { AdapterConfig, AiAdapter, ChatChunk, ChatRequest } from './types'
+import type { AdapterConfig, AiAdapter, ChatChunk, ChatRequest, ModelInfo } from './types'
 import { parseSseStream } from './sse'
+
+// Heuristics that drop OpenAI families which can't take chat-completion
+// requests (embeddings, image, audio, moderation). Other providers' lists
+// are usually pre-filtered, so this only really fires for openai.com.
+const NON_CHAT_KEYWORDS = [
+  'embedding',
+  'whisper',
+  'tts-',
+  'dall-e',
+  'image',
+  'moderation',
+  'davinci-002',
+  'babbage-002',
+] as const
+
+function looksLikeChatModel(id: string): boolean {
+  const lower = id.toLowerCase()
+  return !NON_CHAT_KEYWORDS.some((keyword) => lower.includes(keyword))
+}
 
 const DEFAULT_ENDPOINT = 'https://api.openai.com/v1'
 const DEFAULT_MODEL = 'gpt-4o-mini'
@@ -76,6 +95,26 @@ export const openAiCompatibleAdapter: AiAdapter = {
     }
 
     yield { kind: 'done', finishReason }
+  },
+
+  async listModels(config: AdapterConfig, signal?: AbortSignal): Promise<ModelInfo[]> {
+    const url = joinEndpoint(config.endpoint || DEFAULT_ENDPOINT, '/models')
+    const response = await fetch(url, {
+      method: 'GET',
+      signal,
+      headers: buildHeaders(config),
+    })
+    if (!response.ok) {
+      throw new Error(await safeErrorMessage(response))
+    }
+    const payload = (await response.json()) as { data?: Array<{ id?: unknown }> } | null
+    const data = payload?.data ?? []
+    return data
+      .map((entry) => (typeof entry.id === 'string' ? entry.id : null))
+      .filter((id): id is string => id !== null)
+      .filter(looksLikeChatModel)
+      .sort((a, b) => a.localeCompare(b))
+      .map((id) => ({ id }))
   },
 }
 

@@ -79,15 +79,22 @@ export function InlineSuggestion({ terminal, session }: InlineSuggestionProps) {
             messages: [
               {
                 role: 'system',
-                content:
-                  'You are an AI shell-completion engine. Reply with a SINGLE shell command and nothing else: no explanation, no code fences, no leading prompt characters. The command will be inserted at the user’s cursor.',
+                content: [
+                  'You are a shell-completion engine for a Unix-style terminal.',
+                  'Respond with EXACTLY ONE shell command. Nothing else:',
+                  '- No prose, no explanation, no markdown.',
+                  '- No code fences, no leading $, >, # prompt characters.',
+                  '- Bash-portable when possible.',
+                  '- Use the recent terminal output to infer the user’s intent. If intent is ambiguous, output the safest read-only option.',
+                  'The output is inserted at the user’s cursor literally — wrong format breaks the flow.',
+                ].join('\n'),
               },
               {
                 role: 'user',
                 content:
                   'Recent terminal output:\n```\n' +
                   recent.join('\n') +
-                  '\n```\nSuggest the next shell command.',
+                  '\n```\n\nSuggest the next shell command. Single line.',
               },
             ],
             maxOutputTokens: 80,

@@ -38,6 +38,16 @@ export type AdapterConfig = {
   apiKey: string
 }
 
+/**
+ * One entry in the model picker. `id` is the model identifier the provider
+ * expects on the wire (`gpt-4o-mini`, `claude-sonnet-4-6`, `llama3:latest`,
+ * etc.); `label` is an optional human-friendly display name.
+ */
+export type ModelInfo = {
+  id: string
+  label?: string
+}
+
 export interface AiAdapter {
   /** Stable id matching the AiProvider enum, for telemetry / errors. */
   readonly id: string
@@ -55,6 +65,17 @@ export interface AiAdapter {
    * - honour `request.signal` for cancellation
    */
   chat(request: ChatRequest, config: AdapterConfig): AsyncIterable<ChatChunk>
+
+  /**
+   * Discover available models for the configured endpoint + key. The
+   * Settings UI calls this so the user picks from a real list instead of
+   * guessing a model name. Should throw on auth / network failure so the
+   * caller can surface the message; should NOT swallow errors silently.
+   *
+   * `signal` lets the caller abort if the user navigates away or hits
+   * "Refresh" again before the previous request returned.
+   */
+  listModels(config: AdapterConfig, signal?: AbortSignal): Promise<ModelInfo[]>
 }
 
 /**

@@ -1,4 +1,11 @@
-import type { AdapterConfig, AiAdapter, ChatChunk, ChatMessage, ChatRequest } from './types'
+import type {
+  AdapterConfig,
+  AiAdapter,
+  ChatChunk,
+  ChatMessage,
+  ChatRequest,
+  ModelInfo,
+} from './types'
 import { parseSseStream } from './sse'
 
 const DEFAULT_ENDPOINT = 'https://api.anthropic.com/v1'
@@ -84,6 +91,34 @@ export const anthropicAdapter: AiAdapter = {
     }
 
     yield { kind: 'done', finishReason: stopReason }
+  },
+
+  async listModels(config: AdapterConfig, signal?: AbortSignal): Promise<ModelInfo[]> {
+    const url = joinEndpoint(config.endpoint || DEFAULT_ENDPOINT, '/models')
+    const response = await fetch(url, {
+      method: 'GET',
+      signal,
+      headers: {
+        'anthropic-dangerous-direct-browser-access': 'true',
+        'anthropic-version': ANTHROPIC_VERSION,
+        'x-api-key': config.apiKey,
+      },
+    })
+    if (!response.ok) {
+      throw new Error(await safeErrorMessage(response))
+    }
+    const payload = (await response.json()) as {
+      data?: Array<{ id?: unknown; display_name?: unknown }>
+    } | null
+    const data = payload?.data ?? []
+    return data
+      .map<ModelInfo | null>((entry) => {
+        if (typeof entry.id !== 'string') return null
+        const label = typeof entry.display_name === 'string' ? entry.display_name : undefined
+        return { id: entry.id, label }
+      })
+      .filter((entry): entry is ModelInfo => entry !== null)
+      .sort((a, b) => (b.id > a.id ? 1 : -1))
   },
 }
 
