@@ -56,6 +56,13 @@ paths:
   /api/v1/auth/refresh:
     post:
       summary: Rotate a refresh token and issue a new token pair.
+      description: |
+        Refresh tokens are single use and rotate within a family that keeps the
+        same device for the lifetime of a sign-in. Presenting a token that was
+        already rotated is treated as theft: every refresh token in its family
+        and every access token issued to its device are revoked, and the call
+        fails with 422. Clients must serialise refreshes. Tokens expire after
+        `TROMINAL_REFRESH_TOKEN_EXPIRATION_DAYS` (default 7, clamped to 1-30).
       requestBody:
         required: true
         content:

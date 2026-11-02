@@ -173,35 +173,112 @@ final class AuthService
      */
     public function refresh(array $payload): array
     {
-        return DB::transaction(function () use ($payload): array {
+        $tokenHash = hash('sha256', (string) $payload['refresh_token']);
+
+        // The transaction only decides the outcome; the error is thrown after
+        // it commits so that a family revocation is never rolled back.
+        /** @var array{user: User, access_token: string, refresh_token: string, token_type: string, expires_in: int}|null $pair */
+        $pair = DB::transaction(function () use ($tokenHash, $payload): ?array {
             /** @var RefreshToken|null $refreshToken */
             $refreshToken = RefreshToken::query()
-                ->where('token_hash', hash('sha256', (string) $payload['refresh_token']))
+                ->where('token_hash', $tokenHash)
                 ->lockForUpdate()
                 ->first();
 
-            if (! $refreshToken instanceof RefreshToken || ! $refreshToken->isUsable()) {
-                throw ValidationException::withMessages([
-                    'refresh_token' => __('The refresh token is invalid.'),
-                ]);
+            if (! $refreshToken instanceof RefreshToken) {
+                return null;
             }
 
-            /** @var User $user */
-            $user = User::query()->findOrFail($refreshToken->user_id);
+            if ($refreshToken->rotated_at !== null) {
+                // A token that was already exchanged is being presented again:
+                // the legitimate client or an attacker holds a copy, and we
+                // cannot tell which. Revoke everything descended from it.
+                $this->revokeRefreshTokenFamily($refreshToken);
 
-            if ($user->suspended_at !== null) {
+                return null;
+            }
+
+            if (! $refreshToken->isUsable()) {
+                return null;
+            }
+
+            /** @var User|null $user */
+            $user = User::query()->find($refreshToken->user_id);
+
+            if (! $user instanceof User || $user->suspended_at !== null) {
                 $refreshToken->update(['revoked_at' => now()]);
 
-                throw ValidationException::withMessages([
-                    'refresh_token' => __('The refresh token is invalid.'),
-                ]);
+                return null;
             }
 
-            $refreshToken->update(['rotated_at' => now()]);
-            AuditLog::record($user, 'auth.token.refreshed', 'user', (string) $user->id);
+            // Claim the token with a conditional update so two concurrent
+            // refreshes can never both rotate it, even without row locks.
+            $claimed = RefreshToken::query()
+                ->whereKey($refreshToken->getKey())
+                ->whereNull('rotated_at')
+                ->whereNull('revoked_at')
+                ->update(['rotated_at' => now()]);
 
-            return $this->issueTokenPair($user, (string) ($payload['device_name'] ?? 'Unknown device'));
+            if ($claimed !== 1) {
+                $this->revokeRefreshTokenFamily($refreshToken);
+
+                return null;
+            }
+
+            AuditLog::record($user, 'auth.token.refreshed', 'user', (string) $user->id, [
+                'device_id' => $refreshToken->device_id,
+            ]);
+
+            return $this->issueTokenPair(
+                $user,
+                (string) ($payload['device_name'] ?? 'Unknown device'),
+                $refreshToken->device_id,
+                $refreshToken->family_id ?? (string) $refreshToken->getKey(),
+            );
         });
+
+        if ($pair === null) {
+            throw ValidationException::withMessages([
+                'refresh_token' => __('The refresh token is invalid.'),
+            ]);
+        }
+
+        return $pair;
+    }
+
+    /**
+     * Revoke every refresh token in the presented token's family and every
+     * access token issued to its device, then record the incident.
+     */
+    private function revokeRefreshTokenFamily(RefreshToken $refreshToken): void
+    {
+        $familyId = $refreshToken->family_id ?? (string) $refreshToken->getKey();
+
+        $refreshTokensRevoked = RefreshToken::query()
+            ->where('user_id', $refreshToken->user_id)
+            ->where(function ($query) use ($familyId): void {
+                $query->where('family_id', $familyId)->orWhere('id', $familyId);
+            })
+            ->whereNull('revoked_at')
+            ->update(['revoked_at' => now()]);
+
+        $accessTokensRevoked = $refreshToken->device_id === null
+            ? 0
+            : PersonalAccessToken::query()
+                ->where('tokenable_type', (new User)->getMorphClass())
+                ->where('tokenable_id', $refreshToken->user_id)
+                ->where('device_id', $refreshToken->device_id)
+                ->delete();
+
+        /** @var User|null $user */
+        $user = User::query()->find($refreshToken->user_id);
+
+        AuditLog::record($user, 'auth.token.reuse_detected', 'user', $refreshToken->user_id, [
+            'family_id' => $familyId,
+            'device_id' => $refreshToken->device_id,
+            'refresh_tokens_revoked' => $refreshTokensRevoked,
+            'access_tokens_revoked' => $accessTokensRevoked,
+        ]);
     }
 
     public function logout(User $user, ?string $plainTextAccessToken = null): void
@@ -319,31 +396,47 @@ final class AuthService
     /**
      * @return array{user: User, access_token: string, refresh_token: string, token_type: string, expires_in: int}
      */
-    private function issueTokenPair(User $user, string $deviceName): array
+    private function issueTokenPair(User $user, string $deviceName, ?string $deviceId = null, ?string $familyId = null): array
     {
-        /** @var Device $device */
-        $device = Device::query()->create([
-            'user_id' => $user->id,
-            'name' => $deviceName,
-            'last_used_at' => now(),
-        ]);
+        /** @var Device|null $device */
+        $device = $deviceId === null
+            ? null
+            : Device::query()->whereKey($deviceId)->where('user_id', $user->id)->first();
+
+        if ($device instanceof Device) {
+            $device->forceFill(['last_used_at' => now()])->save();
+        } else {
+            /** @var Device $device */
+            $device = Device::query()->create([
+                'user_id' => $user->id,
+                'name' => $deviceName,
+                'last_used_at' => now(),
+            ]);
+        }
 
         $accessMinutes = (int) config('trominal.access_token_expiration_minutes', 15);
-        $refreshDays = (int) config('trominal.refresh_token_expiration_days', 30);
         $plainRefreshToken = bin2hex(random_bytes(64));
 
-        RefreshToken::query()->create([
+        /** @var RefreshToken $refreshToken */
+        $refreshToken = RefreshToken::query()->create([
             'user_id' => $user->id,
             'device_id' => $device->id,
+            'family_id' => $familyId,
             'token_hash' => hash('sha256', $plainRefreshToken),
-            'expires_at' => now()->addDays($refreshDays),
+            'expires_at' => now()->addDays(RefreshToken::lifetimeDays()),
         ]);
 
+        if ($familyId === null) {
+            // A fresh sign-in starts a new family rooted at its first token.
+            $refreshToken->forceFill(['family_id' => $refreshToken->getKey()])->save();
+        }
+
         $accessToken = $user->createToken(
-            name: $deviceName,
+            name: $device->name,
             abilities: ['*'],
             expiresAt: now()->addMinutes($accessMinutes),
         );
+        $accessToken->accessToken->forceFill(['device_id' => $device->id])->save();
 
         return [
             'user' => $user->fresh(['roles', 'permissions']) ?? $user,
