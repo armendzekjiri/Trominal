@@ -15,6 +15,7 @@ export type ShortcutId =
   | 'help'
   | 'settings'
   | 'lock'
+  | 'sidebar'
   | 'nav.hosts'
   | 'nav.terminal'
   | 'nav.snippets'
@@ -41,6 +42,7 @@ export const SHORTCUTS: ReadonlyArray<Shortcut> = [
   { id: 'help', keys: ['mod', '/'], label: 'Show keyboard shortcuts', group: 'General' },
   { id: 'settings', keys: ['mod', ','], label: 'Open settings', group: 'General' },
   { id: 'lock', keys: ['mod', 'shift', 'l'], label: 'Lock vault', group: 'General' },
+  { id: 'sidebar', keys: ['mod', 'b'], label: 'Toggle sidebar', group: 'General' },
   { id: 'close', keys: ['esc'], label: 'Close dialog or panel', group: 'General' },
   { id: 'nav.hosts', keys: ['mod', '1'], label: 'Go to Hosts', group: 'Navigation' },
   { id: 'nav.terminal', keys: ['mod', '2'], label: 'Go to Terminal', group: 'Navigation' },
@@ -51,8 +53,18 @@ export const SHORTCUTS: ReadonlyArray<Shortcut> = [
   { id: 'hosts.search', keys: ['mod', 'f'], label: 'Search hosts', group: 'Hosts' },
   { id: 'hosts.new', keys: ['mod', 'n'], label: 'New host', group: 'Hosts' },
   { id: 'terminal.newLocal', keys: ['mod', 't'], label: 'New local shell tab', group: 'Terminal' },
-  { id: 'terminal.next', keys: ['mod', 'shift', ']'], label: 'Next tab', group: 'Terminal' },
-  { id: 'terminal.prev', keys: ['mod', 'shift', '['], label: 'Previous tab', group: 'Terminal' },
+  {
+    id: 'terminal.next',
+    keys: ['mod', 'shift', ']'],
+    label: 'Next session tab',
+    group: 'Terminal',
+  },
+  {
+    id: 'terminal.prev',
+    keys: ['mod', 'shift', '['],
+    label: 'Previous session tab',
+    group: 'Terminal',
+  },
 ]
 
 export function shortcut(id: ShortcutId): Shortcut {

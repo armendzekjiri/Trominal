@@ -1,21 +1,17 @@
 import {
   ArrowRight,
-  Code2,
   ExternalLink,
-  FolderSync,
   Keyboard,
-  KeyRound,
   Lock,
   LogOut,
   Moon,
+  PanelLeft,
   Plus,
   Search,
-  Server,
   Settings,
   Sun,
   Terminal,
   Unplug,
-  Workflow,
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import { useEffect, useId, useMemo, useRef, useState } from 'react'
@@ -26,9 +22,11 @@ import type { ShortcutId } from '@/lib/shortcuts'
 import { useHosts } from '@/features/vault/hooks'
 import { useAppearance } from '@/stores/appearance'
 import { useAuth } from '@/stores/auth'
+import { useLayout } from '@/stores/layout'
 import { useVault } from '@/stores/vault'
 import { useCommandUi } from './command-ui'
 import { openAdminPanel } from './admin-panel'
+import { NAV_ITEMS } from './nav-items'
 
 type Command = {
   id: string
@@ -48,45 +46,6 @@ const SETTINGS_TABS: ReadonlyArray<{ id: string; label: string; permission?: str
   { id: 'appearance', label: 'Appearance' },
   { id: 'shortcuts', label: 'Keyboard shortcuts' },
   { id: 'advanced', label: 'Advanced' },
-]
-
-const NAV: ReadonlyArray<{
-  to: string
-  label: string
-  permission: string
-  icon: LucideIcon
-  shortcut: ShortcutId
-}> = [
-  { to: '/hosts', label: 'Hosts', permission: 'hosts.read', icon: Server, shortcut: 'nav.hosts' },
-  {
-    to: '/terminal',
-    label: 'Terminal',
-    permission: 'hosts.connect',
-    icon: Terminal,
-    shortcut: 'nav.terminal',
-  },
-  {
-    to: '/snippets',
-    label: 'Snippets',
-    permission: 'snippets.read',
-    icon: Code2,
-    shortcut: 'nav.snippets',
-  },
-  {
-    to: '/identities',
-    label: 'Identities',
-    permission: 'identities.read',
-    icon: KeyRound,
-    shortcut: 'nav.identities',
-  },
-  {
-    to: '/tunnels',
-    label: 'Tunnels',
-    permission: 'tunnels.read',
-    icon: Workflow,
-    shortcut: 'nav.tunnels',
-  },
-  { to: '/sftp', label: 'SFTP', permission: 'sftp.read', icon: FolderSync, shortcut: 'nav.sftp' },
 ]
 
 const GROUP_ORDER: ReadonlyArray<Command['group']> = ['Actions', 'Go to', 'Hosts', 'Settings']
@@ -118,6 +77,7 @@ function PaletteDialog() {
   const hasPermission = useAuth((s) => s.hasPermission)
   const logout = useAuth((s) => s.logout)
   const lock = useVault((s) => s.lock)
+  const toggleSidebar = useLayout((s) => s.toggleSidebar)
   const appTheme = useAppearance((s) => s.appTheme)
   const setAppTheme = useAppearance((s) => s.setAppTheme)
   const [query, setQuery] = useState('')
@@ -147,6 +107,15 @@ function PaletteDialog() {
         icon: isDark ? Sun : Moon,
         keywords: 'appearance mode toggle',
         run: () => setAppTheme(isDark ? 'light' : 'dark'),
+      },
+      {
+        id: 'sidebar',
+        label: 'Toggle sidebar',
+        group: 'Actions',
+        icon: PanelLeft,
+        keywords: 'collapse expand hide show',
+        shortcut: 'sidebar',
+        run: toggleSidebar,
       },
       {
         id: 'lock',
@@ -192,7 +161,7 @@ function PaletteDialog() {
         run: () => void openAdminPanel(),
       })
     }
-    for (const item of NAV) {
+    for (const item of NAV_ITEMS) {
       if (!hasPermission(item.permission)) continue
       list.push({
         id: `nav-${item.to}`,
@@ -229,7 +198,18 @@ function PaletteDialog() {
       }
     }
     return list
-  }, [appTheme, hasPermission, hostsData, lock, logout, navigate, setAppTheme, showShortcuts, user])
+  }, [
+    appTheme,
+    hasPermission,
+    hostsData,
+    lock,
+    logout,
+    navigate,
+    setAppTheme,
+    showShortcuts,
+    toggleSidebar,
+    user,
+  ])
 
   const results = useMemo(() => {
     const scored = commands

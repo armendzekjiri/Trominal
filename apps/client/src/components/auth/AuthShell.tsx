@@ -2,6 +2,8 @@ import { KeyRound, ServerCog, ShieldCheck } from 'lucide-react'
 import type { ReactNode } from 'react'
 import { Logo } from '@/components/branding/logo'
 import { Dot, type DotState } from '@/components/ui/dot'
+import { isTauri } from '@/lib/platform'
+import { isMac } from '@/lib/shortcuts'
 
 export type AuthShellProps = {
   title: string
@@ -47,6 +49,10 @@ export function AuthShell({
 }: AuthShellProps) {
   return (
     <div className="grid min-h-full flex-1 bg-bg lg:grid-cols-[minmax(380px,0.9fr)_1.1fr]">
+      {/* macOS desktop hides the native title bar; this strip keeps the window draggable. */}
+      {isTauri && isMac && (
+        <div data-tauri-drag-region aria-hidden className="fixed inset-x-0 top-0 z-10 h-7" />
+      )}
       <aside
         aria-label="About Trominal"
         className="relative hidden flex-col justify-between overflow-hidden border-r border-border bg-bg-elev p-10 lg:flex"
