@@ -25,6 +25,6 @@ export type SftpTransferStartResponse = { transferId: string }
 /** Shape emitted on `sftp://transfer` from the Rust monitor thread. */
 export type SftpTransferEvent = {
   transferId: string
-  state: 'started' | 'done' | 'error'
+  state: 'started' | 'done' | 'error' | 'cancelled'
   message: string | null
 }

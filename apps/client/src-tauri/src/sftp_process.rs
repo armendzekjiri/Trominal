@@ -2,8 +2,20 @@
 //! cancel. Kept free of Tauri types so it can be unit tested.
 
 use std::io::{Read, Write};
-use std::process::{Child, Command as ProcessCommand, Stdio};
-use std::sync::Mutex;
+use std::process::{Child, Command as ProcessCommand, ExitStatus, Stdio};
+use std::sync::{Arc, Mutex, MutexGuard};
+use std::thread::{self, JoinHandle};
+use std::time::{Duration, Instant};
+
+/// How often the monitor polls the child for exit. Short enough that a
+/// finished transfer is reported promptly, long enough to cost nothing.
+const POLL_INTERVAL: Duration = Duration::from_millis(50);
+
+/// Only the tail of each stream is kept for error messages.
+const MAX_CAPTURED_BYTES: usize = 64 * 1024;
+
+/// How long to wait for the pipes to drain once the child has exited.
+const OUTPUT_GRACE: Duration = Duration::from_secs(2);
 
 /// How a transfer ended.
 #[derive(Debug, PartialEq, Eq)]
@@ -23,69 +35,188 @@ pub(crate) enum TransferOutcome {
 /// Result of a cancel request.
 #[derive(Debug, PartialEq, Eq)]
 pub(crate) enum CancelResult {
+    /// The child was killed and reaped before `cancel` returned.
     Cancelled,
+    /// The child had already exited; its own outcome stands.
     AlreadyFinished,
 }
 
+enum Phase {
+    Running,
+    Exited(ExitStatus),
+    Cancelled,
+}
+
+struct Inner {
+    /// Owned for the whole transfer so `cancel` can always reach it.
+    child: Child,
+    phase: Phase,
+}
+
+/// One `sftp` child. The child stays inside the mutex until it has been
+/// reaped, and whichever of "exited" or "cancelled" is recorded first under
+/// that mutex decides the outcome, so a cancelled transfer is never
+/// reported as completed and a completed one is never reported cancelled.
 pub(crate) struct TransferProcess {
-    child: Mutex<Option<Child>>,
+    inner: Mutex<Inner>,
+    stdout: Capture,
+    stderr: Capture,
 }
 
 impl TransferProcess {
-    /// Spawn `command` with piped stdio and write `batch` to its stdin.
+    /// Spawn `command` with piped stdio, start draining stdout and stderr,
+    /// and write `batch` to its stdin (then close it).
     pub(crate) fn spawn(mut command: ProcessCommand, batch: &[u8]) -> Result<Self, String> {
         command
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .stderr(Stdio::piped());
         let mut child = command.spawn().map_err(|err| err.to_string())?;
-        if let Some(mut stdin) = child.stdin.take() {
-            if let Err(err) = stdin.write_all(batch) {
-                let _ = child.kill();
-                let _ = child.wait();
+        let stdout = child.stdout.take();
+        let stderr = child.stderr.take();
+        let stdin = child.stdin.take();
+        let process = Self {
+            inner: Mutex::new(Inner {
+                child,
+                phase: Phase::Running,
+            }),
+            stdout: Capture::start(stdout),
+            stderr: Capture::start(stderr),
+        };
+
+        if let Some(mut stdin) = stdin {
+            let written = stdin.write_all(batch);
+            drop(stdin);
+            if let Err(err) = written {
+                let _ = process.cancel();
                 return Err(err.to_string());
             }
         }
-        Ok(Self {
-            child: Mutex::new(Some(child)),
-        })
+        Ok(process)
     }
 
-    /// Block until the child exits.
+    /// Block until the child exits or is cancelled.
     pub(crate) fn wait_for_exit(&self) -> TransferOutcome {
-        let taken = self.child.lock().ok().and_then(|mut guard| guard.take());
-        let Some(mut child) = taken else {
-            return TransferOutcome::Cancelled;
-        };
-        let result = child.wait();
-        let mut stderr = String::new();
-        if let Some(mut pipe) = child.stderr.take() {
-            let _ = pipe.read_to_string(&mut stderr);
-        }
-        let mut stdout = String::new();
-        if let Some(mut pipe) = child.stdout.take() {
-            let _ = pipe.read_to_string(&mut stdout);
-        }
-        match result {
-            Ok(status) => TransferOutcome::Exited {
-                success: status.success(),
-                code: status.code(),
-                stdout,
-                stderr,
-            },
-            Err(err) => TransferOutcome::WaitError(err.to_string()),
+        loop {
+            {
+                let mut inner = self.lock();
+                match inner.phase {
+                    Phase::Cancelled => return TransferOutcome::Cancelled,
+                    Phase::Exited(status) => {
+                        drop(inner);
+                        return self.exited(status);
+                    }
+                    Phase::Running => {}
+                }
+                match inner.child.try_wait() {
+                    Ok(Some(status)) => {
+                        inner.phase = Phase::Exited(status);
+                        drop(inner);
+                        return self.exited(status);
+                    }
+                    Ok(None) => {}
+                    Err(err) => {
+                        // The child can't be observed any more; make sure it
+                        // is gone rather than leaving it running unattended.
+                        let _ = inner.child.kill();
+                        let _ = inner.child.wait();
+                        inner.phase = Phase::Cancelled;
+                        return TransferOutcome::WaitError(err.to_string());
+                    }
+                }
+            }
+            thread::sleep(POLL_INTERVAL);
         }
     }
 
-    /// Stop the transfer.
+    /// Kill the child and wait until it has terminated. Returns
+    /// `AlreadyFinished` if it exited on its own first.
     pub(crate) fn cancel(&self) -> Result<CancelResult, String> {
-        if let Ok(mut guard) = self.child.lock() {
-            if let Some(mut child) = guard.take() {
-                let _ = child.kill();
-                let _ = child.wait();
-            }
+        let mut inner = self.lock();
+        match inner.phase {
+            Phase::Cancelled => return Ok(CancelResult::Cancelled),
+            Phase::Exited(_) => return Ok(CancelResult::AlreadyFinished),
+            Phase::Running => {}
         }
+        if let Ok(Some(status)) = inner.child.try_wait() {
+            inner.phase = Phase::Exited(status);
+            return Ok(CancelResult::AlreadyFinished);
+        }
+        // kill() only fails if the child is already gone; wait() below is
+        // the actual confirmation that it has terminated.
+        let _ = inner.child.kill();
+        inner.child.wait().map_err(|err| err.to_string())?;
+        inner.phase = Phase::Cancelled;
         Ok(CancelResult::Cancelled)
+    }
+
+    fn exited(&self, status: ExitStatus) -> TransferOutcome {
+        let (stdout, stderr) = self.collect_output();
+        TransferOutcome::Exited {
+            success: status.success(),
+            code: status.code(),
+            stdout,
+            stderr,
+        }
+    }
+
+    /// Wait (bounded) for both pipes to reach EOF and return what they
+    /// carried. A grandchild that inherited a pipe can keep it open after
+    /// the child exits, so this never blocks longer than `OUTPUT_GRACE`.
+    fn collect_output(&self) -> (String, String) {
+        let deadline = Instant::now() + OUTPUT_GRACE;
+        while !(self.stdout.done() && self.stderr.done()) && Instant::now() < deadline {
+            thread::sleep(Duration::from_millis(10));
+        }
+        (self.stdout.snapshot(), self.stderr.snapshot())
+    }
+
+    fn lock(&self) -> MutexGuard<'_, Inner> {
+        self.inner
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+    }
+}
+
+/// Drains one pipe on a background thread so the child never blocks on a
+/// full buffer, keeping only the last `MAX_CAPTURED_BYTES` for diagnostics.
+struct Capture {
+    buffer: Arc<Mutex<Vec<u8>>>,
+    reader: JoinHandle<()>,
+}
+
+impl Capture {
+    fn start(pipe: Option<impl Read + Send + 'static>) -> Self {
+        let buffer = Arc::new(Mutex::new(Vec::new()));
+        let sink = Arc::clone(&buffer);
+        let reader = thread::spawn(move || {
+            let Some(mut pipe) = pipe else { return };
+            let mut chunk = [0_u8; 8192];
+            loop {
+                match pipe.read(&mut chunk) {
+                    Ok(0) | Err(_) => break,
+                    Ok(size) => {
+                        let mut kept = sink.lock().unwrap_or_else(|p| p.into_inner());
+                        kept.extend_from_slice(&chunk[..size]);
+                        if kept.len() > MAX_CAPTURED_BYTES * 2 {
+                            let excess = kept.len() - MAX_CAPTURED_BYTES;
+                            kept.drain(..excess);
+                        }
+                    }
+                }
+            }
+        });
+        Self { buffer, reader }
+    }
+
+    fn done(&self) -> bool {
+        self.reader.is_finished()
+    }
+
+    fn snapshot(&self) -> String {
+        let kept = self.buffer.lock().unwrap_or_else(|p| p.into_inner());
+        let start = kept.len().saturating_sub(MAX_CAPTURED_BYTES);
+        String::from_utf8_lossy(&kept[start..]).into_owned()
     }
 }
 
