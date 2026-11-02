@@ -902,8 +902,57 @@ fn default_shell() -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::{is_rsa_private_key, tunnel_forward_args, user_safe_ssh_error};
+    use super::{
+        is_rsa_private_key, password_auth_options, ssh_command, tunnel_forward_args,
+        user_safe_ssh_error,
+    };
+    use portable_pty::CommandBuilder;
     use trominal_core::SshTunnelSpec;
+
+    const FAKE_KEY: &[u8] =
+        b"-----BEGIN OPENSSH PRIVATE KEY-----\nAAAA\n-----END OPENSSH PRIVATE KEY-----\n";
+
+    fn argv(command: &CommandBuilder) -> Vec<String> {
+        command
+            .get_argv()
+            .iter()
+            .map(|arg| arg.to_string_lossy().into_owned())
+            .collect()
+    }
+
+    #[test]
+    fn terminal_ssh_never_writes_the_private_key_to_disk() {
+        let prepared = ssh_command(
+            "test-session",
+            "example.com".to_string(),
+            22,
+            "deploy".to_string(),
+            Some(FAKE_KEY.to_vec()),
+        );
+        if let Ok(prepared) = prepared {
+            for path in &prepared.temp_paths {
+                let contents = std::fs::read(path).unwrap_or_default();
+                let _ = std::fs::remove_file(path);
+                assert!(
+                    !contents.windows(11).any(|window| window == b"PRIVATE KEY"),
+                    "private key written to {}",
+                    path.display()
+                );
+            }
+            for arg in argv(&prepared.command) {
+                assert!(!arg.contains("accept-new"));
+            }
+        }
+    }
+
+    #[test]
+    fn key_install_never_accepts_unknown_host_keys() {
+        let mut command = CommandBuilder::new("ssh");
+        password_auth_options(&mut command);
+        let args = argv(&command);
+        assert!(!args.iter().any(|arg| arg.contains("accept-new")));
+        assert!(args.contains(&"StrictHostKeyChecking=yes".to_string()));
+    }
 
     #[test]
     fn detects_rsa_private_key_pem_headers() {
