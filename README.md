@@ -53,10 +53,8 @@ Read the full threat model in [`SECURITY.md`](SECURITY.md).
 ```bash
 git clone https://github.com/armendzekjiri/Trominal.git
 cd Trominal
-cp docker/env/backend.env.example .env
-# Edit .env to set APP_KEY, APP_URL, TROMINAL_SITE_ADDRESS, DB password, etc.
-docker compose up -d
-docker compose exec app php artisan migrate --seed --force
+./docker/setup.sh        # writes .env with a fresh APP_KEY + DB password (--port 8031 / --domain example.com)
+docker compose up -d     # migrations run automatically
 ```
 
 Then:

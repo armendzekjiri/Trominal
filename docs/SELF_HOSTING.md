@@ -15,28 +15,31 @@ For the Docker backend package, Docker Engine with the Compose plugin is enough.
 
 ## Backend Docker Deployment
 
-Copy the backend environment template and set secrets:
+Generate `.env` (random `APP_KEY` and database password), then start the stack:
 
 ```bash
-cp docker/env/backend.env.example .env
+./docker/setup.sh                 # http://localhost
+docker compose up -d
 ```
 
-Required production edits:
+That's it. Migrations run automatically on every `up`; roles and default settings are seeded only on the first boot. Open `http://localhost/admin` once you've registered the first user from a client.
 
-- `APP_KEY`: generate with `docker compose run --rm app php artisan key:generate --show`
-- `APP_URL`: public backend URL, for example `https://trominal.example.com`
-- `TROMINAL_SITE_ADDRESS`: Caddy site address, for example `trominal.example.com`
-- `POSTGRES_PASSWORD` and `DB_PASSWORD`: same strong password
-- `ALLOWED_ORIGINS`: deployed client origins and `tauri://localhost`
-- `TROMINAL_BACKEND_IMAGE`: released image tag, for example `ghcr.io/armendzekjiri/trominal-backend:0.1.0`
-
-Start the backend stack:
+Other setups:
 
 ```bash
-docker compose up -d postgres redis
-docker compose up -d app queue scheduler ssh-proxy caddy
-docker compose exec app php artisan migrate --seed --force
+./docker/setup.sh --port 8031                     # port 80 is taken → http://localhost:8031
+./docker/setup.sh --domain trominal.example.com   # public server, automatic HTTPS via Let's Encrypt
 ```
+
+For `--domain`, point the domain's DNS at the server and open ports 80 and 443 first. If `.env` already exists, `setup.sh` leaves it alone apart from filling an empty `APP_KEY`.
+
+Prefer to edit by hand? Copy `docker/env/backend.env.example` to `.env` and set:
+
+- `APP_KEY`: `echo "base64:$(openssl rand -base64 32)"`
+- `POSTGRES_PASSWORD` and `DB_PASSWORD`: the same strong password
+- `APP_URL` and `ALLOWED_ORIGINS`: the URL you open in the browser (keep `tauri://localhost` in the origins)
+- `HTTP_PORT`: host port, if 80 is taken
+- `TROMINAL_SITE_ADDRESS`: leave at `:80`, or a bare domain for HTTPS. **Never a port** — Caddy listens on 80/443 inside its container; `HTTP_PORT` picks the host port.
 
 Check health:
 
@@ -47,20 +50,20 @@ curl http://localhost/api/server-info
 
 The production Compose file runs:
 
+- `migrate`: one-shot migrations (and first-boot seeding) before the backend starts
 - `app`: Laravel PHP-FPM for `/api`, `/admin`, and Filament/Livewire
 - `queue`: Redis queue worker from the same backend image
 - `scheduler`: Laravel scheduler from the same backend image
 - `ssh-proxy`: WebSocket SSH proxy from the same backend image
 - `postgres`: PostgreSQL 16
 - `redis`: Redis 7
-- `caddy`: HTTP/TLS reverse proxy
+- `caddy`: the only container with published ports. PHP-FPM speaks FastCGI, not HTTP, so something has to translate browser requests; Caddy does that, serves static assets, routes `/ws/*` to `ssh-proxy`, and gets TLS certificates automatically when `TROMINAL_SITE_ADDRESS` is a domain.
 
-Update only the backend:
+Update the backend: set the new `TROMINAL_BACKEND_IMAGE` tag in `.env`, then:
 
 ```bash
-TROMINAL_BACKEND_IMAGE=ghcr.io/armendzekjiri/trominal-backend:0.1.0 docker compose pull app queue scheduler ssh-proxy
-TROMINAL_BACKEND_IMAGE=ghcr.io/armendzekjiri/trominal-backend:0.1.0 docker compose up -d app queue scheduler ssh-proxy
-docker compose exec app php artisan migrate --force
+docker compose pull
+docker compose up -d
 ```
 
 Backend tags use `backend-vX.Y.Z`. Client tags use `client-vX.Y.Z`; they do not need to match.

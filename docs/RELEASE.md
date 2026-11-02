@@ -123,9 +123,9 @@ Prerelease tags such as `backend-v0.2.0-beta.1` do not update `latest`.
 Self-hosted update flow:
 
 ```bash
-TROMINAL_BACKEND_IMAGE=ghcr.io/armendzekjiri/trominal-backend:0.1.0 docker compose pull app queue scheduler ssh-proxy
-TROMINAL_BACKEND_IMAGE=ghcr.io/armendzekjiri/trominal-backend:0.1.0 docker compose up -d app queue scheduler ssh-proxy
-docker compose exec app php artisan migrate --force
+# set TROMINAL_BACKEND_IMAGE=ghcr.io/armendzekjiri/trominal-backend:<new tag> in .env, then:
+docker compose pull
+docker compose up -d     # the migrate service runs pending migrations before app starts
 ```
 
 The backend image receives `TROMINAL_BACKEND_VERSION` from the tag. `/api/server-info` exposes `backend_version`, `api_version`, and `min_client_version` so clients can make compatibility decisions.

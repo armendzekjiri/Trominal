@@ -7,6 +7,32 @@ x-backend-volumes: &backend-volumes
   - backend-public:/shared/public
 
 services:
+  # One-shot: runs migrations on every `up`, seeds roles/settings only on a fresh database.
+  migrate:
+    image: *backend-image
+    restart: 'no'
+    env_file:
+      - *backend-env-file
+    environment:
+      DB_HOST: postgres
+      REDIS_HOST: redis
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    command:
+      - sh
+      - -c
+      - |
+        if [ -z "$${APP_KEY:-}" ]; then
+          echo 'APP_KEY is empty. Run ./docker/setup.sh (or set APP_KEY in .env) and try again.' >&2
+          exit 1
+        fi
+        if php artisan migrate:status >/dev/null 2>&1; then fresh=0; else fresh=1; fi
+        php artisan migrate --force
+        if [ "$$fresh" = 1 ]; then php artisan db:seed --force; fi
+
   app:
     image: *backend-image
     build:
@@ -24,10 +50,8 @@ services:
       TROMINAL_WEB_SSH_PROXY_HOST: 0.0.0.0
     volumes: *backend-volumes
     depends_on:
-      postgres:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
     healthcheck:
       test: ['CMD-SHELL', 'php artisan about --only=environment >/dev/null 2>&1']
       interval: 30s
@@ -109,12 +133,14 @@ services:
     restart: unless-stopped
     env_file:
       - *backend-env-file
+    # Caddy always listens on 80/443 inside the container; HTTP_PORT/HTTPS_PORT pick the host ports.
     ports:
       - '${HTTP_PORT:-80}:80'
       - '${HTTPS_PORT:-443}:443'
     volumes:
       - ./docker/Caddyfile:/etc/caddy/Caddyfile:ro
-      - backend-public:/srv/trominal/public:ro
+      # Same path as in the app container: php_fastcgi passes this root to PHP-FPM as SCRIPT_FILENAME.
+      - backend-public:/var/www/html/public:ro
       - caddy-data:/data
       - caddy-config:/config
     depends_on:
