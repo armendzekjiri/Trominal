@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Services;
 
+use App\Enums\TeamAction;
 use App\Models\AuditLog;
 use App\Models\Team;
 use App\Models\TeamMember;
@@ -73,7 +74,7 @@ final class TeamService
      */
     public function update(User $actor, Team $team, array $payload): Team
     {
-        $this->requireManager($actor, $team);
+        $this->requireTeamAction($actor, $team, TeamAction::UpdateTeam, 'You cannot update this team.');
 
         $team->update($payload);
 
@@ -84,11 +85,7 @@ final class TeamService
 
     public function delete(User $actor, Team $team): void
     {
-        $membership = $this->requireMember($actor, $team);
-
-        if (! $membership->isOwner()) {
-            throw new AuthorizationException('Only team owners can delete a team.');
-        }
+        $this->requireTeamAction($actor, $team, TeamAction::DeleteTeam, 'Only team owners can delete a team.');
 
         $team->delete();
 
@@ -107,7 +104,7 @@ final class TeamService
     {
         $actorMembership = $this->requireManager($actor, $team);
 
-        if ($payload['role'] === TeamMember::ROLE_OWNER && ! $actorMembership->isOwner()) {
+        if ($payload['role'] === TeamMember::ROLE_OWNER && ! $actorMembership->allows(TeamAction::AssignOwner)) {
             throw new AuthorizationException('Only team owners can add another owner.');
         }
 
@@ -152,7 +149,7 @@ final class TeamService
         $actorMembership = $this->requireManager($actor, $team);
         $this->ensureMemberBelongsToTeam($team, $member);
 
-        if ($payload['role'] === TeamMember::ROLE_OWNER && ! $actorMembership->isOwner()) {
+        if ($payload['role'] === TeamMember::ROLE_OWNER && ! $actorMembership->allows(TeamAction::AssignOwner)) {
             throw new AuthorizationException('Only team owners can assign owner role.');
         }
 
@@ -310,10 +307,15 @@ final class TeamService
 
     private function requireManager(User $actor, Team $team): TeamMember
     {
+        return $this->requireTeamAction($actor, $team, TeamAction::ManageMembers, 'You cannot manage this team.');
+    }
+
+    private function requireTeamAction(User $actor, Team $team, TeamAction $action, string $message): TeamMember
+    {
         $membership = $this->requireMember($actor, $team);
 
-        if (! $membership->canManageMembers()) {
-            throw new AuthorizationException('You cannot manage this team.');
+        if (! $membership->allows($action)) {
+            throw new AuthorizationException($message);
         }
 
         return $membership;

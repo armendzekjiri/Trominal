@@ -100,7 +100,8 @@ The web client cannot SSH directly from the browser (no raw TCP). It uses a **We
 - **Honest statement:** during an active web SSH session, your decrypted private key sits in the backend process memory. If the operator of that backend is malicious and modifies the Trominal code, they could exfiltrate keys.
 - **Mitigation:** YOU are the operator. This is a self-hosted product. There is no third party between you and your data when you run your own instance.
 - **For maximum security:** use the **desktop client**, which performs SSH natively in the Rust process on your own machine. Backend never sees the key in any form.
-- **For self-hosters serving multiple users:** consider disabling web SSH (`WEB_SSH_ENABLED=false`) and requiring desktop clients.
+- **For self-hosters serving multiple users:** keep web SSH disabled (the default; the **Web SSH enabled** setting in `/admin`) and require desktop clients.
+- **Server-side checks:** the proxy verifies the server's host key against a fingerprint pinned in your vault before it sends any credential. It binds each 30-second, single-use token to one destination and client IP, and only connects to public addresses unless the operator allowlists private ranges (`TROMINAL_WEB_SSH_ALLOWED_CIDRS`). See `docs/SELF_HOSTING.md`.
 
 We will never claim web SSH is zero-knowledge. It is "encrypted-in-transit + ephemeral-in-memory + operator-trusted."
 

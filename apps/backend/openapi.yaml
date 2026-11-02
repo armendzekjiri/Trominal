@@ -53,9 +53,18 @@ paths:
           description: Access and refresh tokens.
         '422':
           description: Invalid credentials or TOTP code.
+        '429':
+          description: Too many failed sign-ins for this account or IP address, or too many failed TOTP codes. See Retry-After.
   /api/v1/auth/refresh:
     post:
       summary: Rotate a refresh token and issue a new token pair.
+      description: |
+        Refresh tokens are single use and rotate within a family that keeps the
+        same device for the lifetime of a sign-in. Presenting a token that was
+        already rotated is treated as theft: every refresh token in its family
+        and every access token issued to its device are revoked, and the call
+        fails with 422. Clients must serialise refreshes. Tokens expire after
+        `TROMINAL_REFRESH_TOKEN_EXPIRATION_DAYS` (default 7, clamped to 1-30).
       requestBody:
         required: true
         content:
@@ -73,6 +82,8 @@ paths:
           description: New token pair.
         '422':
           description: Invalid refresh token.
+        '429':
+          description: Too many refreshes for this IP address or account. See Retry-After.
   /api/v1/auth/logout:
     post:
       summary: Revoke the current access token and active refresh tokens.
@@ -96,6 +107,10 @@ paths:
   /api/v1/auth/forgot-password:
     post:
       summary: Request a password reset link without disclosing account existence.
+      description: |
+        Always answers 202 with the same body, including when delivery fails.
+        The emailed link is `{TROMINAL_CLIENT_URL or APP_URL}/reset-password?token=…&email=…`,
+        the client's reset page.
       requestBody:
         required: true
         content:
@@ -138,34 +153,92 @@ paths:
           description: Invalid token or validation failed.
   /api/v1/auth/two-factor/enable:
     post:
-      summary: Start TOTP setup and return the secret and otpauth URI.
+      summary: Stage a new TOTP secret and return it with its otpauth URI.
+      description: |
+        The secret is stored as a pending enrollment; the active factor is not
+        changed until the pending secret is confirmed via
+        `/api/v1/auth/two-factor/verify`. When two-factor authentication is
+        already enabled, this call replaces the factor and requires the login
+        `password` and a current `code` from the existing authenticator.
       security:
         - bearerAuth: []
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TwoFactorEnableRequest'
       responses:
         '200':
-          description: TOTP setup payload.
+          description: Pending TOTP setup payload.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [secret, otpauth_uri]
+                properties:
+                  secret:
+                    type: string
+                  otpauth_uri:
+                    type: string
         '401':
           description: Unauthenticated.
+        '422':
+          description: Two-factor authentication is enabled and the password or current code is missing or invalid.
+        '429':
+          description: Too many requests or failed codes/passwords for this account. See Retry-After.
   /api/v1/auth/two-factor/verify:
     post:
-      summary: Confirm TOTP setup with a six-digit code.
+      summary: Confirm the pending TOTP secret with a six-digit code.
+      description: |
+        Promotes the pending secret to the active factor. When it replaces an
+        existing factor, every other session (access and refresh tokens of
+        other devices) is revoked.
       security:
         - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [code]
+              properties:
+                code:
+                  type: string
+                  pattern: "^\\d{6}$"
       responses:
         '200':
           description: TOTP enabled.
         '422':
-          description: Invalid code.
+          description: Invalid code, or no pending setup.
+        '429':
+          description: Too many requests or failed codes/passwords for this account. See Retry-After.
   /api/v1/auth/two-factor/disable:
     post:
-      summary: Disable TOTP after password and code confirmation.
+      summary: Disable TOTP after password and current code confirmation.
       security:
         - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [password, code]
+              properties:
+                password:
+                  type: string
+                code:
+                  type: string
+                  pattern: "^\\d{6}$"
       responses:
         '200':
           description: TOTP disabled.
         '422':
           description: Invalid password or code.
+        '429':
+          description: Too many requests or failed codes/passwords for this account. See Retry-After.
   /api/v1/vault/sync:
     get:
       summary: Delta sync encrypted vault records visible to the authenticated user.
@@ -205,6 +278,8 @@ paths:
                 $ref: '#/components/schemas/VaultListResponse'
         '403':
           description: Missing permission.
+        '422':
+          description: The requested team is not one the caller belongs to.
     post:
       summary: Create an encrypted vault record.
       security:
@@ -225,9 +300,9 @@ paths:
               schema:
                 $ref: '#/components/schemas/VaultRecordResponse'
         '403':
-          description: Missing permission.
+          description: Missing permission, or the caller's team role does not allow creating team records (viewer).
         '422':
-          description: Validation failed.
+          description: Validation failed, or the team is not one the caller belongs to.
   /api/v1/vault/{resource}/{id}:
     get:
       summary: Read one encrypted vault record.
@@ -244,7 +319,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/VaultRecordResponse'
         '403':
-          description: Missing permission or not the owner.
+          description: Missing permission, not the owner of a personal record, or not a member of the record's team.
         '404':
           description: Vault record not found.
     patch:
@@ -268,7 +343,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/VaultRecordResponse'
         '403':
-          description: Missing permission or not the owner.
+          description: Missing permission, not the owner of a personal record, or the caller's team role does not allow writing team records (viewer).
         '404':
           description: Vault record not found.
         '422':
@@ -284,7 +359,7 @@ paths:
         '204':
           description: Vault record soft-deleted.
         '403':
-          description: Missing permission or not the owner.
+          description: Missing permission, not the owner of a personal record, or the caller's team role does not allow writing team records (viewer).
         '404':
           description: Vault record not found.
   /api/v1/teams/users/lookup:
@@ -515,7 +590,36 @@ paths:
           description: Validation failed.
   /api/v1/ws/ssh-token:
     post:
-      summary: Create a short-lived WebSocket SSH token for an owned host.
+      summary: Create a short-lived WebSocket SSH token for an owned host or a team host the caller may connect to.
+      description: |
+        Issues a 30-second, single-use token bound to the requesting client IP
+        and to the stated destination (host_id + host + port). Web SSH is
+        disabled by default and, when enabled, the backend sees SSH
+        credentials in plaintext for the duration of the session.
+
+        WebSocket protocol at `websocket_url` (the token is never put in the URL).
+        The first client text frame is JSON and is one of:
+
+        - `{"type":"probe","token","host_id","host","port"}` — runs the SSH key
+          exchange without authenticating and replies
+          `{"type":"host_key","fingerprint":"SHA256:…","key_type":"ssh-ed25519"}`,
+          then closes. Use it on first connection so the user can explicitly
+          approve the fingerprint and pin it in the encrypted vault.
+        - `{"type":"connect","token","host_id","host","port","host_key_fingerprint",
+          "username","cols","rows","auth"}` — `host_key_fingerprint` (OpenSSH
+          `SHA256:` format) is required. The proxy compares it with the
+          server's host key before sending any credential, then replies
+          `{"type":"ready","fingerprint","key_type"}`. Terminal data follows as
+          binary frames; `{"type":"resize","cols","rows"}` resizes the PTY.
+
+        Failures reply `{"type":"error","code","message"}` and close. Codes:
+        `invalid_frame`, `invalid_token`, `web_ssh_disabled`,
+        `destination_mismatch`, `destination_unresolvable`,
+        `destination_denied` (non-public address not in
+        TROMINAL_WEB_SSH_ALLOWED_CIDRS), `connect_failed`, `host_key_unknown`
+        (no pin sent), `host_key_mismatch` (also carries the presented
+        `fingerprint` and `key_type`), `host_key_unavailable`, `auth_failed`,
+        `session_failed`.
       security:
         - bearerAuth: []
       requestBody:
@@ -532,9 +636,12 @@ paths:
               schema:
                 $ref: '#/components/schemas/SshTokenResponse'
         '403':
-          description: Missing hosts.connect permission or web SSH disabled.
+          description: Missing hosts.connect permission, web SSH disabled, or the caller's team role does not allow connecting to this team host (viewer).
         '422':
-          description: Host does not belong to the authenticated user.
+          description: >-
+            Host is not visible to the authenticated user (another user's
+            personal host, or a team the caller is not a member of), or the
+            destination host/port is missing or invalid.
 components:
   securitySchemes:
     bearerAuth:
@@ -583,6 +690,7 @@ components:
         - registration_mode
         - registration_open
         - web_ssh_enabled
+        - setup_token_required
       properties:
         instance_name:
           type: string
@@ -599,6 +707,9 @@ components:
           type: boolean
         web_ssh_enabled:
           type: boolean
+        setup_token_required:
+          type: boolean
+          description: True while the instance has no users and a setup token is configured. The token itself is never returned.
     RegisterRequest:
       type: object
       required:
@@ -636,6 +747,24 @@ components:
         invite_code:
           type: string
           description: Required when server registration mode is invite.
+        setup_token:
+          type: string
+          maxLength: 255
+          description: |
+            Required for the first registration (the account that becomes admin)
+            when the operator configured `TROMINAL_SETUP_TOKEN`; see
+            `setup_token_required` in server info. Ignored afterwards.
+    TwoFactorEnableRequest:
+      type: object
+      description: Empty for a first enrollment. Both fields are required to replace an enabled factor.
+      properties:
+        password:
+          type: string
+          description: Current login password.
+        code:
+          type: string
+          pattern: "^\\d{6}$"
+          description: Current code from the active authenticator.
     LoginRequest:
       type: object
       required: [email, password]
@@ -966,19 +1095,39 @@ components:
                 $ref: '#/components/schemas/VaultRecordPayload'
     SshTokenRequest:
       type: object
-      required: [host_id]
+      required: [host_id, host, port]
+      description: >-
+        Host addresses are end-to-end encrypted, so the client states the
+        destination it is about to connect to. The token stores only a keyed
+        hash of host + port; the proxy refuses any connect or probe frame whose
+        host_id, host or port differs.
       properties:
         host_id:
           type: string
+          description: ID of a host owned by the authenticated user.
+        host:
+          type: string
+          maxLength: 255
+          description: Hostname or IP literal (IPv6 may be bracketed). Compared case-insensitively.
+        port:
+          type: integer
+          minimum: 1
+          maximum: 65535
     SshTokenResponse:
       type: object
       required: [token, expires_at, websocket_url]
       properties:
         token:
           type: string
-          description: Plain token shown once; server stores only a SHA-256 hash.
+          pattern: '^[a-f0-9]{64}$'
+          description: >-
+            Plain single-use token shown once; the server stores only a SHA-256
+            hash. Send it as the `token` field of the first WebSocket frame,
+            never in the URL. Bound to the requesting client IP unless
+            TROMINAL_WEB_SSH_BIND_IP=false.
         expires_at:
           type: string
           format: date-time
         websocket_url:
           type: string
+          description: WebSocket endpoint of the SSH proxy. Contains no credentials.

@@ -30,6 +30,7 @@ final class RegisterRequest extends FormRequest
             'private_key_nonce' => ['required', 'string', 'max:512'],
             'device_name' => ['nullable', 'string', 'max:255'],
             'invite_code' => ['nullable', 'string', 'min:32', 'max:128'],
+            'setup_token' => ['nullable', 'string', 'max:255'],
         ];
     }
 }

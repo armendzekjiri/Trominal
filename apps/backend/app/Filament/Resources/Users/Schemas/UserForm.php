@@ -7,6 +7,7 @@ namespace App\Filament\Resources\Users\Schemas;
 use Filament\Forms\Components\DateTimePicker;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
+use Filament\Forms\Components\Toggle;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
 
@@ -40,8 +41,12 @@ class UserForm
                             ->preload()
                             ->searchable()
                             ->disabled(fn ($record): bool => $record?->is(auth()->user()) ?? false),
-                        DateTimePicker::make('suspended_at')
-                            ->label('Suspended at')
+                        // Not the suspended_at column: EditUser routes changes
+                        // through UserSuspensionService so suspension always
+                        // ends the user's sessions.
+                        Toggle::make('suspended')
+                            ->label('Suspended')
+                            ->helperText('Suspending signs the user out everywhere and revokes all API and refresh tokens.')
                             ->disabled(fn ($record): bool => $record?->is(auth()->user()) ?? false),
                     ])
                     ->columns(2),

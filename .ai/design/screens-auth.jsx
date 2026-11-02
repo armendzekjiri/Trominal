@@ -184,6 +184,14 @@ const ScreenSignup = () => {
           </div>
         </div>
         <Input label="Confirm master password" mono value="•••••••••••••••••••••" icon="key" />
+        {/* Only rendered when /api/server-info reports setup_token_required (first account on a fresh instance). */}
+        <Input
+          label="Setup code"
+          mono
+          value="3f8c2d91b7a04e6f0c5d8e1a2b3c4d5e"
+          icon="key"
+          hint="Printed by docker/setup.sh (TROMINAL_SETUP_TOKEN in the server's .env)."
+        />
         <label
           style={{
             display: 'flex',
