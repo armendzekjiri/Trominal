@@ -21,7 +21,8 @@ final class SystemTest extends TestCase
             ->assertJsonPath('min_client_version', '0.1.0')
             ->assertJsonPath('registration_mode', 'single')
             ->assertJsonPath('registration_open', true)
-            ->assertJsonPath('web_ssh_enabled', false);
+            ->assertJsonPath('web_ssh_enabled', false)
+            ->assertJsonPath('setup_token_required', false);
     }
 
     public function test_returns_basic_health_information(): void

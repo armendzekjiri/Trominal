@@ -9,6 +9,9 @@ return [
     'registration_mode' => env('TROMINAL_REGISTRATION_MODE', 'single'),
     'access_token_expiration_minutes' => (int) env('TROMINAL_ACCESS_TOKEN_EXPIRATION_MINUTES', 15),
     'refresh_token_expiration_days' => (int) env('TROMINAL_REFRESH_TOKEN_EXPIRATION_DAYS', 7),
+    // Optional one-time code the first registration (the one that becomes
+    // admin) must present. Leave empty to disable. Never exposed by the API.
+    'setup_token' => env('TROMINAL_SETUP_TOKEN'),
     'rate_limits' => [
         // Failed sign-ins tolerated per account and per IP address within the decay window.
         'login_max_attempts' => (int) env('TROMINAL_LOGIN_MAX_ATTEMPTS', 5),

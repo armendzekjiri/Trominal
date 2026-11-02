@@ -75,6 +75,12 @@ export type ServerInfoResponse = {
   registration_mode: 'single' | 'open' | 'invite' | 'closed'
   registration_open: boolean
   web_ssh_enabled: boolean
+  /**
+   * True while the instance has no users and the operator configured a setup
+   * code, which the first (admin) registration must send as `setup_token`.
+   * Absent on older servers.
+   */
+  setup_token_required?: boolean
 }
 
 /** Argon2id parameters serialised on the user record. */
@@ -123,6 +129,8 @@ export type RegisterRequest = {
   private_key_nonce: string
   device_name?: string
   invite_code?: string
+  /** One-time setup code; required for the first account when server info says so. */
+  setup_token?: string
 }
 
 /** Request body for POST /api/v1/auth/login. */

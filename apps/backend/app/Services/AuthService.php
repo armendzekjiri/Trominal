@@ -35,8 +35,46 @@ final class AuthService
      */
     public function register(array $payload): array
     {
+        $setupTokenRejected = false;
+
+        try {
+            return $this->registerInTransaction($payload, $setupTokenRejected);
+        } catch (AuthorizationException $exception) {
+            if ($setupTokenRejected) {
+                // Recorded after the rollback so the entry is kept.
+                AuditLog::record(null, 'auth.register.setup_token_rejected', 'user', null, [
+                    'email_hash' => hash('sha256', (string) ($payload['email'] ?? '')),
+                ]);
+            }
+
+            throw $exception;
+        }
+    }
+
+    /**
+     * Whether the instance still has no users and a setup token is configured,
+     * i.e. the next registration (the future admin) must present it.
+     */
+    public static function setupTokenRequired(): bool
+    {
+        return self::configuredSetupToken() !== null && User::query()->count() === 0;
+    }
+
+    private static function configuredSetupToken(): ?string
+    {
+        $token = config('trominal.setup_token');
+
+        return is_string($token) && trim($token) !== '' ? trim($token) : null;
+    }
+
+    /**
+     * @param  array<string, mixed>  $payload
+     * @return array{user: User, access_token: string, refresh_token: string, token_type: string, expires_in: int}
+     */
+    private function registerInTransaction(array $payload, bool &$setupTokenRejected): array
+    {
         /** @var array{user: User, access_token: string, refresh_token: string, token_type: string, expires_in: int} $tokenPair */
-        $tokenPair = DB::transaction(function () use ($payload): array {
+        $tokenPair = DB::transaction(function () use ($payload, &$setupTokenRejected): array {
             /** @var AppSetting $setting */
             $setting = AppSetting::query()
                 ->where('key', AppSetting::REGISTRATION)
@@ -50,6 +88,18 @@ final class AuthService
 
             if (! $isOpen || $mode === 'closed' || ($mode === 'single' && ! $isFirstUser)) {
                 throw new AuthorizationException(__('Registration is closed.'));
+            }
+
+            $setupToken = self::configuredSetupToken();
+
+            if (
+                $isFirstUser
+                && $setupToken !== null
+                && ! hash_equals($setupToken, trim((string) ($payload['setup_token'] ?? '')))
+            ) {
+                $setupTokenRejected = true;
+
+                throw new AuthorizationException(__('A valid setup code is required to create the first account.'));
             }
 
             $invite = $mode === 'invite'

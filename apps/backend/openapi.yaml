@@ -652,6 +652,7 @@ components:
         - registration_mode
         - registration_open
         - web_ssh_enabled
+        - setup_token_required
       properties:
         instance_name:
           type: string
@@ -668,6 +669,9 @@ components:
           type: boolean
         web_ssh_enabled:
           type: boolean
+        setup_token_required:
+          type: boolean
+          description: True while the instance has no users and a setup token is configured. The token itself is never returned.
     RegisterRequest:
       type: object
       required:
@@ -705,6 +709,13 @@ components:
         invite_code:
           type: string
           description: Required when server registration mode is invite.
+        setup_token:
+          type: string
+          maxLength: 255
+          description: |
+            Required for the first registration (the account that becomes admin)
+            when the operator configured `TROMINAL_SETUP_TOKEN`; see
+            `setup_token_required` in server info. Ignored afterwards.
     TwoFactorEnableRequest:
       type: object
       description: Empty for a first enrollment. Both fields are required to replace an enabled factor.
