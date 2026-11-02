@@ -74,7 +74,8 @@ interface ContributorResponse {
 
 export async function fetchGithubStats(opts: FetchOptions = {}): Promise<GithubStats> {
   const repo = `${SITE.github.owner}/${SITE.github.repo}`
-  const token = opts.token ?? (typeof process !== 'undefined' ? process.env?.GITHUB_TOKEN : undefined)
+  const token =
+    opts.token ?? (typeof process !== 'undefined' ? process.env?.GITHUB_TOKEN : undefined)
 
   const [repoData, releases, contributors] = await Promise.allSettled([
     gh<RepoResponse>(`/repos/${repo}`, { ...opts, token }),
@@ -89,9 +90,15 @@ export async function fetchGithubStats(opts: FetchOptions = {}): Promise<GithubS
   }
 
   if (releases.status === 'fulfilled') {
-    const latest = releases.value.find((r) => !r.draft && !r.prerelease) ?? releases.value[0]
+    // Tags are split per deployable (`client-vX.Y.Z`, `backend-vX.Y.Z`). The product version is
+    // the client the user installs; fall back to the backend while no client release is out.
+    const published = releases.value.filter((r) => !r.draft && !r.prerelease)
+    const latest =
+      published.find((r) => r.tag_name.startsWith('client-v')) ??
+      published.find((r) => r.tag_name.startsWith('backend-v')) ??
+      published[0]
     if (latest) {
-      out.latestVersion = latest.tag_name
+      out.latestVersion = latest.tag_name.replace(/^(client|backend)-/, '')
       out.latestReleaseName = latest.name
       out.latestReleaseDate = latest.published_at
       out.latestReleaseUrl = latest.html_url
