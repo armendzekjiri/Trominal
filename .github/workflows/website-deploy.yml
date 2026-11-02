@@ -1,4 +1,7 @@
-name: Website — build & deploy
+name: Website — build
+
+# Deploys happen in Cloudflare Workers Builds (project `trominal`, connected to this repo),
+# which builds website/ with wrangler.toml on every push. This workflow only verifies the build.
 
 on:
   push:
@@ -17,20 +20,23 @@ on:
   pull_request:
     paths:
       - 'website/**'
+      - 'docs/**'
+      - 'pnpm-lock.yaml'
+      - 'pnpm-workspace.yaml'
+      - '.github/workflows/website-deploy.yml'
   workflow_dispatch:
 
-# Avoid stacking deploys on rapid pushes.
+# Avoid stacking builds on rapid pushes.
 concurrency:
   group: website-${{ github.ref }}
   cancel-in-progress: true
 
 permissions:
   contents: read
-  deployments: write
 
 jobs:
   build:
-    name: Build & deploy to Cloudflare Pages
+    name: Build website
     runs-on: ubuntu-latest
     timeout-minutes: 12
     steps:
@@ -52,12 +58,3 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: pnpm --filter @trominal/website build
-
-      - name: Deploy to Cloudflare Pages
-        # Only auto-deploy from main. PRs build for verification only.
-        if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
-        uses: cloudflare/wrangler-action@v3
-        with:
-          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          command: pages deploy website/dist --project-name=trominal-website --branch=main
