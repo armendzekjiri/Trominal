@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers\Api\V1;
 
+use App\Enums\TeamAction;
 use App\Http\Controllers\Controller;
 use App\Models\TeamMember;
 use App\Models\User;
@@ -31,8 +32,10 @@ final class VaultSyncController extends Controller
         /** @var list<string> $teamIds */
         $teamIds = TeamMember::query()
             ->where('user_id', $user->id)
-            ->pluck('team_id')
-            ->map(static fn (mixed $teamId): string => (string) $teamId)
+            ->get()
+            ->filter(static fn (TeamMember $member): bool => $member->allows(TeamAction::ReadRecords))
+            ->map(static fn (TeamMember $member): string => (string) $member->team_id)
+            ->values()
             ->all();
 
         foreach (VaultResourceRegistry::all() as $type => $resource) {

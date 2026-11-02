@@ -12,6 +12,7 @@ use App\Models\User;
 use App\Models\WsSessionToken;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Gate;
 use Illuminate\Validation\ValidationException;
 
 final class SshTokenController extends Controller
@@ -33,16 +34,18 @@ final class SshTokenController extends Controller
         ])->validate();
 
         /** @var Host|null $host */
-        $host = Host::query()
-            ->whereKey($payload['host_id'])
-            ->where('user_id', $user->id)
-            ->first();
+        $host = Host::query()->whereKey($payload['host_id'])->first();
 
-        if (! $host instanceof Host) {
+        // Hosts the caller cannot see (another user's personal host, or a
+        // team they are not a member of) look like unknown hosts; visible
+        // team hosts additionally require a team role that may connect.
+        if (! $host instanceof Host || Gate::denies('view', $host)) {
             throw ValidationException::withMessages([
                 'host_id' => __('The selected host is invalid.'),
             ]);
         }
+
+        Gate::authorize('connect', $host);
 
         $plainToken = bin2hex(random_bytes(32));
         $expiresAt = now()->addSeconds(30);
