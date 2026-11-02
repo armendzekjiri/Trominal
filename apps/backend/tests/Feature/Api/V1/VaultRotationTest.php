@@ -387,15 +387,33 @@ final class VaultRotationTest extends TestCase
     public function test_rotation_is_rate_limited_per_user(): void
     {
         $account = $this->createAccount();
-        $payload = [...$this->rotationPayload($account), 'current_password' => 'not-the-login-password'];
+        $payload = $this->rotationPayload($account);
 
+        // The route allows 10 attempts per hour per user, whatever the outcome.
         for ($attempt = 0; $attempt < 10; $attempt++) {
-            $this->postJson('/api/v1/me/master-password/change', $payload, $account['headers'])
-                ->assertUnprocessable();
+            $this->postJson('/api/v1/me/master-password/change', [...$payload, 'vault_version' => 999], $account['headers'])
+                ->assertConflict();
         }
 
         $this->postJson('/api/v1/me/master-password/change', $payload, $account['headers'])
             ->assertTooManyRequests();
+    }
+
+    public function test_wrong_step_up_passwords_lock_rotation_out(): void
+    {
+        config(['trominal.rate_limits.two_factor_max_attempts' => 3]);
+        $account = $this->createAccount();
+        $payload = [...$this->rotationPayload($account), 'current_password' => 'not-the-login-password'];
+
+        // Step-up failures share the per-account counter with the 2FA endpoints.
+        for ($attempt = 0; $attempt < 3; $attempt++) {
+            $this->postJson('/api/v1/me/master-password/change', $payload, $account['headers'])
+                ->assertUnprocessable();
+        }
+
+        $this->postJson('/api/v1/me/master-password/change', $this->rotationPayload($account), $account['headers'])
+            ->assertTooManyRequests();
+        $this->assertVaultUnchanged($account);
     }
 
     public function test_vault_writes_are_rejected_once_the_access_token_was_revoked_by_a_rotation(): void

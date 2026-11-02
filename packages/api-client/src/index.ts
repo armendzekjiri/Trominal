@@ -99,6 +99,12 @@ export type ServerInfoResponse = {
   registration_mode: 'single' | 'open' | 'invite' | 'closed'
   registration_open: boolean
   web_ssh_enabled: boolean
+  /**
+   * True while the instance has no users and the operator configured a setup
+   * code, which the first (admin) registration must send as `setup_token`.
+   * Absent on older servers.
+   */
+  setup_token_required?: boolean
 }
 
 /** Argon2id parameters serialised on the user record. */
@@ -153,6 +159,8 @@ export type RegisterRequest = {
   private_key_nonce: string
   device_name?: string
   invite_code?: string
+  /** One-time setup code; required for the first account when server info says so. */
+  setup_token?: string
 }
 
 /** Request body for POST /api/v1/auth/login. */
@@ -195,19 +203,30 @@ export type TwoFactorEnableResponse = {
   otpauth_uri: string
 }
 
+/**
+ * Request body for POST /api/v1/auth/two-factor/enable. Omit for a first
+ * enrollment; replacing an enabled factor requires both fields.
+ */
+export type TwoFactorEnableRequest = { password?: string; code?: string }
+
 /** Request body for POST /api/v1/auth/two-factor/verify. */
 export type TwoFactorVerifyRequest = { code: string }
 
 /** Request body for POST /api/v1/auth/two-factor/disable. */
 export type TwoFactorDisableRequest = { password: string; code: string }
 
-/** Request body for POST /api/v1/ws/ssh-token. */
-export type SshTokenRequest = { host_id: string }
+/**
+ * Request body for POST /api/v1/ws/ssh-token. The token is bound to this exact
+ * destination; the proxy refuses frames for any other host_id/host/port.
+ */
+export type SshTokenRequest = { host_id: string; host: string; port: number }
 
 /** Short-lived WebSocket SSH token response. */
 export type SshTokenResponse = {
+  /** Single-use token; send it in the first WebSocket frame, never in the URL. */
   token: string
   expires_at: string
+  /** Proxy endpoint; contains no credentials. */
   websocket_url: string
 }
 
@@ -400,10 +419,16 @@ export class TrominalApiClient {
     return response.data
   }
 
-  /** Begin TOTP setup. Returns a base32 secret and otpauth:// URI for QR rendering. */
-  async enableTwoFactor(): Promise<TwoFactorEnableResponse> {
+  /**
+   * Stage a TOTP enrollment. Returns a base32 secret and otpauth:// URI for QR
+   * rendering; nothing changes until the code is confirmed with
+   * `verifyTwoFactor`. Replacing an enabled factor requires `password` and a
+   * current `code`.
+   */
+  async enableTwoFactor(payload: TwoFactorEnableRequest = {}): Promise<TwoFactorEnableResponse> {
     return this.request<TwoFactorEnableResponse>('/api/v1/auth/two-factor/enable', {
       method: 'POST',
+      body: payload,
     })
   }
 

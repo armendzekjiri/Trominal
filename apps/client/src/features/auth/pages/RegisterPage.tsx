@@ -1,9 +1,10 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { Eye, EyeOff, Key, Lock, Mail } from 'lucide-react'
+import { Eye, EyeOff, Key, KeyRound, Lock, Mail } from 'lucide-react'
 import { AuthShell } from '@/components/auth/AuthShell'
 import { Button } from '@/components/ui/button'
 import { TextInput } from '@/components/ui/text-input'
+import { getApiClient } from '@/lib/api-client'
 import { useAuth } from '@/stores/auth'
 import { useVault } from '@/stores/vault'
 import { useServerDisplay } from '@/features/auth/server-display'
@@ -48,8 +49,28 @@ export function RegisterPage() {
   const [accepted, setAccepted] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
+  const [setupTokenRequired, setSetupTokenRequired] = useState(false)
+  const [setupToken, setSetupToken] = useState('')
 
   const masterScore = useMemo(() => scoreMaster(masterPw), [masterPw])
+
+  useEffect(() => {
+    // The first (admin) account on a fresh instance may need the one-time
+    // setup code the operator got from docker/setup.sh.
+    let active = true
+    void (async (): Promise<void> => {
+      try {
+        const api = await getApiClient()
+        const info = await api.getServerInfo()
+        if (active) setSetupTokenRequired(info.setup_token_required === true)
+      } catch {
+        // Unreachable server: the register call will surface the real error.
+      }
+    })()
+    return () => {
+      active = false
+    }
+  }, [])
 
   const submit = async (e: React.FormEvent): Promise<void> => {
     e.preventDefault()
@@ -73,6 +94,10 @@ export function RegisterPage() {
     }
     if (!accepted) {
       setError('You must acknowledge the master-password recovery warning.')
+      return
+    }
+    if (setupTokenRequired && setupToken.trim() === '') {
+      setError('Enter the setup code printed when this server was installed.')
       return
     }
 
@@ -100,6 +125,7 @@ export function RegisterPage() {
         public_key: await toBase64(keypair.publicKey),
         private_key_ciphertext: env.ct,
         private_key_nonce: env.n,
+        ...(setupTokenRequired ? { setup_token: setupToken.trim() } : {}),
       })
 
       // Round-trip the salt — server returned the same value, but we keep our
@@ -212,6 +238,20 @@ export function RegisterPage() {
           onChange={(e) => setMasterPwConfirm(e.target.value)}
           required
         />
+
+        {setupTokenRequired && (
+          <TextInput
+            label="Setup code"
+            autoComplete="off"
+            spellCheck={false}
+            icon={<KeyRound size={14} />}
+            hint="Printed by docker/setup.sh (TROMINAL_SETUP_TOKEN in the server's .env)."
+            mono
+            value={setupToken}
+            onChange={(e) => setSetupToken(e.target.value)}
+            required
+          />
+        )}
 
         <label className="flex items-start gap-2.5 text-[12px] leading-relaxed text-fg-muted">
           <input

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Filament\Resources\Roles\Schemas;
 
+use App\Models\Role;
 use Filament\Forms\Components\Hidden;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
@@ -21,7 +22,11 @@ class RoleForm
                         TextInput::make('name')
                             ->required()
                             ->unique(ignoreRecord: true)
-                            ->maxLength(255),
+                            ->maxLength(255)
+                            ->disabled(fn (?Role $record): bool => $record?->isDefault() ?? false)
+                            ->helperText(fn (?Role $record): ?string => ($record?->isDefault() ?? false)
+                                ? 'Default roles cannot be renamed.'
+                                : null),
                         Hidden::make('guard_name')
                             ->default('web'),
                     ])

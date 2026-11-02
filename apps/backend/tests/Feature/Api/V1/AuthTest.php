@@ -271,11 +271,13 @@ final class AuthTest extends TestCase
         $enable->assertOk()->assertJsonStructure(['secret', 'otpauth_uri']);
 
         $secret = (string) $enable->json('secret');
-        $code = (new Google2FA)->getCurrentOtp($secret);
+        // Codes are single use, so each step uses the code of a later 30-second window.
+        $codeAt = static fn (): string => (new Google2FA)->oathTotp($secret, intdiv(now()->getTimestamp(), 30));
 
         $this->postJson('/api/v1/auth/two-factor/verify', [
-            'code' => $code,
+            'code' => $codeAt(),
         ], $headers)->assertOk();
+        $this->travel(30)->seconds();
 
         $this->postJson('/api/v1/auth/login', [
             'email' => 'first@example.test',
@@ -285,12 +287,13 @@ final class AuthTest extends TestCase
         $this->postJson('/api/v1/auth/login', [
             'email' => 'first@example.test',
             'password' => self::validPassword(),
-            'two_factor_code' => $code,
+            'two_factor_code' => $codeAt(),
         ])->assertOk();
+        $this->travel(30)->seconds();
 
         $this->postJson('/api/v1/auth/two-factor/disable', [
             'password' => self::validPassword(),
-            'code' => $code,
+            'code' => $codeAt(),
         ], $headers)->assertOk();
 
         $this->postJson('/api/v1/auth/login', [
