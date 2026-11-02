@@ -2,6 +2,7 @@ export type {
   LocalShellOptions,
   SshAuth,
   SshConnectOptions,
+  SshHostKeyPin,
   SshSession,
   SshSessionState,
   Unsubscribe,

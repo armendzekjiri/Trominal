@@ -9,9 +9,7 @@ use crate::event::{emit_typed, EventSink};
 use crate::types::{LocalShellClosed, LocalShellData};
 use portable_pty::{native_pty_system, Child as PtyChild, CommandBuilder, MasterPty, PtySize};
 use std::collections::HashMap;
-use std::fs;
 use std::io::{Read, Write};
-use std::path::PathBuf;
 use std::process::Child as ProcessChild;
 use std::sync::{Arc, Mutex};
 use std::thread;
@@ -31,13 +29,33 @@ pub struct LocalShellSession {
     pub master: Box<dyn MasterPty + Send>,
     pub writer: Box<dyn Write + Send>,
     pub child: Box<dyn PtyChild + Send + Sync>,
-    pub temp_paths: Vec<PathBuf>,
+    pub resources: SessionResources,
 }
 
-/// A long-lived `ssh -L/-R/-D` child plus any temp identity files it owns.
+/// A long-lived `ssh -L/-R/-D` child plus the resources it owns.
 pub struct TunnelSession {
     pub child: ProcessChild,
-    pub temp_paths: Vec<PathBuf>,
+    pub resources: SessionResources,
+}
+
+/// Whatever a session's child process needs while it runs (for SSH: the
+/// private agent, pinned known_hosts and their directory). Released by
+/// dropping, which happens when the session closes, exits or fails to
+/// start.
+#[derive(Default)]
+pub struct SessionResources(
+    // Never read: held only so it is dropped together with the session.
+    #[allow(dead_code)] Option<Box<dyn Send>>,
+);
+
+impl SessionResources {
+    pub fn none() -> Self {
+        Self(None)
+    }
+
+    pub fn new(resource: impl Send + 'static) -> Self {
+        Self(Some(Box::new(resource)))
+    }
 }
 
 #[derive(Debug, Error)]
@@ -65,23 +83,22 @@ pub struct PtyEvents {
 
 pub struct PtyCommand {
     pub command: CommandBuilder,
-    pub temp_paths: Vec<PathBuf>,
+    pub resources: SessionResources,
 }
 
 /// Spawn a child process under a freshly opened PTY pair, register the
 /// session in [`LocalShellState::sessions`], and start a reader thread
 /// that streams bytes into the supplied [`EventSink`].
 ///
-/// `temp_paths` are owned by the session — they will be removed when the
-/// session closes, whether through normal exit, error, or
-/// [`close_session`]. On any failure during setup the temp paths are
-/// cleaned up before the error is returned.
+/// `resources` are owned by the session and released when it closes,
+/// whether through normal exit, error, or [`close_session`]. On any
+/// failure during setup they are released before the error is returned.
 pub fn open_pty_session(
     sink: Arc<dyn EventSink>,
     state: Arc<LocalShellState>,
     session_id: String,
     command: CommandBuilder,
-    temp_paths: Vec<PathBuf>,
+    resources: SessionResources,
     geometry: PtyGeometry,
     events: PtyEvents,
 ) -> Result<String, LocalShellError> {
@@ -96,21 +113,17 @@ pub fn open_pty_session(
             pixel_width: 0,
             pixel_height: 0,
         })
-        .map_err(|err| {
-            cleanup_temp_paths(&temp_paths);
-            LocalShellError::Operation(err.to_string())
-        })?;
+        .map_err(|err| LocalShellError::Operation(err.to_string()))?;
 
-    let mut child = pair.slave.spawn_command(command).map_err(|err| {
-        cleanup_temp_paths(&temp_paths);
-        LocalShellError::Operation(err.to_string())
-    })?;
+    let mut child = pair
+        .slave
+        .spawn_command(command)
+        .map_err(|err| LocalShellError::Operation(err.to_string()))?;
 
     let reader = match pair.master.try_clone_reader() {
         Ok(reader) => reader,
         Err(err) => {
             let _ = child.kill();
-            cleanup_temp_paths(&temp_paths);
             return Err(LocalShellError::Operation(err.to_string()));
         }
     };
@@ -118,7 +131,6 @@ pub fn open_pty_session(
         Ok(writer) => writer,
         Err(err) => {
             let _ = child.kill();
-            cleanup_temp_paths(&temp_paths);
             return Err(LocalShellError::Operation(err.to_string()));
         }
     };
@@ -128,7 +140,6 @@ pub fn open_pty_session(
         Ok(sessions) => sessions,
         Err(_) => {
             let _ = child.kill();
-            cleanup_temp_paths(&temp_paths);
             return Err(LocalShellError::Locked);
         }
     };
@@ -138,7 +149,7 @@ pub fn open_pty_session(
             master: pair.master,
             writer,
             child,
-            temp_paths,
+            resources,
         },
     );
     drop(sessions);
@@ -202,11 +213,39 @@ pub fn close_session(state: &LocalShellState, session_id: &str) -> Result<(), Lo
             .child
             .kill()
             .map_err(|err| LocalShellError::Operation(err.to_string()));
-        cleanup_temp_paths(&session.temp_paths);
+        drop(session);
         kill_result?;
     }
 
     Ok(())
+}
+
+/// Kill every PTY session and tunnel and release their resources. Called
+/// when the app exits so no ssh child or private agent outlives it.
+pub fn close_all_sessions(state: &LocalShellState) {
+    let sessions: Vec<LocalShellSession> = match state.sessions.lock() {
+        Ok(mut sessions) => sessions.drain().map(|(_, session)| session).collect(),
+        Err(poisoned) => poisoned
+            .into_inner()
+            .drain()
+            .map(|(_, session)| session)
+            .collect(),
+    };
+    for mut session in sessions {
+        let _ = session.child.kill();
+    }
+    let tunnels: Vec<TunnelSession> = match state.tunnels.lock() {
+        Ok(mut tunnels) => tunnels.drain().map(|(_, tunnel)| tunnel).collect(),
+        Err(poisoned) => poisoned
+            .into_inner()
+            .drain()
+            .map(|(_, tunnel)| tunnel)
+            .collect(),
+    };
+    for mut tunnel in tunnels {
+        let _ = tunnel.child.kill();
+        let _ = tunnel.child.wait();
+    }
 }
 
 fn spawn_reader(
@@ -258,18 +297,8 @@ fn emit_closed(sink: &dyn EventSink, topic: &str, session_id: &str, reason: Stri
 
 fn remove_session(state: &LocalShellState, session_id: &str) {
     if let Ok(mut sessions) = state.sessions.lock() {
-        if let Some(session) = sessions.remove(session_id) {
-            cleanup_temp_paths(&session.temp_paths);
-        }
-    }
-}
-
-/// Best-effort removal of any temp identity / config files the caller
-/// owned. Errors are intentionally ignored — losing the file path means
-/// it was already removed or the user can clean `/tmp` themselves.
-pub fn cleanup_temp_paths(paths: &[PathBuf]) {
-    for path in paths {
-        let _ = fs::remove_file(path);
+        // Dropping the session releases its resources.
+        sessions.remove(session_id);
     }
 }
 

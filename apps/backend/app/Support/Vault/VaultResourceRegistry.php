@@ -40,7 +40,7 @@ final class VaultResourceRegistry
             'hosts' => [
                 'model' => Host::class,
                 'permissions' => self::hostPermissions(),
-                'fields' => ['team_id', 'group_id', 'name_ciphertext', 'name_nonce', 'hostname_ciphertext', 'hostname_nonce', 'port_ciphertext', 'port_nonce', 'username_ciphertext', 'username_nonce', 'tags_ciphertext', 'tags_nonce', 'color_ciphertext', 'color_nonce'],
+                'fields' => ['team_id', 'group_id', 'name_ciphertext', 'name_nonce', 'hostname_ciphertext', 'hostname_nonce', 'port_ciphertext', 'port_nonce', 'username_ciphertext', 'username_nonce', 'tags_ciphertext', 'tags_nonce', 'color_ciphertext', 'color_nonce', 'host_keys_ciphertext', 'host_keys_nonce'],
                 'required' => ['name_ciphertext', 'name_nonce', 'hostname_ciphertext', 'hostname_nonce'],
                 'relationship_fields' => ['group_id' => Group::class],
                 'team_scoped' => true,

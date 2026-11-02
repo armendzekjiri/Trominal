@@ -12,13 +12,18 @@
 //! commits on phase/10-web-helper.
 
 pub mod event;
+pub mod host_keys;
 pub mod pty;
+pub mod secret;
+pub mod ssh_identity;
+pub mod ssh_session;
 pub mod types;
 
 pub use event::{emit_typed, EventSink};
 pub use pty::{
-    cleanup_temp_paths, close_session, open_pty_session, require_session_id, resize_session,
+    close_all_sessions, close_session, open_pty_session, require_session_id, resize_session,
     write_session, LocalShellError, LocalShellSession, LocalShellState, PtyCommand, PtyEvents,
-    PtyGeometry, TunnelSession,
+    PtyGeometry, SessionResources, TunnelSession,
 };
+pub use secret::SecretBytes;
 pub use types::*;

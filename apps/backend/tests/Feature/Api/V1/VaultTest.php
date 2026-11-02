@@ -27,6 +27,41 @@ final class VaultTest extends TestCase
         $this->seed(RoleAndPermissionSeeder::class);
     }
 
+    public function test_stores_encrypted_host_key_pins_and_keeps_them_on_partial_updates(): void
+    {
+        $user = $this->userWithRole('user');
+        $headers = $this->bearerHeaders($user);
+        $hostId = '01JZ0000000000000000000001';
+
+        // Existing clients create hosts without pins.
+        $this->postJson('/api/v1/vault/hosts', [
+            'id' => $hostId,
+            ...self::hostPayload(),
+        ], $headers)
+            ->assertCreated()
+            ->assertJsonPath('data.host_keys_ciphertext', null);
+
+        $this->patchJson("/api/v1/vault/hosts/{$hostId}", [
+            'host_keys_ciphertext' => 'pinned-keys-ciphertext',
+            'host_keys_nonce' => 'pinned-keys-nonce',
+        ], $headers)
+            ->assertOk()
+            ->assertJsonPath('data.host_keys_ciphertext', 'pinned-keys-ciphertext')
+            ->assertJsonPath('data.host_keys_nonce', 'pinned-keys-nonce');
+
+        $raw = DB::table('hosts')->where('id', $hostId)->value('host_keys_ciphertext');
+        self::assertIsString($raw);
+        self::assertNotSame('pinned-keys-ciphertext', $raw);
+
+        // An update that doesn't mention the pins leaves them alone.
+        $this->patchJson("/api/v1/vault/hosts/{$hostId}", [
+            'username_ciphertext' => 'updated-user-ciphertext',
+            'username_nonce' => 'updated-user-nonce',
+        ], $headers)
+            ->assertOk()
+            ->assertJsonPath('data.host_keys_ciphertext', 'pinned-keys-ciphertext');
+    }
+
     public function test_manages_encrypted_host_records_and_keeps_database_ciphertext_wrapped(): void
     {
         $user = $this->userWithRole('user');

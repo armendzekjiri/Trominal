@@ -12,8 +12,19 @@ export type SshAuth =
       passphrase?: string
     }
 
+/** An approved SSH host key (desktop transport only). */
+export type SshHostKeyPin = {
+  keyType: string
+  publicKey: string
+}
+
 export type SshConnectOptions = {
   hostId?: string
+  /**
+   * Host keys the user approved for this host. The desktop transport refuses
+   * to connect to a server that presents none of them.
+   */
+  hostKeys?: SshHostKeyPin[]
   host: string
   port: number
   username: string

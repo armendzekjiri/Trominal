@@ -68,6 +68,11 @@ export class NativeSshSession implements SshSession {
       if (privateKeyPem !== undefined) {
         request.privateKeyPem = privateKeyPem
       }
+      const passphrase = this.passphrasePayload()
+      if (passphrase !== undefined) {
+        request.passphrase = passphrase
+      }
+      request.hostKeys = this.options.hostKeys ?? []
 
       await invoke<string>('ssh_connect', {
         request,
@@ -143,6 +148,18 @@ export class NativeSshSession implements SshSession {
     }
 
     return Array.from(this.options.auth.privateKeyPem)
+  }
+
+  private passphrasePayload(): number[] | undefined {
+    if (this.options.auth?.kind !== 'private-key' || !this.options.auth.passphrase) {
+      return undefined
+    }
+    const bytes = new TextEncoder().encode(this.options.auth.passphrase)
+    try {
+      return Array.from(bytes)
+    } finally {
+      bytes.fill(0)
+    }
   }
 
   private cleanupListeners(): void {

@@ -14,35 +14,59 @@
 use std::collections::HashMap;
 use std::env;
 use std::fs;
-use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
-use std::process::{Child, ChildStdin, Command as ProcessCommand, Stdio};
+use std::process::Command as ProcessCommand;
 use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::UNIX_EPOCH;
 use tauri::{AppHandle, Emitter, State};
 use thiserror::Error;
+use trominal_core::ssh_session::{ssh_destination, PreparedSsh};
 use trominal_core::{
-    cleanup_temp_paths, LocalHomeResponse, LocalListRequest, LocalListResponse, SftpEntry,
+    LocalHomeResponse, LocalListRequest, LocalListResponse, SftpEntry,
     SftpHomeRequest, SftpHomeResponse, SftpHostArgs, SftpListRequest, SftpListResponse,
     SftpPathRequest, SftpRemoveRequest, SftpRenameRequest, SftpTransferEvent, SftpTransferRequest,
     SftpTransferStartResponse,
 };
 
 use crate::local_shell::{
-    destination, is_rsa_private_key, read_child_stderr, rsa_key_compat_process_options,
-    user_safe_ssh_error, user_safe_ssh_output, write_temp_ssh_file,
+    host_key_failure_error, key_material, load_options, rsa_key_compat_process_options,
+    user_safe_ssh_error,
 };
+use crate::sftp_process::{CancelResult, TransferOutcome, TransferProcess};
 
 #[derive(Default)]
 pub struct SftpState {
     transfers: Mutex<HashMap<String, TransferHandle>>,
 }
 
+impl SftpState {
+    /// Cancel every running transfer and give the monitor threads a moment
+    /// to unload keys and remove their directories (used on app exit).
+    pub fn cancel_all(&self) {
+        let processes: Vec<Arc<TransferProcess>> = match self.transfers.lock() {
+            Ok(transfers) => transfers
+                .values()
+                .map(|handle| Arc::clone(&handle.process))
+                .collect(),
+            Err(_) => return,
+        };
+        for process in processes {
+            let _ = process.cancel();
+        }
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(2);
+        while std::time::Instant::now() < deadline {
+            if self.transfers.lock().map_or(true, |t| t.is_empty()) {
+                break;
+            }
+            thread::sleep(std::time::Duration::from_millis(20));
+        }
+    }
+}
+
 struct TransferHandle {
-    /// `Some(child)` while running; consumed when the monitor thread exits.
-    child: Arc<Mutex<Option<Child>>>,
-    temp_paths: Vec<PathBuf>,
+    /// Shared with the monitor thread, which owns cleanup and the final event.
+    process: Arc<TransferProcess>,
 }
 
 #[derive(Debug, Error)]
@@ -60,12 +84,7 @@ enum SftpError {
 #[tauri::command]
 pub fn sftp_list(request: SftpListRequest) -> Result<SftpListResponse, String> {
     let SftpListRequest { host, remote_path } = request;
-    let path = clean_remote_path(&remote_path);
-    // OpenSSH `sftp` returns absolute names from `ls /path`, so a click on a
-    // child folder would join `/home` + `/home/ubuntu` = `/home//home/ubuntu`.
-    // `cd` first, then a bare `ls -la`, gives plain relative names that the
-    // joinPath helper on the frontend can compose without surprises.
-    let batch = format!("cd {}\nls -la\n", quote_remote(&path));
+    let batch = list_batch(&remote_path)?;
     let stdout = run_sftp_batch(&host, "list", batch.as_bytes())?;
     let entries = parse_sftp_listing(&stdout);
     Ok(SftpListResponse { entries })
@@ -86,10 +105,7 @@ pub fn sftp_remote_home(request: SftpHomeRequest) -> Result<SftpHomeResponse, St
 #[tauri::command]
 pub fn sftp_mkdir(request: SftpPathRequest) -> Result<(), String> {
     let SftpPathRequest { host, remote_path } = request;
-    if remote_path.trim().is_empty() {
-        return Err(SftpError::Operation("remote path is required".to_string()).to_string());
-    }
-    let batch = format!("mkdir {}\n", quote_remote(&remote_path));
+    let batch = mkdir_batch(&remote_path)?;
     run_sftp_batch(&host, "mkdir", batch.as_bytes()).map(|_| ())
 }
 
@@ -100,11 +116,7 @@ pub fn sftp_remove(request: SftpRemoveRequest) -> Result<(), String> {
         remote_path,
         is_dir,
     } = request;
-    if remote_path.trim().is_empty() {
-        return Err(SftpError::Operation("remote path is required".to_string()).to_string());
-    }
-    let cmd = if is_dir { "rmdir" } else { "rm" };
-    let batch = format!("{} {}\n", cmd, quote_remote(&remote_path));
+    let batch = remove_batch(&remote_path, is_dir)?;
     run_sftp_batch(&host, "remove", batch.as_bytes()).map(|_| ())
 }
 
@@ -115,14 +127,7 @@ pub fn sftp_rename(request: SftpRenameRequest) -> Result<(), String> {
         from_path,
         to_path,
     } = request;
-    if from_path.trim().is_empty() || to_path.trim().is_empty() {
-        return Err(SftpError::Operation("rename paths are required".to_string()).to_string());
-    }
-    let batch = format!(
-        "rename {} {}\n",
-        quote_remote(&from_path),
-        quote_remote(&to_path)
-    );
+    let batch = rename_batch(&from_path, &to_path)?;
     run_sftp_batch(&host, "rename", batch.as_bytes()).map(|_| ())
 }
 
@@ -138,14 +143,7 @@ pub fn sftp_upload(
         local_path,
         remote_path,
     } = request;
-    if local_path.trim().is_empty() || remote_path.trim().is_empty() {
-        return Err(SftpError::Operation("transfer paths are required".to_string()).to_string());
-    }
-    let batch = format!(
-        "put {} {}\n",
-        quote_local(&local_path),
-        quote_remote(&remote_path)
-    );
+    let batch = upload_batch(&local_path, &remote_path)?;
     spawn_transfer(app, state, transfer_id, host, "upload", batch)
 }
 
@@ -161,14 +159,7 @@ pub fn sftp_download(
         local_path,
         remote_path,
     } = request;
-    if local_path.trim().is_empty() || remote_path.trim().is_empty() {
-        return Err(SftpError::Operation("transfer paths are required".to_string()).to_string());
-    }
-    let batch = format!(
-        "get {} {}\n",
-        quote_remote(&remote_path),
-        quote_local(&local_path)
-    );
+    let batch = download_batch(&remote_path, &local_path)?;
     spawn_transfer(app, state, transfer_id, host, "download", batch)
 }
 
@@ -177,19 +168,19 @@ pub fn sftp_cancel(
     state: State<'_, Arc<SftpState>>,
     transfer_id: String,
 ) -> Result<(), String> {
-    let mut transfers = state.transfers.lock().map_err(|_| SftpError::Locked.to_string())?;
-    let Some(handle) = transfers.remove(&transfer_id) else {
-        return Err(SftpError::MissingTransfer.to_string());
+    let process = {
+        let transfers = state.transfers.lock().map_err(|_| SftpError::Locked.to_string())?;
+        let Some(handle) = transfers.get(&transfer_id) else {
+            return Err(SftpError::MissingTransfer.to_string());
+        };
+        Arc::clone(&handle.process)
     };
-    if let Ok(mut child) = handle.child.lock() {
-        if let Some(mut child) = child.take() {
-            let _ = child.kill();
-            // Drain to avoid leaving zombies on Unix.
-            let _ = child.wait();
-        }
+    // The monitor thread owns cleanup and the terminal event; cancel only
+    // stops the child and reports whether it got there first.
+    match process.cancel().map_err(|err| SftpError::Operation(err).to_string())? {
+        CancelResult::Cancelled => Ok(()),
+        CancelResult::AlreadyFinished => Err(SftpError::MissingTransfer.to_string()),
     }
-    cleanup_temp_paths(&handle.temp_paths);
-    Ok(())
 }
 
 // ---------- Internals ----------
@@ -203,33 +194,21 @@ fn spawn_transfer(
     batch: String,
 ) -> Result<SftpTransferStartResponse, String> {
     let transfer_id = require_transfer_id(transfer_id)?;
-    let (mut command, temp_paths) = build_sftp_command(&host, &transfer_id)?;
-    command
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped());
+    let (command, prepared) = build_sftp_command(&host)?;
+    // `host` (and the key bytes in it) is dropped, and zeroized, here;
+    // the loaded identity lives in `prepared` until the transfer ends.
+    drop(host);
+    let process = Arc::new(
+        TransferProcess::spawn(command, batch.as_bytes())
+            .map_err(|err| SftpError::Operation(err).to_string())?,
+    );
 
-    let mut child = command.spawn().map_err(|err| {
-        cleanup_temp_paths(&temp_paths);
-        SftpError::Operation(err.to_string()).to_string()
-    })?;
-
-    if let Some(stdin) = child.stdin.take() {
-        if let Err(err) = write_batch_then_close(stdin, batch.as_bytes()) {
-            let _ = child.kill();
-            cleanup_temp_paths(&temp_paths);
-            return Err(SftpError::Operation(err).to_string());
-        }
-    }
-
-    let child = Arc::new(Mutex::new(Some(child)));
     {
         let mut transfers = state.transfers.lock().map_err(|_| SftpError::Locked.to_string())?;
         transfers.insert(
             transfer_id.clone(),
             TransferHandle {
-                child: Arc::clone(&child),
-                temp_paths: temp_paths.clone(),
+                process: Arc::clone(&process),
             },
         );
     }
@@ -240,7 +219,14 @@ fn spawn_transfer(
     let state_arc = Arc::clone(state.inner());
     let transfer_for_thread = transfer_id.clone();
     thread::spawn(move || {
-        monitor_transfer(app_clone, state_arc, transfer_for_thread, child, temp_paths, label)
+        monitor_transfer(
+            app_clone,
+            state_arc,
+            transfer_for_thread,
+            process,
+            prepared,
+            label,
+        )
     });
 
     Ok(SftpTransferStartResponse { transfer_id })
@@ -250,58 +236,39 @@ fn monitor_transfer(
     app: AppHandle,
     state: Arc<SftpState>,
     transfer_id: String,
-    child: Arc<Mutex<Option<Child>>>,
-    temp_paths: Vec<PathBuf>,
+    process: Arc<TransferProcess>,
+    prepared: PreparedSsh,
     _label: &'static str,
 ) {
-    // We hold the child for the whole transfer; if `sftp_cancel` is called
-    // it takes the child via `child.lock().take()` and kills it.
-    let mut owned = match child.lock() {
-        Ok(mut guard) => match guard.take() {
-            Some(c) => c,
-            None => return,
-        },
-        Err(_) => return,
-    };
-
-    let result = owned.wait();
-    let stderr = read_child_stderr(&mut owned);
-    let stdout = drain_remaining_stdout(&mut owned);
-    cleanup_temp_paths(&temp_paths);
+    let outcome = process.wait_for_exit();
+    // Unload the key and remove the private directory now that the child
+    // is gone.
+    drop(prepared);
     if let Ok(mut transfers) = state.transfers.lock() {
         transfers.remove(&transfer_id);
     }
 
-    match result {
-        Ok(status) if status.success() => {
+    match outcome {
+        TransferOutcome::Exited { success: true, .. } => {
             emit_transfer_event(&app, &transfer_id, "done", None);
         }
-        Ok(status) => {
+        TransferOutcome::Exited { stdout, stderr, .. } => {
             let combined = format!("{stderr}\n{stdout}");
-            let message = if status.code().is_some() {
-                user_safe_ssh_error(combined.trim(), &[])
-            } else {
-                "sftp was cancelled".to_string()
-            };
+            let message = user_safe_ssh_error(combined.trim(), &[]);
             emit_transfer_event(&app, &transfer_id, "error", Some(message));
         }
-        Err(err) => {
+        TransferOutcome::Cancelled => {
+            emit_transfer_event(&app, &transfer_id, "cancelled", None);
+        }
+        TransferOutcome::WaitError(err) => {
             emit_transfer_event(
                 &app,
                 &transfer_id,
                 "error",
-                Some(SftpError::Operation(err.to_string()).to_string()),
+                Some(SftpError::Operation(err).to_string()),
             );
         }
     }
-}
-
-fn drain_remaining_stdout(child: &mut Child) -> String {
-    let mut output = String::new();
-    if let Some(mut stdout) = child.stdout.take() {
-        let _ = stdout.read_to_string(&mut output);
-    }
-    output
 }
 
 fn emit_transfer_event(
@@ -320,60 +287,37 @@ fn emit_transfer_event(
     );
 }
 
-fn write_batch_then_close(mut stdin: ChildStdin, batch: &[u8]) -> Result<(), String> {
-    stdin.write_all(batch).map_err(|err| err.to_string())?;
-    drop(stdin);
-    Ok(())
-}
+fn run_sftp_batch(host: &SftpHostArgs, _label: &str, batch: &[u8]) -> Result<String, String> {
+    let (command, prepared) = build_sftp_command(host)?;
+    let outcome = TransferProcess::spawn(command, batch).map(|process| process.wait_for_exit());
 
-fn run_sftp_batch(host: &SftpHostArgs, label: &str, batch: &[u8]) -> Result<String, String> {
-    let session_id = format!("sftp-{label}");
-    let (mut command, temp_paths) = build_sftp_command(host, &session_id)?;
-    command
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped());
-
-    let mut child = command.spawn().map_err(|err| {
-        cleanup_temp_paths(&temp_paths);
-        SftpError::Operation(err.to_string()).to_string()
-    })?;
-
-    if let Some(stdin) = child.stdin.take() {
-        if let Err(err) = write_batch_then_close(stdin, batch) {
-            let _ = child.kill();
-            cleanup_temp_paths(&temp_paths);
-            return Err(SftpError::Operation(err).to_string());
+    match outcome.map_err(|err| SftpError::Operation(err).to_string())? {
+        TransferOutcome::Exited {
+            success: true,
+            stdout,
+            ..
+        } => Ok(stdout),
+        TransferOutcome::Exited { stdout, stderr, .. } => {
+            let combined = format!("{stderr}\n{stdout}");
+            if let Some(err) =
+                host_key_failure_error(&host.host, host.port.max(1), prepared.pins(), &combined)
+            {
+                return Err(err);
+            }
+            Err(SftpError::Operation(user_safe_ssh_error(combined.trim(), &[])).to_string())
         }
+        TransferOutcome::Cancelled => {
+            Err(SftpError::Operation("sftp was cancelled".to_string()).to_string())
+        }
+        TransferOutcome::WaitError(err) => Err(SftpError::Operation(err).to_string()),
     }
-
-    let mut stdout = String::new();
-    if let Some(mut pipe) = child.stdout.take() {
-        let _ = pipe.read_to_string(&mut stdout);
-    }
-    let stderr = read_child_stderr(&mut child);
-
-    let status = child.wait().map_err(|err| {
-        cleanup_temp_paths(&temp_paths);
-        SftpError::Operation(err.to_string()).to_string()
-    })?;
-    cleanup_temp_paths(&temp_paths);
-
-    if !status.success() {
-        let combined = format!("{stderr}\n{stdout}");
-        return Err(SftpError::Operation(user_safe_ssh_error(combined.trim(), &[])).to_string());
-    }
-    let _ = user_safe_ssh_output(&stdout, &[]); // touch helper to silence dead-code warnings on this path
-
-    Ok(stdout)
 }
 
-fn build_sftp_command(
-    host: &SftpHostArgs,
-    session_id: &str,
-) -> Result<(ProcessCommand, Vec<PathBuf>), String> {
-    let host_value = host.host.trim();
-    if host_value.is_empty() {
+/// `sftp -b -` for `host`, using the shared SSH policy: the vault key in a
+/// private agent and the approved host-key pins. The returned
+/// [`PreparedSsh`] must outlive the child process.
+fn build_sftp_command(host: &SftpHostArgs) -> Result<(ProcessCommand, PreparedSsh), String> {
+    if host.host.trim().is_empty() {
         return Err(SftpError::Operation("host is required".to_string()).to_string());
     }
     if host.private_key_pem.is_empty() {
@@ -381,27 +325,18 @@ fn build_sftp_command(
             SftpError::Operation("attached SSH identity is required".to_string()).to_string(),
         );
     }
-
-    let mut key_bytes = host.private_key_pem.clone();
-    let rsa = is_rsa_private_key(&key_bytes);
-    let key_path = write_temp_ssh_file(session_id, "sftp-key", &key_bytes);
-    key_bytes.fill(0);
-    let key_path = key_path?;
-    let config_path = match write_temp_ssh_file(session_id, "sftp-config", &[]) {
-        Ok(path) => path,
-        Err(err) => {
-            cleanup_temp_paths(std::slice::from_ref(&key_path));
-            return Err(err);
-        }
-    };
-    let temp_paths = vec![key_path.clone(), config_path.clone()];
+    let destination = ssh_destination(&host.host, &host.username)?;
+    let prepared = PreparedSsh::prepare(
+        &host.host,
+        host.port.max(1),
+        &host.host_keys,
+        key_material(Some(&host.private_key_pem), host.passphrase.as_ref()),
+        &load_options(),
+    )?;
 
     let mut command = ProcessCommand::new("sftp");
     command
-        .arg("-F")
-        .arg(&config_path)
-        .arg("-i")
-        .arg(&key_path)
+        .args(prepared.ssh_options())
         .arg("-b")
         .arg("-")
         .arg("-o")
@@ -413,21 +348,15 @@ fn build_sftp_command(
         .arg("-o")
         .arg("PreferredAuthentications=publickey")
         .arg("-o")
-        .arg("IdentitiesOnly=yes")
-        .arg("-o")
-        .arg("IdentityAgent=none")
-        .arg("-o")
-        .arg("StrictHostKeyChecking=accept-new")
-        .arg("-o")
         .arg("ConnectTimeout=15")
         .arg("-P")
         .arg(host.port.max(1).to_string());
-    if rsa {
+    if prepared.rsa_key() {
         rsa_key_compat_process_options(&mut command);
     }
-    command.arg(destination(host_value, &host.username)?);
+    command.arg(destination);
 
-    Ok((command, temp_paths))
+    Ok((command, prepared))
 }
 
 fn require_transfer_id(transfer_id: String) -> Result<String, String> {
@@ -438,14 +367,103 @@ fn require_transfer_id(transfer_id: String) -> Result<String, String> {
     Ok(trimmed.to_string())
 }
 
-/// Quote a remote path for `sftp -b` so spaces and shell metacharacters survive.
-fn quote_remote(path: &str) -> String {
-    format!("\"{}\"", path.replace('"', "\\\""))
+// ---------- Batch script construction ----------
+//
+// `sftp -b -` reads one command per line, so every path that reaches a batch
+// line goes through `batch_arg`. Each builder returns exactly one command
+// line (plus the trailing `ls -la` for listings).
+
+/// List `remote_path` (or the login directory when empty). OpenSSH `sftp`
+/// returns absolute names from `ls /path`, so a click on a child folder
+/// would join `/home` + `/home/ubuntu` = `/home//home/ubuntu`. `cd` first,
+/// then a bare `ls -la`, gives plain relative names that the joinPath helper
+/// on the frontend can compose without surprises.
+pub(crate) fn list_batch(remote_path: &str) -> Result<String, String> {
+    let path = clean_remote_path(remote_path);
+    Ok(format!("cd {}\nls -la\n", batch_arg(&path)?))
 }
 
-/// Quote a local path the same way; sftp uses the same parser for both sides.
-fn quote_local(path: &str) -> String {
-    quote_remote(path)
+pub(crate) fn mkdir_batch(remote_path: &str) -> Result<String, String> {
+    require_path(remote_path, "remote path is required")?;
+    Ok(format!("mkdir {}\n", batch_arg(remote_path)?))
+}
+
+pub(crate) fn remove_batch(remote_path: &str, is_dir: bool) -> Result<String, String> {
+    require_path(remote_path, "remote path is required")?;
+    let cmd = if is_dir { "rmdir" } else { "rm" };
+    Ok(format!("{cmd} {}\n", batch_arg(remote_path)?))
+}
+
+pub(crate) fn rename_batch(from_path: &str, to_path: &str) -> Result<String, String> {
+    require_path(from_path, "rename paths are required")?;
+    require_path(to_path, "rename paths are required")?;
+    Ok(format!(
+        "rename {} {}\n",
+        batch_arg(from_path)?,
+        batch_arg(to_path)?
+    ))
+}
+
+pub(crate) fn upload_batch(local_path: &str, remote_path: &str) -> Result<String, String> {
+    require_path(local_path, "transfer paths are required")?;
+    require_path(remote_path, "transfer paths are required")?;
+    Ok(format!(
+        "put {} {}\n",
+        batch_arg(local_path)?,
+        batch_arg(remote_path)?
+    ))
+}
+
+pub(crate) fn download_batch(remote_path: &str, local_path: &str) -> Result<String, String> {
+    require_path(remote_path, "transfer paths are required")?;
+    require_path(local_path, "transfer paths are required")?;
+    Ok(format!(
+        "get {} {}\n",
+        batch_arg(remote_path)?,
+        batch_arg(local_path)?
+    ))
+}
+
+fn require_path(path: &str, message: &str) -> Result<(), String> {
+    if path.trim().is_empty() {
+        return Err(SftpError::Operation(message.to_string()).to_string());
+    }
+    Ok(())
+}
+
+/// Encode one path as a single `sftp -b` argument.
+///
+/// OpenSSH's batch parser (`makeargv` in sftp.c) splits on whitespace,
+/// treats `#` as a comment outside quotes, and inside a double-quoted
+/// argument understands exactly two escapes that matter here: `\"` and
+/// `\\` (one level of backslash escaping is removed again before the path
+/// is used). It escapes glob metacharacters (`*?[]`) itself while inside
+/// quotes, so those stay verbatim. A line break would end the command, and
+/// the parser has no escape for one, so any control character is rejected.
+/// A leading `-` would be read as a command flag even when quoted, so
+/// relative paths starting with one are anchored with `./`.
+pub(crate) fn batch_arg(path: &str) -> Result<String, String> {
+    if let Some(ch) = path.chars().find(|ch| ch.is_control()) {
+        return Err(SftpError::Operation(format!(
+            "path contains an unsupported control character (U+{:04X})",
+            u32::from(ch)
+        ))
+        .to_string());
+    }
+
+    let mut quoted = String::with_capacity(path.len() + 4);
+    quoted.push('"');
+    if path.starts_with('-') {
+        quoted.push_str("./");
+    }
+    for ch in path.chars() {
+        if ch == '\\' || ch == '"' {
+            quoted.push('\\');
+        }
+        quoted.push(ch);
+    }
+    quoted.push('"');
+    Ok(quoted)
 }
 
 fn clean_remote_path(path: &str) -> String {
@@ -722,7 +740,53 @@ fn entry_kind_from_perms(perms: &str) -> &'static str {
 
 #[cfg(test)]
 mod tests {
-    use super::{extract_pwd_path, parse_sftp_listing, quote_remote};
+    use super::{
+        batch_arg, download_batch, extract_pwd_path, list_batch, mkdir_batch, parse_sftp_listing,
+        remove_batch, rename_batch, upload_batch,
+    };
+
+    /// Manual end-to-end check of SFTP through the private agent and the
+    /// pinned host key. Run with
+    /// `TROMINAL_E2E_SSH=host:port:user:/path/to/private_key cargo test -p trominal-client -- --ignored e2e`.
+    #[test]
+    #[ignore = "needs a reachable sshd with the sftp subsystem"]
+    fn e2e_sftp_batch_against_real_sshd() {
+        use super::run_sftp_batch;
+        use trominal_core::host_keys::{scan_host_keys, HOST_KEY_ERROR_PREFIX};
+        use trominal_core::SftpHostArgs;
+
+        let spec = std::env::var("TROMINAL_E2E_SSH").expect("TROMINAL_E2E_SSH");
+        let mut parts = spec.splitn(4, ':');
+        let (host, port, user, key_path) = (
+            parts.next().unwrap().to_string(),
+            parts.next().unwrap().parse::<u16>().unwrap(),
+            parts.next().unwrap().to_string(),
+            parts.next().unwrap().to_string(),
+        );
+        let key = std::fs::read(&key_path).unwrap();
+        let args = |pins: serde_json::Value| -> SftpHostArgs {
+            serde_json::from_value(serde_json::json!({
+                "host": host, "port": port, "username": user,
+                "privateKeyPem": key, "hostKeys": pins,
+            }))
+            .unwrap()
+        };
+        let pins: Vec<serde_json::Value> = scan_host_keys(&host, port)
+            .unwrap()
+            .iter()
+            .map(|k| serde_json::json!({"keyType": k.key_type, "publicKey": k.public_key}))
+            .collect();
+
+        let stdout = run_sftp_batch(&args(serde_json::json!(pins)), "home", b"pwd\n").unwrap();
+        assert!(extract_pwd_path(&stdout).is_some(), "{stdout}");
+
+        let wrong = serde_json::json!([{
+            "keyType": "ssh-ed25519",
+            "publicKey": "AAAAC3NzaC1lZDI1NTE5AAAAIB0DWUzzfmsj0qLl7lZVRfhNC1x98nyQCs4PbVsvm0ob",
+        }]);
+        let err = run_sftp_batch(&args(wrong), "home", b"pwd\n").unwrap_err();
+        assert!(err.starts_with(HOST_KEY_ERROR_PREFIX), "{err}");
+    }
 
     #[test]
     fn extracts_pwd_path_from_openssh_output() {
@@ -775,12 +839,187 @@ mod tests {
     }
 
     #[test]
-    fn quotes_remote_paths() {
-        assert_eq!(quote_remote("/srv/app"), "\"/srv/app\"");
-        assert_eq!(quote_remote("with space"), "\"with space\"");
+    fn quotes_batch_paths() {
+        assert_eq!(batch_arg("/srv/app").unwrap(), "\"/srv/app\"");
+        assert_eq!(batch_arg("with space").unwrap(), "\"with space\"");
         assert_eq!(
-            quote_remote("with \"quote\""),
+            batch_arg("with \"quote\"").unwrap(),
             "\"with \\\"quote\\\"\""
         );
+    }
+
+    #[test]
+    fn escapes_backslashes_before_quotes() {
+        // A trailing backslash must not swallow the closing quote, and a
+        // backslash before a quote must not turn into an escaped quote.
+        assert_eq!(batch_arg("/tmp/a\\").unwrap(), "\"/tmp/a\\\\\"");
+        assert_eq!(batch_arg("/tmp/a\\\"b").unwrap(), "\"/tmp/a\\\\\\\"b\"");
+        assert_eq!(
+            batch_arg("C:\\Users\\me\\file.txt").unwrap(),
+            "\"C:\\\\Users\\\\me\\\\file.txt\""
+        );
+    }
+
+    #[test]
+    fn keeps_glob_and_comment_characters_inside_quotes() {
+        // sftp escapes glob metacharacters itself while inside quotes, so
+        // they must stay verbatim; '#' only starts a comment when unquoted.
+        assert_eq!(batch_arg("/srv/a*b?[c]").unwrap(), "\"/srv/a*b?[c]\"");
+        assert_eq!(batch_arg("/srv/x #y").unwrap(), "\"/srv/x #y\"");
+        assert_eq!(batch_arg("/srv/it's").unwrap(), "\"/srv/it's\"");
+    }
+
+    #[test]
+    fn rejects_line_breaks_and_control_characters() {
+        for path in [
+            "/srv/a\nrm /etc/passwd",
+            "/srv/a\rb",
+            "/srv/a\r\nb",
+            "/srv/a\0b",
+            "/srv/a\tb",
+            "/srv/a\u{1b}[31m",
+            "/srv/a\u{7f}",
+            "/srv/a\u{85}b",
+        ] {
+            assert!(batch_arg(path).is_err(), "{path:?} must be rejected");
+        }
+        assert!(upload_batch("/tmp/ok", "/srv/a\nput /etc/shadow x").is_err());
+        assert!(download_batch("/srv/ok", "/tmp/a\nb").is_err());
+        assert!(rename_batch("/srv/a", "/srv/b\nrm /srv/c").is_err());
+        assert!(mkdir_batch("/srv/a\n").is_err());
+        assert!(remove_batch("/srv/a\nrm /srv/b", false).is_err());
+        assert!(list_batch("/srv\nrm x").is_err());
+    }
+
+    #[test]
+    fn leading_hyphen_is_never_parsed_as_a_flag() {
+        assert_eq!(batch_arg("-rf").unwrap(), "\"./-rf\"");
+        assert_eq!(batch_arg("/srv/-rf").unwrap(), "\"/srv/-rf\"");
+        assert_eq!(remove_batch("-r", true).unwrap(), "rmdir \"./-r\"\n");
+    }
+
+    #[test]
+    fn keeps_non_ascii_and_lossy_decoded_names_intact() {
+        // Non-UTF-8 remote names reach us lossily decoded (U+FFFD); they must
+        // pass through verbatim so the command targets nothing else.
+        assert_eq!(batch_arg("/srv/caf\u{e9}").unwrap(), "\"/srv/caf\u{e9}\"");
+        assert_eq!(
+            batch_arg("/srv/bad\u{fffd}name").unwrap(),
+            "\"/srv/bad\u{fffd}name\""
+        );
+    }
+
+    #[test]
+    fn every_builder_emits_single_command_lines() {
+        let hostile = "/srv/we\"ird\\ na*me #1";
+        for batch in [
+            mkdir_batch(hostile).unwrap(),
+            remove_batch(hostile, false).unwrap(),
+            remove_batch(hostile, true).unwrap(),
+            rename_batch(hostile, hostile).unwrap(),
+            upload_batch(hostile, hostile).unwrap(),
+            download_batch(hostile, hostile).unwrap(),
+        ] {
+            assert_eq!(batch.matches('\n').count(), 1, "{batch:?}");
+            assert!(batch.ends_with('\n'));
+        }
+        assert_eq!(list_batch(hostile).unwrap().matches('\n').count(), 2);
+        assert_eq!(list_batch("  ").unwrap(), "cd \".\"\nls -la\n");
+    }
+
+    /// Runs the generated batch lines through the real OpenSSH `sftp`
+    /// parser against a local `sftp-server` (no network, no ssh). Skipped
+    /// when this machine has no sftp-server binary.
+    #[cfg(unix)]
+    #[test]
+    fn real_sftp_parser_round_trips_adversarial_names() {
+        use std::fs;
+        use std::io::Write;
+        use std::process::{Command, Stdio};
+
+        let Some(server) = [
+            "/usr/libexec/sftp-server",
+            "/usr/lib/openssh/sftp-server",
+            "/usr/libexec/openssh/sftp-server",
+            "/usr/lib/ssh/sftp-server",
+        ]
+        .into_iter()
+        .find(|path| std::path::Path::new(path).is_file()) else {
+            eprintln!("skipping: no sftp-server binary found");
+            return;
+        };
+
+        let root = std::env::temp_dir().join(format!(
+            "trominal-sftp-parser-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        let remote = root.join("remote");
+        let local = root.join("local");
+        fs::create_dir_all(&remote).unwrap();
+        fs::create_dir_all(&local).unwrap();
+
+        let names = [
+            "a*b", "l?m", "n[o]", "back\\slash", "tail\\", "q\"uote", "-rf", "sp ace", "h#sh",
+            "it's",
+        ];
+        // Decoys that a mis-parsed glob or split argument would hit.
+        for decoy in ["ab", "axb", "lxm", "no", "backslash", "q"] {
+            fs::write(remote.join(decoy), "decoy").unwrap();
+        }
+        let mut batch = String::new();
+        for (index, name) in names.iter().enumerate() {
+            let r = |suffix: &str| format!("{}/{name}{suffix}", remote.display());
+            let l = |suffix: &str| format!("{}/{name}{suffix}", local.display());
+            fs::write(local.join(name), format!("payload-{index}")).unwrap();
+            batch.push_str(&upload_batch(&l(""), &r("")).unwrap());
+            batch.push_str(&download_batch(&r(""), &l(".down")).unwrap());
+            batch.push_str(&mkdir_batch(&r(".dir")).unwrap());
+            batch.push_str(&list_batch(&r(".dir")).unwrap());
+            batch.push_str(&rename_batch(&r(".dir"), &r(".moved")).unwrap());
+            batch.push_str(&remove_batch(&r(".moved"), true).unwrap());
+            batch.push_str(&rename_batch(&r(""), &r(".renamed")).unwrap());
+            batch.push_str(&remove_batch(&r(".renamed"), false).unwrap());
+        }
+
+        let mut child = Command::new("sftp")
+            .arg("-D")
+            .arg(server)
+            .arg("-b")
+            .arg("-")
+            .current_dir(&remote)
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn()
+            .expect("spawn sftp");
+        child
+            .stdin
+            .take()
+            .unwrap()
+            .write_all(batch.as_bytes())
+            .unwrap();
+        let output = child.wait_with_output().unwrap();
+        let stderr = String::from_utf8_lossy(&output.stderr).to_string();
+
+        let mut leftovers: Vec<String> = fs::read_dir(&remote)
+            .unwrap()
+            .map(|entry| entry.unwrap().file_name().to_string_lossy().into_owned())
+            .collect();
+        leftovers.sort();
+        let downloads: Vec<String> = names
+            .iter()
+            .map(|name| fs::read_to_string(local.join(format!("{name}.down"))).unwrap_or_default())
+            .collect();
+        let _ = fs::remove_dir_all(&root);
+
+        assert!(output.status.success(), "sftp failed: {stderr}");
+        assert_eq!(leftovers, vec!["ab", "axb", "backslash", "lxm", "no", "q"]);
+        for (index, contents) in downloads.iter().enumerate() {
+            assert_eq!(contents, &format!("payload-{index}"), "{}", names[index]);
+        }
     }
 }

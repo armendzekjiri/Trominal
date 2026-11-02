@@ -16,6 +16,7 @@ import {
   encryptGroupInput,
   encryptHostCredentialInput,
   encryptHostInput,
+  encryptHostKeysPayload,
   encryptIdentityInput,
   encryptSnippetInput,
   encryptTunnelInput,
@@ -24,6 +25,7 @@ import {
   type GroupInput,
   type HostCredentialInput,
   type HostInput,
+  type HostKeyPin,
   type IdentityInput,
   type SnippetInput,
   type TunnelInput,
@@ -266,6 +268,23 @@ export function useSaveHost() {
       return input.id === undefined
         ? api.createVaultRecord('hosts', payload)
         : api.updateVaultRecord('hosts', id, payload)
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: vaultKeys.hostsRoot }),
+  })
+}
+
+/**
+ * Replace only a host's approved SSH host keys (PATCH of the encrypted
+ * `host_keys` field). Personal vault only, like every other write today.
+ */
+export function useSaveHostKeys() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async ({ hostId, hostKeys }: { hostId: string; hostKeys: HostKeyPin[] }) => {
+      assertPersonalWriteScope()
+      const api = await getApiClient()
+      const payload = await encryptHostKeysPayload(hostId, vaultKey(), hostKeys)
+      return api.updateVaultRecord('hosts', hostId, payload)
     },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: vaultKeys.hostsRoot }),
   })
