@@ -745,6 +745,49 @@ mod tests {
         remove_batch, rename_batch, upload_batch,
     };
 
+    /// Manual end-to-end check of SFTP through the private agent and the
+    /// pinned host key. Run with
+    /// `TROMINAL_E2E_SSH=host:port:user:/path/to/private_key cargo test -p trominal-client -- --ignored e2e`.
+    #[test]
+    #[ignore = "needs a reachable sshd with the sftp subsystem"]
+    fn e2e_sftp_batch_against_real_sshd() {
+        use super::run_sftp_batch;
+        use trominal_core::host_keys::{scan_host_keys, HOST_KEY_ERROR_PREFIX};
+        use trominal_core::SftpHostArgs;
+
+        let spec = std::env::var("TROMINAL_E2E_SSH").expect("TROMINAL_E2E_SSH");
+        let mut parts = spec.splitn(4, ':');
+        let (host, port, user, key_path) = (
+            parts.next().unwrap().to_string(),
+            parts.next().unwrap().parse::<u16>().unwrap(),
+            parts.next().unwrap().to_string(),
+            parts.next().unwrap().to_string(),
+        );
+        let key = std::fs::read(&key_path).unwrap();
+        let args = |pins: serde_json::Value| -> SftpHostArgs {
+            serde_json::from_value(serde_json::json!({
+                "host": host, "port": port, "username": user,
+                "privateKeyPem": key, "hostKeys": pins,
+            }))
+            .unwrap()
+        };
+        let pins: Vec<serde_json::Value> = scan_host_keys(&host, port)
+            .unwrap()
+            .iter()
+            .map(|k| serde_json::json!({"keyType": k.key_type, "publicKey": k.public_key}))
+            .collect();
+
+        let stdout = run_sftp_batch(&args(serde_json::json!(pins)), "home", b"pwd\n").unwrap();
+        assert!(extract_pwd_path(&stdout).is_some(), "{stdout}");
+
+        let wrong = serde_json::json!([{
+            "keyType": "ssh-ed25519",
+            "publicKey": "AAAAC3NzaC1lZDI1NTE5AAAAIB0DWUzzfmsj0qLl7lZVRfhNC1x98nyQCs4PbVsvm0ob",
+        }]);
+        let err = run_sftp_batch(&args(wrong), "home", b"pwd\n").unwrap_err();
+        assert!(err.starts_with(HOST_KEY_ERROR_PREFIX), "{err}");
+    }
+
     #[test]
     fn extracts_pwd_path_from_openssh_output() {
         let raw = "sftp> pwd\nRemote working directory: /home/ubuntu\n";
