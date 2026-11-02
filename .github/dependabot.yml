@@ -1,0 +1,75 @@
+# Keeps pinned GitHub Actions SHAs, Docker base-image digests and package
+# dependencies current. Pins are only safe while something keeps bumping them.
+#
+# Commit prefixes avoid `build:` on purpose: a `build:` line on main starts a
+# client release (docs/RELEASE.md).
+#
+# The Compose service images (postgres, redis, caddy) stay on floating tags so
+# `docker compose pull` picks up their patch releases; they are not listed
+# here because a tag bump such as postgres 16 -> 17 needs a data migration.
+version: 2
+
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      github-actions:
+        patterns: ['*']
+    commit-message:
+      prefix: ci
+
+  - package-ecosystem: docker
+    directory: /apps/backend
+    schedule:
+      interval: weekly
+    commit-message:
+      prefix: chore(docker)
+
+  # pnpm workspace (apps/client, packages/*, website) — one lockfile at the root.
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 10
+    groups:
+      npm-minor-and-patch:
+        update-types: [minor, patch]
+    commit-message:
+      prefix: chore(deps)
+
+  # Filament/Vite assets for the backend image (package-lock.json).
+  - package-ecosystem: npm
+    directory: /apps/backend
+    schedule:
+      interval: weekly
+    groups:
+      backend-npm-minor-and-patch:
+        update-types: [minor, patch]
+    commit-message:
+      prefix: chore(deps)
+
+  - package-ecosystem: composer
+    directory: /apps/backend
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 10
+    groups:
+      composer-minor-and-patch:
+        update-types: [minor, patch]
+    commit-message:
+      prefix: chore(deps)
+
+  # Cargo workspace (Tauri client + crates/*).
+  - package-ecosystem: cargo
+    directories:
+      - /
+      - /packages/crypto/parity
+    schedule:
+      interval: weekly
+    groups:
+      cargo-minor-and-patch:
+        update-types: [minor, patch]
+    commit-message:
+      prefix: chore(deps)
