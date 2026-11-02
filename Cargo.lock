@@ -4487,7 +4487,7 @@ dependencies = [
 name = "trominal-core"
 version = "0.1.0"
 dependencies = [
- "base64 0.22.1",
+ "base64 0.23.1",
  "portable-pty",
  "serde",
  "serde_json",

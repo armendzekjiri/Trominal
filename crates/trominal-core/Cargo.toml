@@ -13,5 +13,5 @@ thiserror = { workspace = true }
 portable-pty = { workspace = true }
 # Already in the lockfile via Tauri / rustls; see commit message.
 zeroize = "1.8"
-base64 = "0.22"
+base64 = "0.23"
 sha2 = "0.10"
