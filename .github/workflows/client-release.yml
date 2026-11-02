@@ -114,9 +114,22 @@ jobs:
                 --notes "Desktop installers, updater signatures and latest.json for Trominal Client $VERSION. The macOS build is a universal binary, signed with Developer ID and notarized by Apple.")
           [[ -n "$PREVIOUS_TAG" ]] && args+=(--notes-start-tag "$PREVIOUS_TAG")
           [[ "$PRERELEASE" == true ]] && args+=(--prerelease)
-          gh release create "$TAG" "${args[@]}"
-          id="$(gh api "repos/$GH_REPO/releases" --jq ".[] | select(.draft and .tag_name == \"$TAG\") | .id" | head -n1)"
-          [[ -n "$id" ]] || { echo "::error::Draft release for $TAG not found after creating it."; exit 1; }
+          url="$(gh release create "$TAG" "${args[@]}")"
+          # The releases list is eventually consistent: a draft created a moment
+          # ago may not be listed yet, so look it up by its URL with retries.
+          id=""
+          for attempt in 1 2 3 4 5 6 7 8 9 10; do
+            id="$(gh api "repos/$GH_REPO/releases?per_page=100" --jq ".[] | select(.draft and .html_url == \"$url\") | .id" | head -n1)"
+            [[ -n "$id" ]] && break
+            sleep 3
+          done
+          if [[ -z "$id" ]]; then
+            echo "::error::Draft release for $TAG ($url) not found after creating it."
+            # The cleanup job only runs when this job succeeds, so remove the
+            # draft here; otherwise it blocks the next run for this version.
+            gh release delete "$(basename "$url")" --yes || true
+            exit 1
+          fi
           echo "id=$id" >> "$GITHUB_OUTPUT"
 
   web:
