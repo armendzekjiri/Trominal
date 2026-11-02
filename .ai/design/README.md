@@ -70,6 +70,7 @@ Rebuilt so far: **app shell** (top bar + collapsible sidebar), **Hosts**, **auth
 - Field labels: 12px medium `fg-muted`, sentence case. Column/section headers: 11px medium `fg-faint`. No uppercase-tracking labels.
 - Selectable list rows: full 1px border, selected = `accent` border + `accent-soft` fill (no left stripe).
 - Settings: left menu styled like the main sidebar, unfinished sections carry a "Soon" pill; the active section is in the URL (`/settings?tab=…`).
+- Settings → AI: provider, endpoint, API key, then **Fetch models** lists what that endpoint offers (filterable list, arrow keys move the selection). No model is ever hardcoded or pre-filled; "Enter a model ID manually" covers gateways without a model list. Save and Test stay disabled until a model is picked.
 
 ### Keyboard
 
