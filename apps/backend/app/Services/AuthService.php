@@ -11,6 +11,7 @@ use App\Models\Invite;
 use App\Models\PersonalAccessToken;
 use App\Models\RefreshToken;
 use App\Models\User;
+use App\Support\Vault\VaultKeyMaterialRules;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Auth\Events\PasswordReset;
 use Illuminate\Support\Facades\DB;
@@ -49,16 +50,23 @@ final class AuthService
                 ? $this->consumeInviteForRegistration($payload)
                 : null;
 
+            $clientUserId = isset($payload['id']) ? (string) $payload['id'] : null;
+
             /** @var User $user */
-            $user = User::query()->create([
+            $user = User::query()->forceCreate([
+                ...($clientUserId === null ? [] : ['id' => $clientUserId]),
                 'name' => $payload['name'] ?? null,
                 'email' => $payload['email'],
                 'password' => $payload['password'],
                 'kdf_salt' => $payload['kdf_salt'],
-                'kdf_params' => $payload['kdf_params'],
+                'kdf_params' => VaultKeyMaterialRules::normalizeKdfParams($payload['kdf_params']),
                 'public_key' => $payload['public_key'],
                 'private_key_ciphertext' => $payload['private_key_ciphertext'],
                 'private_key_nonce' => $payload['private_key_nonce'],
+                // A client that chose the user ID bound the envelope to it.
+                'private_key_ad_version' => $clientUserId === null
+                    ? User::PRIVATE_KEY_AD_EMAIL
+                    : User::PRIVATE_KEY_AD_USER_ID,
             ]);
 
             $user->assignRole($isFirstUser ? ['admin', 'user'] : ['user']);
@@ -274,6 +282,27 @@ final class AuthService
         ])->save();
 
         AuditLog::record($user, 'auth.2fa.disabled', 'user', (string) $user->id);
+    }
+
+    /**
+     * Re-authenticate the current user before a sensitive vault operation:
+     * the login password, plus a current TOTP code when 2FA is enabled.
+     *
+     * @throws ValidationException
+     */
+    public function assertStepUp(User $user, string $password, ?string $twoFactorCode): void
+    {
+        if ($password === '' || ! Hash::check($password, $user->password)) {
+            throw ValidationException::withMessages([
+                'current_password' => __('The password is incorrect.'),
+            ]);
+        }
+
+        if ($user->two_fa_enabled_at !== null && ! $this->verifyTwoFactorCode($user, (string) $twoFactorCode)) {
+            throw ValidationException::withMessages([
+                'two_factor_code' => __('The two-factor authentication code is invalid.'),
+            ]);
+        }
     }
 
     public function sendPasswordResetLink(string $email): void

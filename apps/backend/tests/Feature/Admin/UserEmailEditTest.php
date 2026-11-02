@@ -9,6 +9,7 @@ use App\Models\User;
 use Database\Seeders\RoleAndPermissionSeeder;
 use Filament\Facades\Filament;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Livewire\Features\SupportTesting\Testable;
 use Livewire\Livewire;
 use Tests\TestCase;
 
@@ -35,9 +36,7 @@ final class UserEmailEditTest extends TestCase
         $legacy = User::factory()->create();
         $legacy->forceFill(['private_key_ad_version' => 1])->save();
 
-        Livewire::actingAs($admin)
-            ->test(EditUser::class, ['record' => $legacy->getRouteKey()])
-            ->assertFormFieldDisabled('email');
+        $this->editUserPage($admin, $legacy)->assertFormFieldDisabled('email');
     }
 
     public function test_email_is_editable_once_the_envelope_is_bound_to_the_user_id(): void
@@ -46,9 +45,18 @@ final class UserEmailEditTest extends TestCase
         $migrated = User::factory()->create();
         $migrated->forceFill(['private_key_ad_version' => 2])->save();
 
-        Livewire::actingAs($admin)
-            ->test(EditUser::class, ['record' => $migrated->getRouteKey()])
-            ->assertFormFieldEnabled('email');
+        $this->editUserPage($admin, $migrated)->assertFormFieldEnabled('email');
+    }
+
+    /**
+     * @return Testable<EditUser>
+     */
+    private function editUserPage(User $admin, User $record): Testable
+    {
+        /** @var Testable<EditUser> $page */
+        $page = Livewire::actingAs($admin)->test(EditUser::class, ['record' => $record->getRouteKey()]); // @phpstan-ignore argument.templateType
+
+        return $page;
     }
 
     private function admin(): User

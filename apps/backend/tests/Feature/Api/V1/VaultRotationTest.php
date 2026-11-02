@@ -21,6 +21,7 @@ use Database\Seeders\RoleAndPermissionSeeder;
 use Illuminate\Auth\AuthManager;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Routing\Middleware\ThrottleRequests;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
 use PragmaRX\Google2FA\Google2FA;
@@ -75,6 +76,8 @@ final class VaultRotationTest extends TestCase
             ->assertJsonPath('vault.vault_version', 2)
             ->assertJsonPath('vault.private_key_ad_version', 2);
 
+        // Drop the guard's cached user so /me reads the rotated row, as a new request would.
+        $this->app->make(AuthManager::class)->forgetGuards();
         $me = $this->getJson('/api/v1/me', $account['headers'])->assertOk()->json('data.vault');
         self::assertIsArray($me);
         $newKey = VaultKeyMaterial::deriveKey(self::NEW_MASTER_PASSWORD, (string) base64_decode((string) $me['kdf_salt'], true));
@@ -222,7 +225,10 @@ final class VaultRotationTest extends TestCase
         $deletedHost->delete();
 
         $base = $this->rotationPayload($account);
-        $hostItem = collect($base['items'])->firstWhere('type', 'hosts');
+        /** @var list<array<string, mixed>> $baseItems */
+        $baseItems = $base['items'];
+        $hostItems = array_values(array_filter($baseItems, static fn (array $item): bool => $item['type'] === 'hosts'));
+        $hostItem = $hostItems[0] ?? null;
         self::assertIsArray($hostItem);
 
         $variants = [
@@ -333,6 +339,8 @@ final class VaultRotationTest extends TestCase
 
     public function test_rotation_enforces_kdf_parameter_and_envelope_bounds(): void
     {
+        // Many rejected requests in a row; the rate limit is covered separately.
+        $this->withoutMiddleware(ThrottleRequests::class);
         $account = $this->createAccount();
         $base = $this->rotationPayload($account);
         $params = VaultKeyMaterial::kdfParams();

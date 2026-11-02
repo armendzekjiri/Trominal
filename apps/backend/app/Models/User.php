@@ -40,6 +40,12 @@ class User extends Authenticatable implements FilamentUser, HasAppAuthentication
     /** @use HasFactory<UserFactory> */
     use HasApiTokens, HasFactory, HasRoles, HasUlids, Notifiable, SoftDeletes;
 
+    /** Private-key envelope AD is `trominal:v1:user_private_key:<email>` (legacy). */
+    public const int PRIVATE_KEY_AD_EMAIL = 1;
+
+    /** Private-key envelope AD is `trominal:v1:user_private_key:<user id>`. */
+    public const int PRIVATE_KEY_AD_USER_ID = 2;
+
     /**
      * Get the attributes that should be cast.
      *
@@ -55,6 +61,7 @@ class User extends Authenticatable implements FilamentUser, HasAppAuthentication
             'two_fa_secret_enc' => 'encrypted',
             'two_fa_enabled_at' => 'datetime',
             'vault_version' => 'integer',
+            'private_key_ad_version' => 'integer',
             'suspended_at' => 'datetime',
         ];
     }
