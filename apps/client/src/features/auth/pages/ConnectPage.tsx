@@ -7,6 +7,10 @@ import { TextInput } from '@/components/ui/text-input'
 import { getApiBaseUrl, setApiBaseUrl } from '@/lib/config'
 import { openExternal } from '@/lib/open-external'
 import { buildProbeClient, resetApiClient } from '@/lib/api-client'
+import { parseServerUrl } from '@/lib/server-url'
+import { teardownSession } from '@/lib/session-teardown'
+import { secureStorage } from '@/lib/secure-storage'
+import { useAuth } from '@/stores/auth'
 import type { ServerInfoResponse } from '@trominal/api-client'
 
 const SELF_HOSTING_URL = 'https://trominal.app/docs/self-hosting'
@@ -14,12 +18,8 @@ const SELF_HOSTING_URL = 'https://trominal.app/docs/self-hosting'
 type ProbeState =
   | { kind: 'idle' }
   | { kind: 'probing' }
-  | { kind: 'ok'; info: ServerInfoResponse; latencyMs: number }
+  | { kind: 'ok'; url: string; info: ServerInfoResponse; latencyMs: number }
   | { kind: 'error'; message: string }
-
-function normaliseUrl(value: string): string {
-  return value.trim().replace(/\/+$/, '')
-}
 
 export function ConnectPage() {
   const navigate = useNavigate()
@@ -39,18 +39,19 @@ export function ConnectPage() {
 
   const handleProbe = async (e: React.FormEvent): Promise<void> => {
     e.preventDefault()
-    const target = normaliseUrl(url)
-    if (target === '') {
-      setProbe({ kind: 'error', message: 'Enter a server URL.' })
+    const parsed = parseServerUrl(url)
+    if (!parsed.ok) {
+      setProbe({ kind: 'error', message: parsed.message })
       return
     }
+    const target = parsed.url
     setProbe({ kind: 'probing' })
     const start = performance.now()
     try {
       const client = buildProbeClient(target)
       const info = await client.getServerInfo()
       const latencyMs = Math.round(performance.now() - start)
-      setProbe({ kind: 'ok', info, latencyMs })
+      setProbe({ kind: 'ok', url: target, info, latencyMs })
     } catch (err) {
       setProbe({
         kind: 'error',
@@ -61,7 +62,19 @@ export function ConnectPage() {
 
   const handleConnect = async (): Promise<void> => {
     if (probe.kind !== 'ok') return
-    await setApiBaseUrl(normaliseUrl(url))
+    const previous = await getApiBaseUrl()
+    if (previous !== probe.url) {
+      // Switching servers: end the old server's session (revoking its tokens
+      // there) and wipe everything that belonged to it, so neither its refresh
+      // token nor its decrypted data is ever presented to the new server.
+      if (useAuth.getState().accessToken !== null) {
+        await useAuth.getState().logout()
+      } else {
+        await secureStorage.delete('refresh_token')
+        await teardownSession()
+      }
+    }
+    await setApiBaseUrl(probe.url)
     resetApiClient()
     if (probe.info.registration_open) {
       navigate('/register')

@@ -1,5 +1,6 @@
 import { TrominalApiClient } from '@trominal/api-client'
 import { secureStorage } from './secure-storage'
+import { parseServerUrl } from './server-url'
 
 let client: TrominalApiClient | null = null
 let clientBaseUrl: string | null = null
@@ -18,6 +19,11 @@ export async function getApiClient(): Promise<TrominalApiClient> {
   const baseUrl = await secureStorage.get('api_base_url')
   if (baseUrl === null || baseUrl === '') {
     throw new Error('API base URL not configured. Send the user to /connect.')
+  }
+  // A URL saved before HTTPS was enforced must not keep sending tokens in the clear.
+  const parsed = parseServerUrl(baseUrl)
+  if (!parsed.ok) {
+    throw new Error(parsed.message)
   }
   client = new TrominalApiClient({ baseUrl })
   clientBaseUrl = baseUrl
