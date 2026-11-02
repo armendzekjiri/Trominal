@@ -33,6 +33,8 @@ final class SshTokenTest extends TestCase
 
         $response = $this->postJson('/api/v1/ws/ssh-token', [
             'host_id' => $host->id,
+            'host' => 'ssh.example.com',
+            'port' => 22,
         ], $this->bearerHeaders($user));
 
         $response
@@ -59,6 +61,8 @@ final class SshTokenTest extends TestCase
         $host = $this->createHost($user);
         $response = $this->postJson('/api/v1/ws/ssh-token', [
             'host_id' => $host->id,
+            'host' => 'ssh.example.com',
+            'port' => 22,
         ], $this->bearerHeaders($user));
         $plainToken = (string) $response->json('token');
         $verifier = app(SshTokenVerifier::class);
@@ -81,6 +85,8 @@ final class SshTokenTest extends TestCase
 
         $response = $this->postJson('/api/v1/ws/ssh-token', [
             'host_id' => $host->id,
+            'host' => 'ssh.example.com',
+            'port' => 22,
         ], $this->bearerHeaders($user));
 
         self::assertSame('wss://ssh.example.test/ws/ssh', (string) $response->json('websocket_url'));
@@ -92,6 +98,8 @@ final class SshTokenTest extends TestCase
         $host = $this->createHost($user);
         $response = $this->postJson('/api/v1/ws/ssh-token', [
             'host_id' => $host->id,
+            'host' => 'ssh.example.com',
+            'port' => 22,
         ], $this->bearerHeaders($user));
 
         $this->expectExceptionMessage('The SSH session token is invalid or expired.');
@@ -105,6 +113,8 @@ final class SshTokenTest extends TestCase
         $host = $this->createHost($user);
         $response = $this->postJson('/api/v1/ws/ssh-token', [
             'host_id' => $host->id,
+            'host' => 'ssh.example.com',
+            'port' => 22,
         ], $this->bearerHeaders($user));
 
         $this->expectExceptionMessage('The SSH session token is invalid or expired.');
@@ -118,6 +128,8 @@ final class SshTokenTest extends TestCase
         $host = $this->createHost($user);
         $response = $this->postJson('/api/v1/ws/ssh-token', [
             'host_id' => $host->id,
+            'host' => 'ssh.example.com',
+            'port' => 22,
         ], $this->bearerHeaders($user));
         WsSessionToken::query()->update(['ip_address' => null]);
 
@@ -134,6 +146,8 @@ final class SshTokenTest extends TestCase
         $host = $this->createHost($user);
         $response = $this->postJson('/api/v1/ws/ssh-token', [
             'host_id' => $host->id,
+            'host' => 'ssh.example.com',
+            'port' => 22,
         ], $this->bearerHeaders($user));
 
         $token = app(SshTokenVerifier::class)->consume((string) $response->json('token'), '192.0.2.10');
@@ -147,6 +161,8 @@ final class SshTokenTest extends TestCase
         $host = $this->createHost($user);
         $response = $this->postJson('/api/v1/ws/ssh-token', [
             'host_id' => $host->id,
+            'host' => 'ssh.example.com',
+            'port' => 22,
         ], $this->bearerHeaders($user));
 
         $token = app(SshTokenVerifier::class)->consume((string) $response->json('token'), '::ffff:127.0.0.1');
@@ -161,6 +177,8 @@ final class SshTokenTest extends TestCase
 
         $this->postJson('/api/v1/ws/ssh-token', [
             'host_id' => $host->id,
+            'host' => 'ssh.example.com',
+            'port' => 22,
         ], [...$this->bearerHeaders($user), 'X-Forwarded-For' => '198.51.100.20'])->assertCreated();
 
         self::assertSame('127.0.0.1', WsSessionToken::query()->firstOrFail()->ip_address);
@@ -175,6 +193,8 @@ final class SshTokenTest extends TestCase
 
         $this->postJson('/api/v1/ws/ssh-token', [
             'host_id' => $host->id,
+            'host' => 'ssh.example.com',
+            'port' => 22,
         ], [...$this->bearerHeaders($user), 'X-Forwarded-For' => '198.51.100.20'])->assertCreated();
 
         self::assertSame('198.51.100.20', WsSessionToken::query()->firstOrFail()->ip_address);
@@ -188,6 +208,8 @@ final class SshTokenTest extends TestCase
 
         $this->postJson('/api/v1/ws/ssh-token', [
             'host_id' => $host->id,
+            'host' => 'ssh.example.com',
+            'port' => 22,
         ], $this->bearerHeaders($user))
             ->assertUnprocessable()
             ->assertJsonValidationErrors(['host_id']);
@@ -200,6 +222,8 @@ final class SshTokenTest extends TestCase
 
         $this->postJson('/api/v1/ws/ssh-token', [
             'host_id' => $host->id,
+            'host' => 'ssh.example.com',
+            'port' => 22,
         ], $this->bearerHeaders($user))
             ->assertForbidden();
     }
@@ -220,6 +244,8 @@ final class SshTokenTest extends TestCase
 
         $this->postJson('/api/v1/ws/ssh-token', [
             'host_id' => $host->id,
+            'host' => 'ssh.example.com',
+            'port' => 22,
         ], $this->bearerHeaders($user))
             ->assertForbidden();
     }
