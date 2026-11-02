@@ -101,6 +101,19 @@ Open a PR from the hotfix branch back into `main` immediately after the stable t
 
 Never force-move a stable release tag after it has been pushed. If a published release is wrong, create the next patch version.
 
+## The "Latest" release must be a client release
+
+The desktop updater downloads `https://github.com/armendzekjiri/Trominal/releases/latest/download/latest.json`. GitHub resolves `releases/latest` to whichever release is marked **Latest**, so that must always be a client release. If a backend release takes the label, every desktop update check fails.
+
+Publishing a draft makes it Latest by default, so always publish with an explicit flag:
+
+```bash
+gh release edit backend-vX.Y.Z --draft=false --latest=false   # backend: never Latest
+gh release edit client-vX.Y.Z --draft=false --latest          # client: Latest
+```
+
+In the GitHub UI, untick **Set as the latest release** when publishing a backend release.
+
 ## Backend Release
 
 Pushing a backend tag runs `.github/workflows/backend-release.yml`:
@@ -203,7 +216,7 @@ For client releases:
 2. Download and smoke-test macOS, Windows, and Linux installers.
 3. Confirm `latest.json` exists on the draft release.
 4. Confirm `.sig` files are attached.
-5. Publish the draft release.
+5. Publish the draft release: `gh release edit client-vX.Y.Z --draft=false --latest`.
 
 ## Web Deployment
 
