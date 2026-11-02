@@ -13,6 +13,8 @@
 
 pub mod event;
 pub mod pty;
+pub mod secret;
+pub mod ssh_identity;
 pub mod types;
 
 pub use event::{emit_typed, EventSink};
@@ -21,4 +23,5 @@ pub use pty::{
     write_session, LocalShellError, LocalShellSession, LocalShellState, PtyCommand, PtyEvents,
     PtyGeometry, TunnelSession,
 };
+pub use secret::SecretBytes;
 pub use types::*;

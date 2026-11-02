@@ -11,3 +11,6 @@ serde = { workspace = true }
 serde_json = { workspace = true }
 thiserror = { workspace = true }
 portable-pty = { workspace = true }
+# Already in the lockfile via Tauri / rustls; see commit message.
+zeroize = "1.8"
+base64 = "0.22"
