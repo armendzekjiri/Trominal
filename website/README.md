@@ -2,7 +2,7 @@
 
 `trominal.app` — the landing page, install guide, public demo info, and full documentation for Trominal.
 
-This is an Astro 5 + MDX project deployed to Cloudflare Pages with a tiny Worker (`/api/stats.json`) that fetches GitHub stars and the latest release, cached in KV for ~10 minutes.
+This is an Astro + MDX project deployed as a Cloudflare Worker (Workers Builds), including a tiny endpoint (`/api/stats.json`) that fetches GitHub stars and the latest release, cached in KV for ~10 minutes.
 
 It lives in the same monorepo as the rest of Trominal but ships independently.
 
@@ -28,7 +28,7 @@ GITHUB_TOKEN=ghp_...
 
 ---
 
-## Deploying to Cloudflare Pages — step by step
+## Deploying to Cloudflare Workers — step by step
 
 You only have to do this once. After that, every push to `main` that touches `website/**` re-deploys automatically.
 
@@ -57,28 +57,25 @@ pnpm dlx wrangler kv namespace create TROMINAL_STATS --preview
 
 Each command prints an `id`. Paste both into `website/wrangler.toml`, replacing the `REPLACE_WITH_KV_ID` placeholders. Commit the change.
 
-### 4. Create the Pages project
+### 4. Create the Worker with Workers Builds
 
-1. Cloudflare dashboard → **Workers & Pages** → **Create** → **Pages** tab → **Connect to Git**.
-2. Authorize Cloudflare to read your GitHub account, then pick the `Trominal` repo.
-3. **Project name:** `trominal-website` (or whatever you like — this becomes the `*.pages.dev` preview URL).
-4. **Production branch:** `main`.
-5. **Framework preset:** select **Astro**. (If it's not listed, pick "None".)
-6. **Build settings:**
-   - **Build command:** `pnpm install --frozen-lockfile && pnpm --filter @trominal/website build`
-   - **Build output directory:** `website/dist`
-   - **Root directory:** *(leave blank — keep it at the repo root)*
-7. **Environment variables (Production):**
-   - `GITHUB_REPO` = `armendzekjiri/Trominal`
-   - `GITHUB_TOKEN` = a GitHub personal access token with **only public repo read access** (optional — without it the site still works, you just hit the lower anonymous rate limit during builds)
-8. Click **Save and Deploy**. Wait for the first build. It will take 2–4 minutes.
+The site is an Astro build served by a Cloudflare **Worker** (`website/wrangler.toml`: `main` + `[assets]`), deployed by Workers Builds on every push.
 
-### 5. Bind the KV namespace to the project
+1. Cloudflare dashboard → **Workers & Pages** → **Create** → **Import a repository** → pick the `Trominal` repo.
+2. **Project name:** `trominal`. It **must** match `name` in `website/wrangler.toml`, or the deploy step fails.
+3. **Build settings** (Settings → Build):
+   - **Root directory:** `/` (repo root, so pnpm installs from `pnpm-lock.yaml` with the pinned versions)
+   - **Build command:** `pnpm --filter @trominal/website build`
+   - **Deploy command:** `pnpm --filter @trominal/website exec wrangler deploy`
+   - **Non-production branch deploy command:** `pnpm --filter @trominal/website exec wrangler versions upload`
+   - **Production branch:** `main`
+4. **Build variables (optional):** `GITHUB_TOKEN` = a GitHub token with **only public repo read access**. Without it the build still works, it just hits the lower anonymous rate limit.
 
-1. Inside the Pages project: **Settings** → **Functions** → **KV namespace bindings** → **Add binding**.
-2. **Variable name:** `TROMINAL_STATS`
-3. **KV namespace:** select the one you created in step 3.
-4. Click **Save**. The next deploy will pick it up.
+Don't use the repo-root `pnpm run build` / `npx wrangler …` defaults: the root build compiles the client app and backend, not the website, and there is no wrangler config at the root.
+
+### 5. KV namespace binding
+
+`website/wrangler.toml` already binds `TROMINAL_STATS` to the namespace id from step 3; `wrangler deploy` applies it. Nothing to click.
 
 ### 6. Enable analytics
 
@@ -92,7 +89,7 @@ If you ever switch RUM to **"Enable with JS Snippet installation"** (manual mode
 
 ### 7. Connect the custom domain
 
-1. Inside the Pages project: **Custom domains** → **Set up a custom domain**.
+1. Inside the `trominal` Worker: **Settings** → **Domains & Routes** → **Add** → **Custom domain**.
 2. Enter `trominal.app` and confirm. Cloudflare wires up DNS automatically.
 3. Repeat for `www.trominal.app` if you want both — most projects redirect `www` → apex.
 4. Verify HTTPS is green. (Cloudflare provisions a cert automatically.)
@@ -117,25 +114,25 @@ See `.ai/skills/website.md` for full guidance.
 
 ## What lives where
 
-| Section / page          | File                                | Source                              |
-| ----------------------- | ----------------------------------- | ----------------------------------- |
-| Home                    | `src/pages/index.astro`             | Hand-written, with Hero/WhyGrid/etc |
-| Features                | `src/pages/features.astro`          | Hand-written                        |
-| Screenshots gallery     | `src/pages/screenshots.astro`       | Globs `src/assets/screenshots/`     |
-| Install                 | `src/pages/install.astro`           | Hand-written, links to releases     |
-| Demo                    | `src/pages/demo.astro`              | Hand-written; uses `SITE.demo`      |
-| Contribute              | `src/pages/contribute.astro`        | Hand-written                        |
-| Contact                 | `src/pages/contact.astro`           | Hand-written; uses `SITE.contactEmail` |
-| Changelog               | `src/pages/changelog.astro`         | `/CHANGELOG.md`                     |
-| Roadmap                 | `src/pages/roadmap.astro`           | Mirrors `PROJECT_BRIEF.md` §11      |
-| Security                | `src/pages/security.astro`          | `/SECURITY.md`                      |
-| Brand                   | `src/pages/brand.astro`             | Hand-written                        |
-| Privacy                 | `src/pages/privacy.astro`           | Hand-written, real policy           |
-| Terms                   | `src/pages/terms.astro`             | Hand-written, real terms            |
-| License                 | `src/pages/license.astro`           | `/LICENSE`                          |
-| Docs hub                | `src/pages/docs/index.astro`        | `DOCS` manifest                     |
-| `/docs/<slug>`          | `src/pages/docs/[slug].astro`       | Maps via `DOCS` to repo markdown    |
-| Stats API               | `src/pages/api/stats.json.ts`       | GitHub API → KV                     |
+| Section / page      | File                          | Source                                 |
+| ------------------- | ----------------------------- | -------------------------------------- |
+| Home                | `src/pages/index.astro`       | Hand-written, with Hero/WhyGrid/etc    |
+| Features            | `src/pages/features.astro`    | Hand-written                           |
+| Screenshots gallery | `src/pages/screenshots.astro` | Globs `src/assets/screenshots/`        |
+| Install             | `src/pages/install.astro`     | Hand-written, links to releases        |
+| Demo                | `src/pages/demo.astro`        | Hand-written; uses `SITE.demo`         |
+| Contribute          | `src/pages/contribute.astro`  | Hand-written                           |
+| Contact             | `src/pages/contact.astro`     | Hand-written; uses `SITE.contactEmail` |
+| Changelog           | `src/pages/changelog.astro`   | `/CHANGELOG.md`                        |
+| Roadmap             | `src/pages/roadmap.astro`     | Mirrors `PROJECT_BRIEF.md` §11         |
+| Security            | `src/pages/security.astro`    | `/SECURITY.md`                         |
+| Brand               | `src/pages/brand.astro`       | Hand-written                           |
+| Privacy             | `src/pages/privacy.astro`     | Hand-written, real policy              |
+| Terms               | `src/pages/terms.astro`       | Hand-written, real terms               |
+| License             | `src/pages/license.astro`     | `/LICENSE`                             |
+| Docs hub            | `src/pages/docs/index.astro`  | `DOCS` manifest                        |
+| `/docs/<slug>`      | `src/pages/docs/[slug].astro` | Maps via `DOCS` to repo markdown       |
+| Stats API           | `src/pages/api/stats.json.ts` | GitHub API → KV                        |
 
 ---
 
