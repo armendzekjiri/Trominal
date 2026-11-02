@@ -250,6 +250,23 @@ final class SshTokenTest extends TestCase
             ->assertForbidden();
     }
 
+    public function test_treats_a_missing_web_ssh_setting_as_disabled(): void
+    {
+        $user = $this->userWithRole('user');
+        $host = $this->createHost($user);
+
+        AppSetting::registration()->update([
+            'value' => ['mode' => 'single', 'open' => false, 'instance_name' => 'Trominal'],
+        ]);
+
+        $this->postJson('/api/v1/ws/ssh-token', [
+            'host_id' => $host->id,
+            'host' => 'ssh.example.com',
+            'port' => 22,
+        ], $this->bearerHeaders($user))
+            ->assertForbidden();
+    }
+
     private function userWithRole(string $role): User
     {
         $user = User::factory()->create();
