@@ -470,13 +470,38 @@ fn require_path(path: &str, message: &str) -> Result<(), String> {
 }
 
 /// Encode one path as a single `sftp -b` argument.
+///
+/// OpenSSH's batch parser (`makeargv` in sftp.c) splits on whitespace,
+/// treats `#` as a comment outside quotes, and inside a double-quoted
+/// argument understands exactly two escapes that matter here: `\"` and
+/// `\\` (one level of backslash escaping is removed again before the path
+/// is used). It escapes glob metacharacters (`*?[]`) itself while inside
+/// quotes, so those stay verbatim. A line break would end the command, and
+/// the parser has no escape for one, so any control character is rejected.
+/// A leading `-` would be read as a command flag even when quoted, so
+/// relative paths starting with one are anchored with `./`.
 pub(crate) fn batch_arg(path: &str) -> Result<String, String> {
-    Ok(quote_remote(path))
-}
+    if let Some(ch) = path.chars().find(|ch| ch.is_control()) {
+        return Err(SftpError::Operation(format!(
+            "path contains an unsupported control character (U+{:04X})",
+            u32::from(ch)
+        ))
+        .to_string());
+    }
 
-/// Quote a remote path for `sftp -b` so spaces and shell metacharacters survive.
-fn quote_remote(path: &str) -> String {
-    format!("\"{}\"", path.replace('"', "\\\""))
+    let mut quoted = String::with_capacity(path.len() + 4);
+    quoted.push('"');
+    if path.starts_with('-') {
+        quoted.push_str("./");
+    }
+    for ch in path.chars() {
+        if ch == '\\' || ch == '"' {
+            quoted.push('\\');
+        }
+        quoted.push(ch);
+    }
+    quoted.push('"');
+    Ok(quoted)
 }
 
 fn clean_remote_path(path: &str) -> String {
