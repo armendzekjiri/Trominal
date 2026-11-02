@@ -19,7 +19,7 @@ The UI reference lives in [`.ai/design/`](../design/). Start with [`.ai/design/R
 
 ## Visual Rules
 
-- Keep the product UI dark-first, warm charcoal, and work-focused.
+- Keep the product UI dark-first, cool slate with the green accent, and work-focused (Termius-style layout; see the Direction section of `.ai/design/README.md`).
 - Use mapped Tailwind design tokens from `tokens.css`; do not use raw color classes like `text-zinc-*` or `bg-neutral-*`.
 - Use shadcn/ui primitives before creating custom components.
 - Use lucide icons for icon buttons when an icon exists.

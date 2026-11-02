@@ -739,7 +739,7 @@ There is a **third user-facing surface** beyond the client app and admin panel:
 | Live data       | `/api/stats.json` Worker route, KV-cached 10 min                 |
 | Analytics       | Cloudflare Web Analytics (privacy-friendly, no cookies)          |
 | Fonts           | Self-hosted via `@fontsource/*` — no Google Fonts at runtime     |
-| Design tokens   | Mirror `.ai/design/` — dark warm charcoal, accent green, JetBrains Mono |
+| Design tokens   | Mirror `.ai/design/` — dark cool slate, accent green, Inter UI + JetBrains Mono |
 | License banner  | AGPL-3.0 everywhere — never MIT                                  |
 | Demo policy     | Public, secure, ephemeral (DB wiped periodically), no SLA        |
 

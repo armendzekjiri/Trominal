@@ -1,12 +1,14 @@
 /* Trominal design tokens
- * Dark-first, warm charcoal, green accent
+ * Dark-first, cool slate neutrals, green accent (Termius-style layout, see README).
+ * Contrast-checked: fg/fg-muted/fg-faint >= 4.5:1 on bg, surface and surface-3;
+ * border-input >= 3:1 against surface (WCAG 1.4.3 / 1.4.11).
  */
 
 :root {
   /* Type */
   --font-mono:
     'JetBrains Mono', 'JetBrains Mono Fallback', ui-monospace, SFMono-Regular, Menlo, monospace;
-  --font-ui: system-ui, -apple-system, 'Segoe UI', 'Inter', sans-serif;
+  --font-ui: 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
 
   /* Sizes */
   --t-10: 10px;
@@ -35,34 +37,36 @@
   --s-12: 40px;
   --s-16: 56px;
 
-  /* Radius */
+  /* Radius: softer, card-based surfaces */
   --r-0: 0px;
-  --r-1: 2px;
-  --r-2: 4px;
-  --r-3: 6px;
-  --r-4: 8px;
+  --r-1: 4px;
+  --r-2: 6px;
+  --r-3: 8px;
+  --r-4: 12px;
+  --r-5: 16px;
   --r-full: 999px;
 
-  /* Dark theme — warm charcoal */
-  --bg: #0e0d0b; /* app background */
-  --bg-elev: #15140f; /* sidebar/panel */
-  --surface: #1c1a14; /* card */
-  --surface-2: #24211a; /* hover */
-  --surface-3: #2d2922; /* active/selected */
-  --border: #2a2620;
-  --border-strong: #3a352d;
-  --border-subtle: #1f1c16;
+  /* Dark theme: cool slate */
+  --bg: #0f1216; /* app background */
+  --bg-elev: #13171c; /* sidebar/panel */
+  --surface: #191e24; /* card */
+  --surface-2: #1f252c; /* hover */
+  --surface-3: #262d36; /* active/selected */
+  --border: #242a32;
+  --border-strong: #3a4350;
+  --border-subtle: #1b2027;
+  --border-input: #626c7b; /* form field outline, >= 3:1 */
 
-  --fg: #e7e2d4; /* primary text */
-  --fg-muted: #a39d8a; /* secondary */
-  --fg-faint: #6e6957; /* tertiary/captions */
-  --fg-dim: #4a463a; /* disabled */
+  --fg: #e8ecf1; /* primary text */
+  --fg-muted: #a3acb9; /* secondary */
+  --fg-faint: #8a93a2; /* tertiary/captions */
+  --fg-dim: #4d5563; /* disabled only, not for readable text */
 
-  --accent: #7dd3a0; /* primary green */
-  --accent-fg: #0a0c0a;
+  --accent: #7dd3a0; /* primary green, the brand colour */
+  --accent-fg: #08110c;
   --accent-hover: #92dfb1;
-  --accent-soft: rgba(125, 211, 160, 0.1);
-  --accent-ring: rgba(125, 211, 160, 0.35);
+  --accent-soft: rgba(125, 211, 160, 0.12);
+  --accent-ring: rgba(125, 211, 160, 0.45);
 
   --danger: #f17a7a;
   --danger-soft: rgba(241, 122, 122, 0.1);
@@ -73,22 +77,22 @@
   --info-soft: rgba(122, 162, 247, 0.1);
 
   /* Terminal ANSI palette — Trominal scheme */
-  --ansi-black: #14130f;
+  --ansi-black: #13171c;
   --ansi-red: #f17a7a;
   --ansi-green: #7dd3a0;
   --ansi-yellow: #e0b870;
   --ansi-blue: #7aa2f7;
   --ansi-magenta: #c897e0;
   --ansi-cyan: #7dd3c0;
-  --ansi-white: #c8c2b0;
-  --ansi-bright-black: #4a463a;
+  --ansi-white: #c9d0da;
+  --ansi-bright-black: #4d5563;
   --ansi-bright-red: #ff8f8f;
   --ansi-bright-green: #92dfb1;
   --ansi-bright-yellow: #ecc78a;
   --ansi-bright-blue: #93b4f8;
   --ansi-bright-magenta: #d3aae6;
   --ansi-bright-cyan: #92dccc;
-  --ansi-bright-white: #e7e2d4;
+  --ansi-bright-white: #e8ecf1;
 
   /* Shadows */
   --sh-1: 0 1px 0 rgba(0, 0, 0, 0.3), 0 0 0 1px rgba(0, 0, 0, 0.1);
@@ -98,25 +102,26 @@
 }
 
 [data-theme='light'] {
-  --bg: #faf8f3;
-  --bg-elev: #f3efe6;
+  --bg: #f6f8fa;
+  --bg-elev: #eef1f5;
   --surface: #ffffff;
-  --surface-2: #f0ece2;
-  --surface-3: #e6e1d3;
-  --border: #e3ddcd;
-  --border-strong: #cfc8b5;
-  --border-subtle: #efeadd;
+  --surface-2: #f0f3f7;
+  --surface-3: #e3e8ee;
+  --border: #dde3ea;
+  --border-strong: #c9d1db;
+  --border-subtle: #e9edf2;
+  --border-input: #7d8897;
 
-  --fg: #1c1a14;
-  --fg-muted: #5e5946;
-  --fg-faint: #8a8472;
-  --fg-dim: #b6b09e;
+  --fg: #12161c;
+  --fg-muted: #4b5563;
+  --fg-faint: #5f6774;
+  --fg-dim: #a8b0bc;
 
-  --accent: #2f8a5b;
+  --accent: #1c7044;
   --accent-fg: #ffffff;
-  --accent-hover: #267548;
-  --accent-soft: rgba(47, 138, 91, 0.1);
-  --accent-ring: rgba(47, 138, 91, 0.3);
+  --accent-hover: #175d39;
+  --accent-soft: rgba(28, 112, 68, 0.1);
+  --accent-ring: rgba(28, 112, 68, 0.4);
 
   --danger: #c64545;
   --danger-soft: rgba(198, 69, 69, 0.1);
