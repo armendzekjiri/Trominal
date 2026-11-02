@@ -27,6 +27,8 @@ use Illuminate\Database\Eloquent\SoftDeletes;
     'tags_nonce',
     'color_ciphertext',
     'color_nonce',
+    'host_keys_ciphertext',
+    'host_keys_nonce',
 ])]
 final class Host extends Model
 {
@@ -52,6 +54,7 @@ final class Host extends Model
             'username_ciphertext' => 'encrypted',
             'tags_ciphertext' => 'encrypted',
             'color_ciphertext' => 'encrypted',
+            'host_keys_ciphertext' => 'encrypted',
         ];
     }
 }
