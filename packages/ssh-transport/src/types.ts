@@ -19,6 +19,8 @@ export type SshConnectOptions = {
   username: string
   auth?: SshAuth
   websocketUrl?: string
+  /** Single-use web SSH token; sent in the first WebSocket frame, never in the URL. */
+  websocketToken?: string
   cols?: number
   rows?: number
   sessionName?: string

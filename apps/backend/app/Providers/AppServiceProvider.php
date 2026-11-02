@@ -13,6 +13,7 @@ use App\Models\PersonalAccessToken;
 use App\Models\Snippet;
 use App\Models\Tunnel;
 use App\Policies\VaultRecordPolicy;
+use App\Services\Ssh\WebSshClientAddress;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
@@ -27,7 +28,7 @@ class AppServiceProvider extends ServiceProvider
      */
     public function register(): void
     {
-        //
+        $this->app->bind(WebSshClientAddress::class, static fn (): WebSshClientAddress => WebSshClientAddress::fromConfig());
     }
 
     /**

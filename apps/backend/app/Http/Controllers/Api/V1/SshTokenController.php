@@ -10,6 +10,7 @@ use App\Models\AuditLog;
 use App\Models\Host;
 use App\Models\User;
 use App\Models\WsSessionToken;
+use App\Support\Network\IpAddress;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\ValidationException;
@@ -23,7 +24,7 @@ final class SshTokenController extends Controller
 
         $settings = AppSetting::registration()->value;
 
-        if (! (bool) ($settings['web_ssh_enabled'] ?? true)) {
+        if (! (bool) ($settings['web_ssh_enabled'] ?? false)) {
             abort(403, 'Web SSH is disabled for this instance.');
         }
 
@@ -51,7 +52,7 @@ final class SshTokenController extends Controller
             'user_id' => $user->id,
             'host_id' => $host->id,
             'token_hash' => hash('sha256', $plainToken),
-            'ip_address' => $request->ip(),
+            'ip_address' => IpAddress::normalize($request->ip()),
             'expires_at' => $expiresAt,
         ]);
 
@@ -62,29 +63,24 @@ final class SshTokenController extends Controller
         return response()->json([
             'token' => $plainToken,
             'expires_at' => $expiresAt->toIso8601String(),
-            'websocket_url' => $this->websocketUrl($request, $plainToken),
+            // The token is sent inside the first WebSocket frame, never in the
+            // URL, so it cannot end up in proxy or access logs.
+            'websocket_url' => $this->websocketUrl($request),
         ], 201);
     }
 
-    private function websocketUrl(Request $request, string $plainToken): string
+    private function websocketUrl(Request $request): string
     {
         $configuredUrl = config('trominal.web_ssh_proxy_url');
 
         if (is_string($configuredUrl) && $configuredUrl !== '') {
-            return $this->appendToken($configuredUrl, $plainToken);
+            return $configuredUrl;
         }
 
         $scheme = $request->isSecure() ? 'wss' : 'ws';
         $path = config('trominal.web_ssh_proxy_path', '/ws/ssh');
         $normalizedPath = '/'.ltrim(is_string($path) ? $path : '/ws/ssh', '/');
 
-        return $this->appendToken($scheme.'://'.$request->getHttpHost().$normalizedPath, $plainToken);
-    }
-
-    private function appendToken(string $url, string $plainToken): string
-    {
-        $separator = str_contains($url, '?') ? '&' : '?';
-
-        return $url.$separator.'token='.rawurlencode($plainToken);
+        return $scheme.'://'.$request->getHttpHost().$normalizedPath;
     }
 }

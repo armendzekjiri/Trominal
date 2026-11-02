@@ -95,6 +95,10 @@ services:
       DB_HOST: postgres
       REDIS_HOST: redis
       TROMINAL_WEB_SSH_PROXY_HOST: 0.0.0.0
+      # ssh-proxy publishes no ports, so its only peer is Caddy on the internal
+      # compose network. Trust X-Forwarded-For (which Caddy rewrites to the real
+      # client address) only from private-network peers.
+      TROMINAL_WEB_SSH_TRUSTED_PROXIES: ${TROMINAL_WEB_SSH_TRUSTED_PROXIES:-10.0.0.0/8,172.16.0.0/12,192.168.0.0/16,fc00::/7}
     volumes: *backend-volumes
     depends_on:
       app:

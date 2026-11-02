@@ -42,6 +42,7 @@ export function useTerminalActions() {
       username: host.username,
       auth,
       websocketUrl: token.websocket_url,
+      websocketToken: token.token,
       sessionName: host.name,
     })
   }

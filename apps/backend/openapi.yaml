@@ -976,9 +976,15 @@ components:
       properties:
         token:
           type: string
-          description: Plain token shown once; server stores only a SHA-256 hash.
+          pattern: '^[a-f0-9]{64}$'
+          description: >-
+            Plain single-use token shown once; the server stores only a SHA-256
+            hash. Send it as the `token` field of the first WebSocket frame,
+            never in the URL. Bound to the requesting client IP unless
+            TROMINAL_WEB_SSH_BIND_IP=false.
         expires_at:
           type: string
           format: date-time
         websocket_url:
           type: string
+          description: WebSocket endpoint of the SSH proxy. Contains no credentials.

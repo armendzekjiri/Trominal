@@ -176,8 +176,10 @@ export type SshTokenRequest = { host_id: string }
 
 /** Short-lived WebSocket SSH token response. */
 export type SshTokenResponse = {
+  /** Single-use token; send it in the first WebSocket frame, never in the URL. */
   token: string
   expires_at: string
+  /** Proxy endpoint; contains no credentials. */
   websocket_url: string
 }
 

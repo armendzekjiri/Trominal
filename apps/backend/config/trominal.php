@@ -13,4 +13,13 @@ return [
     'web_ssh_proxy_host' => env('TROMINAL_WEB_SSH_PROXY_HOST', '127.0.0.1'),
     'web_ssh_proxy_port' => (int) env('TROMINAL_WEB_SSH_PROXY_PORT', 8080),
     'web_ssh_proxy_path' => env('TROMINAL_WEB_SSH_PROXY_PATH', '/ws/ssh'),
+
+    // Bind each single-use web SSH token to the client IP that requested it.
+    // When enabled, a connection whose address cannot be determined is refused.
+    'web_ssh_bind_ip' => (bool) env('TROMINAL_WEB_SSH_BIND_IP', true),
+
+    // Comma-separated IPs / CIDR ranges whose X-Forwarded-For header the SSH
+    // WebSocket proxy trusts (e.g. the reverse proxy in front of it). Empty
+    // means forwarding headers are ignored and the TCP peer address is used.
+    'web_ssh_trusted_proxies' => env('TROMINAL_WEB_SSH_TRUSTED_PROXIES', ''),
 ];

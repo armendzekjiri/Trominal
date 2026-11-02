@@ -20,8 +20,12 @@ use Throwable;
 
 final class WebSshProxy
 {
-    public function __construct(private readonly SshTokenVerifier $tokens)
-    {
+    private const HANDSHAKE_TIMEOUT_SECONDS = 10.0;
+
+    public function __construct(
+        private readonly SshTokenVerifier $tokens,
+        private readonly WebSshClientAddress $clientAddress,
+    ) {
         //
     }
 
@@ -33,50 +37,62 @@ final class WebSshProxy
             ], 426);
         }
 
-        $ipAddress = $this->ipAddress($request);
-
-        try {
-            $token = $this->tokens->consume($this->plainToken($request), $ipAddress);
-        } catch (ValidationException) {
-            $this->sendError($connection, 'The SSH session token is invalid or expired.');
-            $connection->close();
-
-            return null;
-        }
+        $ipAddress = $this->clientAddress->resolve(
+            WebSshClientAddress::peerFromRemoteAddress($this->remoteAddress($connection)),
+            $request->getHeaderLine('X-Forwarded-For'),
+        );
 
         $connection->withMaxMessageSize(1024 * 1024);
 
-        /** @var SSH2|null $ssh */
-        $ssh = null;
-        /** @var TimerInterface|null $readTimer */
-        $readTimer = null;
+        $state = new WebSshConnectionState;
 
-        $connection->onMessage(function (DataInterface $message) use ($connection, $token, $ipAddress, &$ssh, &$readTimer): void {
-            if (! $ssh instanceof SSH2) {
-                $this->openSshSession($message->getPayload(), $connection, $token, $ipAddress, $ssh, $readTimer);
+        // The session token arrives in the first frame, never in the URL.
+        // Connections that do not present one in time are closed.
+        $state->handshakeTimer = Loop::addTimer(self::HANDSHAKE_TIMEOUT_SECONDS, function () use ($connection, $state): void {
+            $state->handshakeTimer = null;
 
-                return;
+            if (! $state->handshakeStarted) {
+                $this->sendError($connection, 'The SSH session token is invalid or expired.');
+                $connection->close();
             }
-
-            if ($this->handleResizeFrame($message->getPayload(), $ssh)) {
-                return;
-            }
-
-            $ssh->write($message->getPayload());
         });
 
-        $connection->onClose(function () use ($token, $ipAddress, &$ssh, &$readTimer): void {
-            if ($readTimer instanceof TimerInterface) {
-                Loop::cancelTimer($readTimer);
-                $readTimer = null;
+        $connection->onMessage(function (DataInterface $message) use ($connection, $ipAddress, $state): void {
+            if (! $state->handshakeStarted) {
+                $state->handshakeStarted = true;
+                $this->cancelHandshakeTimer($state);
+                $this->handshake($message->getPayload(), $connection, $ipAddress, $state);
+
+                return;
             }
 
-            if ($ssh instanceof SSH2) {
-                $ssh->disconnect();
-                $ssh = null;
+            if (! $state->ssh instanceof SSH2) {
+                return;
             }
 
-            $this->audit($token, 'ssh.session.closed', $ipAddress);
+            if ($this->handleResizeFrame($message->getPayload(), $state->ssh)) {
+                return;
+            }
+
+            $state->ssh->write($message->getPayload());
+        });
+
+        $connection->onClose(function () use ($ipAddress, $state): void {
+            $this->cancelHandshakeTimer($state);
+
+            if ($state->readTimer instanceof TimerInterface) {
+                Loop::cancelTimer($state->readTimer);
+                $state->readTimer = null;
+            }
+
+            if ($state->ssh instanceof SSH2) {
+                $state->ssh->disconnect();
+                $state->ssh = null;
+            }
+
+            if ($state->token instanceof WsSessionToken) {
+                $this->audit($state->token, 'ssh.session.closed', $ipAddress);
+            }
         });
 
         $connection->openBuffer();
@@ -84,13 +100,26 @@ final class WebSshProxy
         return null;
     }
 
+    private function handshake(string $payload, WebSocketConnection $connection, ?string $ipAddress, WebSshConnectionState $state): void
+    {
+        try {
+            $state->token = $this->tokens->consume($this->plainToken($payload), $ipAddress);
+        } catch (ValidationException) {
+            $this->sendError($connection, 'The SSH session token is invalid or expired.');
+            $connection->close();
+
+            return;
+        }
+
+        $this->openSshSession($payload, $connection, $state->token, $ipAddress, $state);
+    }
+
     private function openSshSession(
         string $payload,
         WebSocketConnection $connection,
         WsSessionToken $token,
         ?string $ipAddress,
-        ?SSH2 &$ssh,
-        ?TimerInterface &$readTimer,
+        WebSshConnectionState $state,
     ): void {
         try {
             $frame = WebSshConnectFrame::fromJson($payload);
@@ -115,7 +144,8 @@ final class WebSshProxy
             $frame->wipeSecrets();
             $ssh->setTimeout(0.05);
             $ssh->openShell();
-            $readTimer = $this->readPump($connection, $ssh);
+            $state->ssh = $ssh;
+            $state->readTimer = $this->readPump($connection, $ssh);
 
             $this->audit($token, 'ssh.session.opened', $ipAddress, [
                 'transport' => 'websocket',
@@ -195,27 +225,31 @@ final class WebSshProxy
         return true;
     }
 
-    private function plainToken(RequestInterface $request): string
+    private function plainToken(string $payload): string
     {
-        parse_str($request->getUri()->getQuery(), $query);
-        $token = $query['token'] ?? null;
+        $decoded = json_decode($payload, associative: true);
+        $token = is_array($decoded) ? ($decoded['token'] ?? null) : null;
 
         return is_string($token) ? $token : '';
     }
 
-    private function ipAddress(RequestInterface $request): ?string
+    private function remoteAddress(WebSocketConnection $connection): ?string
     {
-        $forwardedFor = $request->getHeaderLine('X-Forwarded-For');
-
-        if ($forwardedFor !== '') {
-            $parts = explode(',', $forwardedFor);
-
-            return trim($parts[0]);
+        try {
+            $address = $connection->connection->__call('getRemoteAddress', []);
+        } catch (Throwable) {
+            return null;
         }
 
-        $realIp = $request->getHeaderLine('X-Real-IP');
+        return is_string($address) ? $address : null;
+    }
 
-        return $realIp !== '' ? $realIp : null;
+    private function cancelHandshakeTimer(WebSshConnectionState $state): void
+    {
+        if ($state->handshakeTimer instanceof TimerInterface) {
+            Loop::cancelTimer($state->handshakeTimer);
+            $state->handshakeTimer = null;
+        }
     }
 
     /**

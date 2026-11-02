@@ -20,6 +20,9 @@ export class WebSocketSshSession implements SshSession {
     if (this.options.websocketUrl === undefined) {
       throw new Error('WebSocket SSH requires a websocketUrl.')
     }
+    if (this.options.websocketToken === undefined) {
+      throw new Error('WebSocket SSH requires a session token.')
+    }
 
     this.currentState = 'connecting'
     const socket = new WebSocket(this.options.websocketUrl)
@@ -78,6 +81,7 @@ export class WebSocketSshSession implements SshSession {
     const auth = this.options.auth
     return {
       type: 'connect',
+      token: this.options.websocketToken,
       host_id: this.options.hostId,
       host: this.options.host,
       port: this.options.port,
