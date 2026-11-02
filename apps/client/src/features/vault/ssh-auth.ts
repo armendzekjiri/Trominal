@@ -92,7 +92,7 @@ async function rsaPkcs8PrivateKeyToPem(privateKey: string): Promise<string> {
   return rsaPrivateJwkToPem(jwk)
 }
 
-function pemToBytes(pem: string, label: string): Uint8Array {
+function pemToBytes(pem: string, label: string): Uint8Array<ArrayBuffer> {
   const pattern = new RegExp(`-----BEGIN ${label}-----([\\s\\S]+?)-----END ${label}-----`)
   const match = pem.match(pattern)
   if (match === null || match[1] === undefined) {
