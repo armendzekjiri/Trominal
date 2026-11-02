@@ -54,7 +54,7 @@ final class UserEmailEditTest extends TestCase
     private function editUserPage(User $admin, User $record): Testable
     {
         /** @var Testable<EditUser> $page */
-        $page = Livewire::actingAs($admin)->test(EditUser::class, ['record' => $record->getRouteKey()]); // @phpstan-ignore argument.templateType
+        $page = Livewire::actingAs($admin)->test(EditUser::class, ['record' => $record->getRouteKey()]);
 
         return $page;
     }
