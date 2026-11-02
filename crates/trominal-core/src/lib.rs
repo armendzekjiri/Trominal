@@ -12,9 +12,11 @@
 //! commits on phase/10-web-helper.
 
 pub mod event;
+pub mod host_keys;
 pub mod pty;
 pub mod secret;
 pub mod ssh_identity;
+pub mod ssh_session;
 pub mod types;
 
 pub use event::{emit_typed, EventSink};
