@@ -48,6 +48,8 @@ curl http://localhost/api/health
 curl http://localhost/api/server-info
 ```
 
+To check the whole stack end to end (fresh install, admin panel, first-user registration, restart), run `./docker/smoke-test.sh`. It uses its own port and volumes and leaves your instance alone; CI runs it on every backend PR.
+
 The production Compose file runs:
 
 - `migrate`: one-shot migrations (and first-boot seeding) before the backend starts
@@ -59,7 +61,7 @@ The production Compose file runs:
 - `redis`: Redis 7
 - `caddy`: the only container with published ports. PHP-FPM speaks FastCGI, not HTTP, so something has to translate browser requests; Caddy does that, serves static assets, routes `/ws/*` to `ssh-proxy`, and gets TLS certificates automatically when `TROMINAL_SITE_ADDRESS` is a domain.
 
-Update the backend: set the new `TROMINAL_BACKEND_IMAGE` tag in `.env`, then:
+Images are published for `linux/amd64` and `linux/arm64`. Update the backend (with the default `0.1` tag this picks up the latest patch; for a new minor version, change `TROMINAL_BACKEND_IMAGE` in `.env` first):
 
 ```bash
 docker compose pull
