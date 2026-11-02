@@ -23,15 +23,15 @@
     "analyse:backend": "composer --working-dir apps/backend analyse"
   },
   "devDependencies": {
-    "@eslint/js": "latest",
-    "eslint": "latest",
-    "eslint-plugin-react-hooks": "latest",
-    "eslint-plugin-react-refresh": "latest",
-    "globals": "latest",
-    "husky": "latest",
-    "lint-staged": "latest",
-    "prettier": "latest",
-    "typescript-eslint": "latest"
+    "@eslint/js": "^10.0.1",
+    "eslint": "^10.5.0",
+    "eslint-plugin-react-hooks": "^7.1.1",
+    "eslint-plugin-react-refresh": "^0.5.3",
+    "globals": "^17.6.0",
+    "husky": "^9.1.7",
+    "lint-staged": "^17.0.7",
+    "prettier": "^3.8.4",
+    "typescript-eslint": "^8.61.1"
   },
   "lint-staged": {
     "*.{js,jsx,ts,tsx}": [
