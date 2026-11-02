@@ -4,7 +4,9 @@ import {
   formatShortcut,
   isTerminalFocused,
   keyLabels,
+  keysFor,
   matchesShortcut,
+  sessionNumber,
 } from './shortcuts'
 
 function key(init: KeyboardEventInit): KeyboardEvent {
@@ -57,6 +59,31 @@ describe('matchesShortcut', () => {
   })
 })
 
+describe('session tab shortcuts', () => {
+  it('closes with ⌘W on macOS but Ctrl+Shift+W elsewhere, leaving Ctrl+W to the shell', () => {
+    expect(matchesShortcut(key({ key: 'w', metaKey: true }), 'terminal.close', true)).toBe(true)
+    expect(matchesShortcut(key({ key: 'w', ctrlKey: true }), 'terminal.close', false)).toBe(false)
+    expect(
+      matchesShortcut(key({ key: 'W', ctrlKey: true, shiftKey: true }), 'terminal.close', false),
+    ).toBe(true)
+    expect(formatShortcut('terminal.close', false)).toBe('Ctrl+Shift+W')
+  })
+
+  it('jumps to a session with ⌘⌥digit on macOS and Alt+digit elsewhere', () => {
+    // ⌥ changes event.key on macOS (⌥1 is ¡), so the physical key decides.
+    expect(
+      sessionNumber(key({ key: '¡', code: 'Digit1', metaKey: true, altKey: true }), true),
+    ).toBe(1)
+    expect(sessionNumber(key({ key: '9', code: 'Digit9', altKey: true }), false)).toBe(9)
+    expect(sessionNumber(key({ key: '1', code: 'Digit1', metaKey: true }), true)).toBeNull()
+    expect(sessionNumber(key({ key: '0', code: 'Digit0', altKey: true }), false)).toBeNull()
+    expect(
+      sessionNumber(key({ key: '2', code: 'Digit2', altKey: true, ctrlKey: true }), false),
+    ).toBeNull()
+    expect(formatShortcut('terminal.goto', true)).toBe('⌘⌥1–9')
+  })
+})
+
 describe('labels', () => {
   it('renders platform-specific key names', () => {
     expect(keyLabels(['mod', 'shift', 'l'], true)).toEqual(['⌘', '⇧', 'L'])
@@ -65,9 +92,11 @@ describe('labels', () => {
     expect(formatShortcut('palette', false)).toBe('Ctrl+K')
   })
 
-  it('has no duplicate bindings', () => {
-    const bindings = SHORTCUTS.map((item) => item.keys.join('+'))
-    expect(new Set(bindings).size).toBe(bindings.length)
+  it('has no duplicate bindings on either platform', () => {
+    for (const mac of [true, false]) {
+      const bindings = SHORTCUTS.map((item) => keysFor(item.id, mac).join('+'))
+      expect(new Set(bindings).size).toBe(bindings.length)
+    }
   })
 })
 

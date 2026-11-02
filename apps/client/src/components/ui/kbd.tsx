@@ -1,9 +1,9 @@
 import { cn } from '@/lib/cn'
-import { keyLabels, shortcut, type ShortcutId } from '@/lib/shortcuts'
+import { keyLabels, keysFor, type ShortcutId } from '@/lib/shortcuts'
 
 /** Key caps for a registered shortcut, e.g. <Kbd id="palette" /> → ⌘ K. */
 export function Kbd({ id, className }: { id: ShortcutId; className?: string }) {
-  const labels = keyLabels(shortcut(id).keys)
+  const labels = keyLabels(keysFor(id))
   return (
     <span className={cn('inline-flex items-center gap-0.5', className)}>
       {labels.map((label) => (
