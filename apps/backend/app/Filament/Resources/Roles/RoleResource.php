@@ -54,7 +54,7 @@ class RoleResource extends Resource
             return false;
         }
 
-        return ! in_array($record->name, ['admin', 'user', 'guest'], true);
+        return ! $record->isDefault();
     }
 
     public static function form(Schema $schema): Schema

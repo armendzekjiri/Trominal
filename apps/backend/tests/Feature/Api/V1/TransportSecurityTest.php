@@ -38,7 +38,7 @@ final class TransportSecurityTest extends TestCase
     {
         $response = $this->requestToken('https://trominal.example.com');
 
-        self::assertStringStartsWith('wss://trominal.example.com/ws/ssh?token=', $this->websocketUrl($response));
+        self::assertSame('wss://trominal.example.com/ws/ssh', $this->websocketUrl($response));
     }
 
     public function test_websocket_url_is_wss_in_production_even_if_tls_ends_upstream(): void
@@ -47,7 +47,7 @@ final class TransportSecurityTest extends TestCase
 
         $response = $this->requestToken('http://trominal.example.com');
 
-        self::assertStringStartsWith('wss://trominal.example.com/ws/ssh?token=', $this->websocketUrl($response));
+        self::assertSame('wss://trominal.example.com/ws/ssh', $this->websocketUrl($response));
     }
 
     public function test_production_still_allows_ws_for_local_development_hosts(): void
@@ -56,7 +56,7 @@ final class TransportSecurityTest extends TestCase
 
         $response = $this->requestToken('http://localhost:8031');
 
-        self::assertStringStartsWith('ws://localhost:8031/ws/ssh?token=', $this->websocketUrl($response));
+        self::assertSame('ws://localhost:8031/ws/ssh', $this->websocketUrl($response));
     }
 
     public function test_forwarded_headers_from_a_trusted_proxy_are_honoured(): void
@@ -132,7 +132,7 @@ final class TransportSecurityTest extends TestCase
         $token = $user->createToken('transport test')->plainTextToken;
 
         return $this->withServerVariables($server)
-            ->postJson($origin.'/api/v1/ws/ssh-token', ['host_id' => $host->id], [
+            ->postJson($origin.'/api/v1/ws/ssh-token', ['host_id' => $host->id, 'host' => 'ssh.example.com', 'port' => 22], [
                 'Authorization' => 'Bearer '.$token,
             ])
             ->assertCreated();

@@ -93,7 +93,10 @@ const platforms = [
           <div class="row"><span class="term-c-dim"># Configure and boot</span></div>
           <div class="row">
             <span class="term-prompt">$</span> ./docker/setup.sh
-            <span class="term-c-dim"># writes .env: APP_KEY, DB password</span>
+            <span class="term-c-dim"># writes .env: APP_KEY, DB password, setup code</span>
+          </div>
+          <div class="row" style="color:var(--ink-3)">
+            Setup code for the first account: <span class="term-c-green">3f8c2d91…</span>
           </div>
           <div class="row">
             <span class="term-prompt">$</span> docker compose up -d
@@ -105,7 +108,7 @@ const platforms = [
           <div class="row"><span class="term-c-dim"># Open in your browser</span></div>
           <div class="row" style="color:var(--ink-3)">
             → point a client at <span class="term-c-blue">http://localhost</span>
-            and register (first user becomes admin)
+            and register with the setup code (first user becomes admin)
           </div>
           <div class="row" style="color:var(--ink-3)">
             → <span class="term-c-blue">http://localhost/admin</span>

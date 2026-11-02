@@ -1,9 +1,10 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { Eye, EyeOff, Key, Lock, Mail } from 'lucide-react'
+import { Eye, EyeOff, Key, KeyRound, Lock, Mail } from 'lucide-react'
 import { AuthShell } from '@/components/auth/AuthShell'
 import { Button } from '@/components/ui/button'
 import { TextInput } from '@/components/ui/text-input'
+import { getApiClient } from '@/lib/api-client'
 import { useAuth } from '@/stores/auth'
 import { useVault } from '@/stores/vault'
 import { useServerDisplay } from '@/features/auth/server-display'
@@ -11,13 +12,14 @@ import { TrominalApiError } from '@trominal/api-client'
 import {
   DEFAULT_KDF_PARAMS,
   deriveVaultKey,
-  encrypt,
   fromBase64,
   generateSalt,
   generateX25519KeyPair,
-  makeAd,
   toBase64,
+  wipe,
 } from '@trominal/crypto'
+import { newVaultId } from '@/features/vault/ids'
+import { sealUserPrivateKey } from '@/features/vault/private-key'
 
 const MIN_MASTER_LEN = 12
 
@@ -47,8 +49,28 @@ export function RegisterPage() {
   const [accepted, setAccepted] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
+  const [setupTokenRequired, setSetupTokenRequired] = useState(false)
+  const [setupToken, setSetupToken] = useState('')
 
   const masterScore = useMemo(() => scoreMaster(masterPw), [masterPw])
+
+  useEffect(() => {
+    // The first (admin) account on a fresh instance may need the one-time
+    // setup code the operator got from docker/setup.sh.
+    let active = true
+    void (async (): Promise<void> => {
+      try {
+        const api = await getApiClient()
+        const info = await api.getServerInfo()
+        if (active) setSetupTokenRequired(info.setup_token_required === true)
+      } catch {
+        // Unreachable server: the register call will surface the real error.
+      }
+    })()
+    return () => {
+      active = false
+    }
+  }, [])
 
   const submit = async (e: React.FormEvent): Promise<void> => {
     e.preventDefault()
@@ -74,16 +96,27 @@ export function RegisterPage() {
       setError('You must acknowledge the master-password recovery warning.')
       return
     }
+    if (setupTokenRequired && setupToken.trim() === '') {
+      setError('Enter the setup code printed when this server was installed.')
+      return
+    }
 
     setSubmitting(true)
+    let vaultKey: Uint8Array | null = null
+    let privateKey: Uint8Array | null = null
     try {
       const params = DEFAULT_KDF_PARAMS
       const saltBytes = await generateSalt(params.salt_len)
-      const vaultKey = await deriveVaultKey(masterPw, saltBytes, params)
+      vaultKey = await deriveVaultKey(masterPw, saltBytes, params)
       const keypair = await generateX25519KeyPair()
-      const env = await encrypt(keypair.privateKey, vaultKey, makeAd('user_private_key', email))
+      privateKey = keypair.privateKey
+      // The envelope's AD is bound to a client-chosen user ID (not the email,
+      // which an admin may change later); the server adopts this ID.
+      const userId = newVaultId().toLowerCase()
+      const env = await sealUserPrivateKey(privateKey, vaultKey, userId)
 
       const user = await register({
+        id: userId,
         email,
         password: loginPw,
         password_confirmation: loginPw,
@@ -92,6 +125,7 @@ export function RegisterPage() {
         public_key: await toBase64(keypair.publicKey),
         private_key_ciphertext: env.ct,
         private_key_nonce: env.n,
+        ...(setupTokenRequired ? { setup_token: setupToken.trim() } : {}),
       })
 
       // Round-trip the salt — server returned the same value, but we keep our
@@ -99,6 +133,7 @@ export function RegisterPage() {
       await fromBase64(user.vault.kdf_salt)
       setMaterial(user.vault)
       adoptKey(vaultKey)
+      vaultKey = null // owned by the vault store now
       navigate('/2fa/setup')
     } catch (err) {
       if (err instanceof TrominalApiError) {
@@ -112,6 +147,8 @@ export function RegisterPage() {
         setError(err instanceof Error ? err.message : 'Sign-up failed.')
       }
     } finally {
+      if (privateKey !== null) wipe(privateKey)
+      if (vaultKey !== null) wipe(vaultKey)
       setSubmitting(false)
     }
   }
@@ -201,6 +238,20 @@ export function RegisterPage() {
           onChange={(e) => setMasterPwConfirm(e.target.value)}
           required
         />
+
+        {setupTokenRequired && (
+          <TextInput
+            label="Setup code"
+            autoComplete="off"
+            spellCheck={false}
+            icon={<KeyRound size={14} />}
+            hint="Printed by docker/setup.sh (TROMINAL_SETUP_TOKEN in the server's .env)."
+            mono
+            value={setupToken}
+            onChange={(e) => setSetupToken(e.target.value)}
+            required
+          />
+        )}
 
         <label className="flex items-start gap-2.5 text-[12px] leading-relaxed text-fg-muted">
           <input

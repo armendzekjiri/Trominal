@@ -65,6 +65,12 @@ This prevents the server from swapping ciphertexts between resources. If ciphert
 
 For records without an ID yet (creation flow), use a client-generated ULID.
 
+**Bind AD to immutable identifiers only** (row IDs, never email addresses or names an admin can edit). The user's private-key envelope — also the vault unlock canary — uses `trominal:v1:user_private_key:<user id>`; registration sends a client-generated lower-case ULID as the user ID so the AD is known before the row exists. Accounts created before this used the email address (`users.private_key_ad_version = 1`): unlock tries the ID AD, falls back to the email AD, and then re-binds the envelope once via `POST /api/v1/me/private-key/rebind`. The admin panel keeps the email read-only until that happens.
+
+### KDF parameter bounds
+
+KDF params come from the server and are untrusted. `isKdfParams` (client) and `SupportedKdfParams` (server) accept only `version: 1`, `alg: argon2id`, integer `memlimit` 64–256 MiB (KiB aligned), integer `opslimit` 3–10, `salt_len: 16`, `out_len: 32`, and no other keys; validate before deriving. A new parameter set gets a new `version`.
+
 ## Key handling rules
 
 1. **Vault key lives in memory only.** Never write to disk. Never log. Never send over the network.
@@ -107,26 +113,38 @@ Both languages run this fixture and assert byte-equal output.
 
 This one's tricky because it requires re-encrypting every vault item.
 
+Implemented in `apps/client/src/features/vault/rotation.ts` and `App\Services\VaultRotationService`.
+
 ```
-1. Client: prompt for current master password
-2. Client: derive old_vault_key, verify by decrypting one canary item
-3. Client: prompt for new master password (zxcvbn ≥ 3)
-4. Client: generate new_kdf_salt (16 random bytes)
-5. Client: derive new_vault_key
-6. Client: fetch ALL vault items
-7. Client: decrypt with old_vault_key, re-encrypt with new_vault_key
-8. Client: POST /api/v1/me/master-password/change with:
+1. Client: prompt for current master password, new master password,
+   login password and (if 2FA is on) a TOTP code
+2. Client: derive old_vault_key, verify by opening the private-key canary
+3. Client: generate new_kdf_salt (16 random bytes), derive new_vault_key
+4. Client: fetch ALL personal records of EVERY vault type
+5. Client: for every non-null <field>_ciphertext/<field>_nonce pair:
+   decrypt with old_vault_key, re-encrypt with new_vault_key, same AD
+6. Client: re-encrypt the private key (the canary!) with new_vault_key
+7. Client: POST /api/v1/me/master-password/change with:
      {
-       new_kdf_salt, new_kdf_params,
-       items: [{ id, type, ciphertext, nonce }, ...]
+       vault_version, current_password, two_factor_code?,
+       current_refresh_token, new_kdf_salt, new_kdf_params,
+       private_key_ciphertext, private_key_nonce,
+       items: [{ type, id, updated_at, fields: { ..._ciphertext, ..._nonce } }, ...]
      }
-9. Server: ATOMIC TX:
-     - update user.kdf_salt, user.kdf_params
-     - update each ciphertext+nonce
+8. Server: step-up (password + TOTP), then ATOMIC TX with row locks:
+     - 409 if vault_version is stale, or items != current personal records
+       (missing/extra/duplicate/foreign/team/deleted/modified since read)
+     - 422 if a stored encrypted field is not replaced, other columns are
+       sent, KDF params/salt/envelope are out of bounds, or the refresh
+       token is not this user's active token
+     - update records, kdf_salt, kdf_params, private-key envelope
      - bump user.vault_version
-     - revoke all OTHER refresh tokens (current device keeps session)
+     - revoke all OTHER refresh and access tokens
      - audit log entry
-10. Other devices: on next sync, see vault_version mismatch → force re-unlock
+9. Client: adopt new key + returned material (wipe old key); on failure
+   keep the old key
+10. Other devices: their tokens are revoked; a device that receives new
+    material with a different salt/params locks and must re-unlock
 ```
 
-If anything fails mid-flight, the entire transaction rolls back — no partial state.
+If anything fails mid-flight, the entire transaction rolls back — no partial state. Vault writes take the same user-row lock and fail once their access token was revoked, so in-flight writes from other devices cannot land old-key ciphertext after a rotation.

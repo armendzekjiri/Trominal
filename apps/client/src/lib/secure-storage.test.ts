@@ -28,14 +28,16 @@ describe('desktop secure storage', () => {
     expect(window.localStorage.length).toBe(0)
   })
 
-  it('uses tab-scoped web storage for the refresh token only in dev builds', async () => {
+  it('keeps dev builds signed in across restarts without touching the keychain', async () => {
     vi.stubEnv('DEV', true)
 
     await secureStorage.set('refresh_token', 'rt-dev')
 
+    // Dev only: rebuilt unsigned binaries re-prompt for Keychain access, and
+    // sessionStorage would sign the developer out on every restart.
     expect(invoke).not.toHaveBeenCalled()
-    expect(window.sessionStorage.getItem('trominal:refresh_token')).toBe('rt-dev')
-    expect(window.localStorage.getItem('trominal:refresh_token')).toBeNull()
+    expect(window.localStorage.getItem('trominal:refresh_token')).toBe('rt-dev')
+    expect(window.sessionStorage.getItem('trominal:refresh_token')).toBeNull()
   })
 
   it('keeps the non-secret server URL in web storage', async () => {

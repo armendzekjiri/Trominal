@@ -75,6 +75,6 @@ Rebuilt so far: **app shell** (top bar + collapsible sidebar), **Hosts**, **auth
 ### Keyboard
 
 - All bindings live in `apps/client/src/lib/shortcuts.ts`; the palette, tooltips, the ⌘/ sheet and Settings → Shortcuts read from it. Add a binding there, never inline.
-- ⌘K command palette (pages, settings sections, actions, "Connect to <host>"), ⌘/ shortcut sheet, ⌘, settings, ⌘⇧L lock, ⌘1–6 sections, ⌘B sidebar, ⌘F / ⌘N on Hosts, ⌘T new local shell and ⌘⇧[ / ⌘⇧] previous/next session tab (both work from any section). Ctrl replaces ⌘ on Windows/Linux.
+- ⌘K command palette (pages, settings sections, actions, "Connect to <host>"), ⌘/ shortcut sheet, ⌘, settings, ⌘⇧L lock, ⌘1–6 sections, ⌘B sidebar, ⌘F / ⌘N on Hosts, ⌘T new local shell, ⌘W close session tab, ⌘⇧[ / ⌘⇧] (or ⌃Tab / ⌃⇧Tab) previous/next session, ⌘⌥1–9 jump to session N; all work from any section. Windows/Linux: Ctrl+Shift+W closes and Alt+1–9 jumps, because Ctrl+W and Ctrl+T belong to the shell. On macOS the native Tab menu owns ⌘T and ⌘W, and Close Window moves to ⌘⇧W. Ctrl replaces ⌘ on Windows/Linux.
 - Inside the terminal on Windows/Linux, Ctrl chords go to the shell, not the app.
 - Overlays (palette, sheet) are `role="dialog"` + `aria-modal`, trap Tab, close on Esc and backdrop click, and return focus to where it was.

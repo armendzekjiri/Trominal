@@ -11,6 +11,7 @@ use Filament\Actions\DeleteAction;
 use Filament\Actions\ViewAction;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
+use Illuminate\Support\Facades\DB;
 
 class TeamsTable
 {
@@ -46,14 +47,21 @@ class TeamsTable
                 ViewAction::make(),
                 DeleteAction::make()
                     ->requiresConfirmation()
-                    ->after(function (Team $record): void {
+                    // Delete and audit atomically.
+                    ->using(fn (Team $record): bool => DB::transaction(function () use ($record): bool {
+                        if (! (bool) $record->delete()) {
+                            return false;
+                        }
+
                         AuditLog::record(
                             actor: auth()->user() instanceof User ? auth()->user() : null,
                             action: 'admin.team.deleted',
                             resourceType: 'team',
                             resourceId: (string) $record->id,
                         );
-                    }),
+
+                        return true;
+                    })),
             ])
             ->defaultSort('created_at', 'desc');
     }

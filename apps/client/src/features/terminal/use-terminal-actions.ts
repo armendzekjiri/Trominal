@@ -33,8 +33,11 @@ export function useTerminalActions() {
       })
     }
 
+    // Web SSH requires a host key pinned in the vault (see probeWebSshHostKey);
+    // without one the transport refuses to connect. The web terminal UI is
+    // disabled until the pin-approval flow ships.
     const api = await getApiClient()
-    const token = await api.createSshToken({ host_id: host.id })
+    const token = await api.createSshToken({ host_id: host.id, host: host.hostname, port })
     requireSecureWebSocketUrl(token.websocket_url)
 
     return createSshSession({
@@ -44,6 +47,7 @@ export function useTerminalActions() {
       username: host.username,
       auth,
       websocketUrl: token.websocket_url,
+      websocketToken: token.token,
       sessionName: host.name,
     })
   }

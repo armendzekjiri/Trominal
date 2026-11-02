@@ -26,6 +26,11 @@
 	@html not path /api/* /up /ws/*
 	header @html Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://ui-avatars.com; font-src 'self' data:; connect-src 'self'; object-src 'none'; frame-src 'none'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'"
 
+	# Web SSH WebSocket proxy. Caddy replaces any client-supplied
+	# X-Forwarded-For with the real peer address (no trusted_proxies are set),
+	# which ssh-proxy uses for token IP binding. The session token is sent in
+	# the first WebSocket frame, never in the URL, so access logs (off by
+	# default here) cannot capture it.
 	handle /ws/* {
 		reverse_proxy ssh-proxy:8080
 	}

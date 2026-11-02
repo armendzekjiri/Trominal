@@ -1,5 +1,5 @@
 import { sodiumReady } from './ready'
-import type { KdfParams } from './kdf-params'
+import { assertKdfResourceLimits, type KdfParams } from './kdf-params'
 
 /**
  * Derive a 32-byte vault key from a master password using Argon2id.
@@ -20,6 +20,9 @@ export async function deriveVaultKey(
   if (params.alg !== 'argon2id') {
     throw new Error(`Unsupported KDF alg: ${params.alg}`)
   }
+  // Refuse resource-exhausting or non-standard params before allocating.
+  // Callers validate server-provided params with `isKdfParams` first.
+  assertKdfResourceLimits(params)
   if (salt.length !== params.salt_len) {
     throw new Error(`Salt length mismatch: expected ${params.salt_len}, got ${salt.length}`)
   }
