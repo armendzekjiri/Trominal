@@ -32,9 +32,9 @@ class UserFactory extends Factory
             'email_verified_at' => now(),
             'password' => static::$password ??= Hash::make('password'),
             'kdf_salt' => base64_encode(random_bytes(16)),
-            'kdf_params' => ['algorithm' => 'argon2id', 'memory' => 65536, 'ops' => 3],
+            'kdf_params' => ['version' => 1, 'alg' => 'argon2id', 'memlimit' => 67108864, 'opslimit' => 3, 'salt_len' => 16, 'out_len' => 32],
             'public_key' => base64_encode(random_bytes(32)),
-            'private_key_ciphertext' => base64_encode(random_bytes(80)),
+            'private_key_ciphertext' => base64_encode(random_bytes(48)),
             'private_key_nonce' => base64_encode(random_bytes(24)),
             'remember_token' => Str::random(10),
         ];
