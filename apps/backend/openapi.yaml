@@ -205,6 +205,8 @@ paths:
                 $ref: '#/components/schemas/VaultListResponse'
         '403':
           description: Missing permission.
+        '422':
+          description: The requested team is not one the caller belongs to.
     post:
       summary: Create an encrypted vault record.
       security:
@@ -225,9 +227,9 @@ paths:
               schema:
                 $ref: '#/components/schemas/VaultRecordResponse'
         '403':
-          description: Missing permission.
+          description: Missing permission, or the caller's team role does not allow creating team records (viewer).
         '422':
-          description: Validation failed.
+          description: Validation failed, or the team is not one the caller belongs to.
   /api/v1/vault/{resource}/{id}:
     get:
       summary: Read one encrypted vault record.
@@ -244,7 +246,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/VaultRecordResponse'
         '403':
-          description: Missing permission or not the owner.
+          description: Missing permission, not the owner of a personal record, or not a member of the record's team.
         '404':
           description: Vault record not found.
     patch:
@@ -268,7 +270,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/VaultRecordResponse'
         '403':
-          description: Missing permission or not the owner.
+          description: Missing permission, not the owner of a personal record, or the caller's team role does not allow writing team records (viewer).
         '404':
           description: Vault record not found.
         '422':
@@ -284,7 +286,7 @@ paths:
         '204':
           description: Vault record soft-deleted.
         '403':
-          description: Missing permission or not the owner.
+          description: Missing permission, not the owner of a personal record, or the caller's team role does not allow writing team records (viewer).
         '404':
           description: Vault record not found.
   /api/v1/teams/users/lookup:
@@ -515,7 +517,7 @@ paths:
           description: Validation failed.
   /api/v1/ws/ssh-token:
     post:
-      summary: Create a short-lived WebSocket SSH token for an owned host.
+      summary: Create a short-lived WebSocket SSH token for an owned host or a team host the caller may connect to.
       description: |
         Issues a 30-second, single-use token bound to the requesting client IP
         and to the stated destination (host_id + host + port). Web SSH is
@@ -561,11 +563,12 @@ paths:
               schema:
                 $ref: '#/components/schemas/SshTokenResponse'
         '403':
-          description: Missing hosts.connect permission or web SSH disabled.
+          description: Missing hosts.connect permission, web SSH disabled, or the caller's team role does not allow connecting to this team host (viewer).
         '422':
           description: >-
-            Host does not belong to the authenticated user, or the destination
-            host/port is missing or invalid.
+            Host is not visible to the authenticated user (another user's
+            personal host, or a team the caller is not a member of), or the
+            destination host/port is missing or invalid.
 components:
   securitySchemes:
     bearerAuth:
