@@ -44,5 +44,10 @@
     "*.{css,json,md,yaml,yml}": [
       "prettier --write"
     ]
+  },
+  "pnpm": {
+    "overrides": {
+      "minimatch@>=10 <11.0.1": "^11.0.4"
+    }
   }
 }
