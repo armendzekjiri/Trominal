@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Tests\Feature\Api\V1;
 
+use App\Models\AppSetting;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -23,6 +24,17 @@ final class SystemTest extends TestCase
             ->assertJsonPath('registration_open', true)
             ->assertJsonPath('web_ssh_enabled', false)
             ->assertJsonPath('setup_token_required', false);
+    }
+
+    public function test_reports_web_ssh_disabled_when_the_setting_is_missing(): void
+    {
+        AppSetting::registration()->update([
+            'value' => ['mode' => 'single', 'open' => false, 'instance_name' => 'Trominal'],
+        ]);
+
+        $this->getJson('/api/server-info')
+            ->assertOk()
+            ->assertJsonPath('web_ssh_enabled', false);
     }
 
     public function test_returns_basic_health_information(): void

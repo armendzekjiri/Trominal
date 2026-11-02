@@ -25,7 +25,7 @@ final class SystemController extends Controller
             'min_client_version' => config('trominal.min_client_version'),
             'registration_mode' => $registration['mode'] ?? 'single',
             'registration_open' => (bool) ($registration['open'] ?? false),
-            'web_ssh_enabled' => (bool) ($registration['web_ssh_enabled'] ?? true),
+            'web_ssh_enabled' => (bool) ($registration['web_ssh_enabled'] ?? false),
             // Only whether a setup code is needed; the code itself is never exposed.
             'setup_token_required' => AuthService::setupTokenRequired(),
         ]);

@@ -9,6 +9,11 @@
 		-Server
 	}
 
+	# Web SSH WebSocket proxy. Caddy replaces any client-supplied
+	# X-Forwarded-For with the real peer address (no trusted_proxies are set),
+	# which ssh-proxy uses for token IP binding. The session token is sent in
+	# the first WebSocket frame, never in the URL, so access logs (off by
+	# default here) cannot capture it.
 	handle /ws/* {
 		reverse_proxy ssh-proxy:8080
 	}

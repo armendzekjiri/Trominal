@@ -40,7 +40,7 @@ The server stores ciphertext. The client owns decryption.
 
 Desktop is the preferred high-security path for v0.1 because SSH, SFTP, and tunnels execute locally through Tauri.
 
-Web SSH/SFTP/tunnel proxying is planned. When enabled, web transport requires trusting the backend process during active sessions because browsers cannot open raw SSH TCP sockets.
+Web SSH is proxied through the backend and is disabled by default. When an admin enables it, the backend sees SSH passwords and private keys in plaintext for the length of each session, because browsers cannot open raw SSH TCP sockets. Only enable it if you trust the backend operator and host. The proxy requires a pinned host key fingerprint before sending credentials, binds each single-use token to a destination and client IP, and refuses non-public destinations unless `TROMINAL_WEB_SSH_ALLOWED_CIDRS` lists them. See [Web SSH in the self-hosting guide](SELF_HOSTING.md#web-ssh-disabled-by-default). Web SFTP and tunnel proxying are still planned.
 
 ## Release Signing
 

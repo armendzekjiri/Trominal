@@ -185,13 +185,18 @@ export type TwoFactorVerifyRequest = { code: string }
 /** Request body for POST /api/v1/auth/two-factor/disable. */
 export type TwoFactorDisableRequest = { password: string; code: string }
 
-/** Request body for POST /api/v1/ws/ssh-token. */
-export type SshTokenRequest = { host_id: string }
+/**
+ * Request body for POST /api/v1/ws/ssh-token. The token is bound to this exact
+ * destination; the proxy refuses frames for any other host_id/host/port.
+ */
+export type SshTokenRequest = { host_id: string; host: string; port: number }
 
 /** Short-lived WebSocket SSH token response. */
 export type SshTokenResponse = {
+  /** Single-use token; send it in the first WebSocket frame, never in the URL. */
   token: string
   expires_at: string
+  /** Proxy endpoint; contains no credentials. */
   websocket_url: string
 }
 

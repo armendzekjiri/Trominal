@@ -278,6 +278,8 @@ paths:
                 $ref: '#/components/schemas/VaultListResponse'
         '403':
           description: Missing permission.
+        '422':
+          description: The requested team is not one the caller belongs to.
     post:
       summary: Create an encrypted vault record.
       security:
@@ -298,9 +300,9 @@ paths:
               schema:
                 $ref: '#/components/schemas/VaultRecordResponse'
         '403':
-          description: Missing permission.
+          description: Missing permission, or the caller's team role does not allow creating team records (viewer).
         '422':
-          description: Validation failed.
+          description: Validation failed, or the team is not one the caller belongs to.
   /api/v1/vault/{resource}/{id}:
     get:
       summary: Read one encrypted vault record.
@@ -317,7 +319,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/VaultRecordResponse'
         '403':
-          description: Missing permission or not the owner.
+          description: Missing permission, not the owner of a personal record, or not a member of the record's team.
         '404':
           description: Vault record not found.
     patch:
@@ -341,7 +343,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/VaultRecordResponse'
         '403':
-          description: Missing permission or not the owner.
+          description: Missing permission, not the owner of a personal record, or the caller's team role does not allow writing team records (viewer).
         '404':
           description: Vault record not found.
         '422':
@@ -357,7 +359,7 @@ paths:
         '204':
           description: Vault record soft-deleted.
         '403':
-          description: Missing permission or not the owner.
+          description: Missing permission, not the owner of a personal record, or the caller's team role does not allow writing team records (viewer).
         '404':
           description: Vault record not found.
   /api/v1/teams/users/lookup:
@@ -588,7 +590,36 @@ paths:
           description: Validation failed.
   /api/v1/ws/ssh-token:
     post:
-      summary: Create a short-lived WebSocket SSH token for an owned host.
+      summary: Create a short-lived WebSocket SSH token for an owned host or a team host the caller may connect to.
+      description: |
+        Issues a 30-second, single-use token bound to the requesting client IP
+        and to the stated destination (host_id + host + port). Web SSH is
+        disabled by default and, when enabled, the backend sees SSH
+        credentials in plaintext for the duration of the session.
+
+        WebSocket protocol at `websocket_url` (the token is never put in the URL).
+        The first client text frame is JSON and is one of:
+
+        - `{"type":"probe","token","host_id","host","port"}` — runs the SSH key
+          exchange without authenticating and replies
+          `{"type":"host_key","fingerprint":"SHA256:…","key_type":"ssh-ed25519"}`,
+          then closes. Use it on first connection so the user can explicitly
+          approve the fingerprint and pin it in the encrypted vault.
+        - `{"type":"connect","token","host_id","host","port","host_key_fingerprint",
+          "username","cols","rows","auth"}` — `host_key_fingerprint` (OpenSSH
+          `SHA256:` format) is required. The proxy compares it with the
+          server's host key before sending any credential, then replies
+          `{"type":"ready","fingerprint","key_type"}`. Terminal data follows as
+          binary frames; `{"type":"resize","cols","rows"}` resizes the PTY.
+
+        Failures reply `{"type":"error","code","message"}` and close. Codes:
+        `invalid_frame`, `invalid_token`, `web_ssh_disabled`,
+        `destination_mismatch`, `destination_unresolvable`,
+        `destination_denied` (non-public address not in
+        TROMINAL_WEB_SSH_ALLOWED_CIDRS), `connect_failed`, `host_key_unknown`
+        (no pin sent), `host_key_mismatch` (also carries the presented
+        `fingerprint` and `key_type`), `host_key_unavailable`, `auth_failed`,
+        `session_failed`.
       security:
         - bearerAuth: []
       requestBody:
@@ -605,9 +636,12 @@ paths:
               schema:
                 $ref: '#/components/schemas/SshTokenResponse'
         '403':
-          description: Missing hosts.connect permission or web SSH disabled.
+          description: Missing hosts.connect permission, web SSH disabled, or the caller's team role does not allow connecting to this team host (viewer).
         '422':
-          description: Host does not belong to the authenticated user.
+          description: >-
+            Host is not visible to the authenticated user (another user's
+            personal host, or a team the caller is not a member of), or the
+            destination host/port is missing or invalid.
 components:
   securitySchemes:
     bearerAuth:
@@ -1061,19 +1095,39 @@ components:
                 $ref: '#/components/schemas/VaultRecordPayload'
     SshTokenRequest:
       type: object
-      required: [host_id]
+      required: [host_id, host, port]
+      description: >-
+        Host addresses are end-to-end encrypted, so the client states the
+        destination it is about to connect to. The token stores only a keyed
+        hash of host + port; the proxy refuses any connect or probe frame whose
+        host_id, host or port differs.
       properties:
         host_id:
           type: string
+          description: ID of a host owned by the authenticated user.
+        host:
+          type: string
+          maxLength: 255
+          description: Hostname or IP literal (IPv6 may be bracketed). Compared case-insensitively.
+        port:
+          type: integer
+          minimum: 1
+          maximum: 65535
     SshTokenResponse:
       type: object
       required: [token, expires_at, websocket_url]
       properties:
         token:
           type: string
-          description: Plain token shown once; server stores only a SHA-256 hash.
+          pattern: '^[a-f0-9]{64}$'
+          description: >-
+            Plain single-use token shown once; the server stores only a SHA-256
+            hash. Send it as the `token` field of the first WebSocket frame,
+            never in the URL. Bound to the requesting client IP unless
+            TROMINAL_WEB_SSH_BIND_IP=false.
         expires_at:
           type: string
           format: date-time
         websocket_url:
           type: string
+          description: WebSocket endpoint of the SSH proxy. Contains no credentials.

@@ -4,9 +4,10 @@ declare(strict_types=1);
 
 namespace App\Filament\Resources\Users\Tables;
 
+use App\Exceptions\AdminLockoutException;
 use App\Models\AuditLog;
-use App\Models\RefreshToken;
 use App\Models\User;
+use App\Services\UserSuspensionService;
 use Filament\Actions\Action;
 use Filament\Actions\EditAction;
 use Filament\Notifications\Notification;
@@ -14,7 +15,6 @@ use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Filters\TernaryFilter;
 use Filament\Tables\Table;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Password;
 
 class UsersTable
@@ -93,7 +93,7 @@ class UsersTable
                         Password::sendResetLink(['email' => $record->email]);
 
                         AuditLog::record(
-                            actor: auth()->user() instanceof User ? auth()->user() : null,
+                            actor: self::actor(),
                             action: 'admin.user.password_reset_requested',
                             resourceType: 'user',
                             resourceId: (string) $record->id,
@@ -107,23 +107,20 @@ class UsersTable
                 Action::make('suspend')
                     ->color('danger')
                     ->requiresConfirmation()
+                    ->modalDescription('Signs the user out everywhere and revokes all API and refresh tokens.')
                     ->visible(fn (User $record): bool => $record->suspended_at === null && $record->id !== auth()->id())
-                    ->action(function (User $record): void {
-                        DB::transaction(function () use ($record): void {
-                            $record->forceFill(['suspended_at' => now()])->save();
-                            $record->tokens()->delete();
-                            RefreshToken::query()
-                                ->where('user_id', $record->id)
-                                ->whereNull('revoked_at')
-                                ->update(['revoked_at' => now()]);
+                    ->action(function (User $record, UserSuspensionService $suspensions): void {
+                        try {
+                            $suspensions->suspend(self::actor(), $record);
+                        } catch (AdminLockoutException $exception) {
+                            Notification::make()
+                                ->danger()
+                                ->title('User not suspended')
+                                ->body($exception->getMessage())
+                                ->send();
 
-                            AuditLog::record(
-                                actor: auth()->user() instanceof User ? auth()->user() : null,
-                                action: 'admin.user.suspended',
-                                resourceType: 'user',
-                                resourceId: (string) $record->id,
-                            );
-                        });
+                            return;
+                        }
 
                         Notification::make()
                             ->success()
@@ -135,17 +132,8 @@ class UsersTable
                     ->color('success')
                     ->requiresConfirmation()
                     ->visible(fn (User $record): bool => $record->suspended_at !== null)
-                    ->action(function (User $record): void {
-                        DB::transaction(function () use ($record): void {
-                            $record->forceFill(['suspended_at' => null])->save();
-
-                            AuditLog::record(
-                                actor: auth()->user() instanceof User ? auth()->user() : null,
-                                action: 'admin.user.unsuspended',
-                                resourceType: 'user',
-                                resourceId: (string) $record->id,
-                            );
-                        });
+                    ->action(function (User $record, UserSuspensionService $suspensions): void {
+                        $suspensions->unsuspend(self::actor(), $record);
 
                         Notification::make()
                             ->success()
@@ -154,5 +142,12 @@ class UsersTable
                     }),
             ])
             ->defaultSort('created_at', 'desc');
+    }
+
+    private static function actor(): ?User
+    {
+        $user = auth()->user();
+
+        return $user instanceof User ? $user : null;
     }
 }

@@ -13,6 +13,12 @@ use App\Models\PersonalAccessToken;
 use App\Models\Snippet;
 use App\Models\Tunnel;
 use App\Policies\VaultRecordPolicy;
+use App\Services\Ssh\Client\PhpseclibWebSshConnector;
+use App\Services\Ssh\Client\WebSshConnector;
+use App\Services\Ssh\Egress\DnsHostResolver;
+use App\Services\Ssh\Egress\HostResolver;
+use App\Services\Ssh\Egress\WebSshEgressPolicy;
+use App\Services\Ssh\WebSshClientAddress;
 use Illuminate\Auth\Notifications\ResetPassword;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Contracts\Auth\CanResetPassword;
@@ -29,7 +35,10 @@ class AppServiceProvider extends ServiceProvider
      */
     public function register(): void
     {
-        //
+        $this->app->bind(WebSshClientAddress::class, static fn (): WebSshClientAddress => WebSshClientAddress::fromConfig());
+        $this->app->bind(WebSshEgressPolicy::class, static fn (): WebSshEgressPolicy => WebSshEgressPolicy::fromConfig());
+        $this->app->bind(HostResolver::class, DnsHostResolver::class);
+        $this->app->bind(WebSshConnector::class, PhpseclibWebSshConnector::class);
     }
 
     /**
