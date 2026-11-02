@@ -7,38 +7,9 @@ import { getApiClient } from '@/lib/api-client'
 import { useAuth } from '@/stores/auth'
 import { useVault } from '@/stores/vault'
 import { secureStorage } from '@/lib/secure-storage'
-import {
-  decryptAiSettings,
-  decryptGroup,
-  decryptHost,
-  decryptHostCredential,
-  decryptIdentity,
-  decryptSnippet,
-  decryptTunnel,
-  encryptAiSettingsInput,
-  encryptGroupInput,
-  encryptHostCredentialInput,
-  encryptHostInput,
-  encryptIdentityInput,
-  encryptSnippetInput,
-  encryptTunnelInput,
-} from '@/features/vault/model'
-import {
-  DEFAULT_KDF_PARAMS,
-  deriveVaultKey,
-  generateSalt,
-  toBase64,
-  wipe,
-  type KdfParams,
-} from '@trominal/crypto'
-import type {
-  MasterPasswordChangeItem,
-  MasterPasswordChangeRequest,
-  TwoFactorEnableResponse,
-  VaultRecord,
-  VaultRecordPayload,
-  VaultResourceType,
-} from '@trominal/api-client'
+import { rotateMasterPassword, type RotationResult } from '@/features/vault/rotation'
+import { TrominalApiError } from '@trominal/api-client'
+import type { TwoFactorEnableResponse, UserDto, UserVaultMaterial } from '@trominal/api-client'
 
 type Status =
   | { kind: 'idle' }
@@ -46,23 +17,14 @@ type Status =
   | { kind: 'ok'; message: string }
   | { kind: 'error'; message: string }
 
-const RESOURCE_TYPES: ReadonlyArray<VaultResourceType> = [
-  'groups',
-  'hosts',
-  'host-credentials',
-  'snippets',
-  'identities',
-  'tunnels',
-  'ai-settings',
-]
-
 export function AccountTab() {
   const user = useAuth((s) => s.user)
   const refreshToken = useAuth((s) => s.refreshToken)
   const fetchMe = useAuth((s) => s.fetchMe)
-  const vaultKey = useVault((s) => s.key)
-  const setMaterial = useVault((s) => s.setMaterial)
-  const adoptKey = useVault((s) => s.adoptKey)
+  const isUnlocked = useVault((s) => !s.isLocked && s.key !== null)
+  const material = useVault((s) => s.material)
+  const vaultVersion = useVault((s) => s.vaultVersion)
+  const replaceKey = useVault((s) => s.replaceKey)
 
   return (
     <div className="mx-auto flex max-w-2xl flex-col gap-6 p-6">
@@ -96,20 +58,16 @@ export function AccountTab() {
       />
 
       <ChangeMasterPasswordSection
-        currentVaultKey={vaultKey}
-        userEmail={user?.email ?? null}
+        user={user}
+        material={material}
+        vaultVersion={vaultVersion}
+        isUnlocked={isUnlocked}
         refreshToken={refreshToken}
-        onRotated={(newKey) => {
-          // After rotation the in-memory key changes too; adopt it so the
-          // user keeps working without re-entering anything.
-          adoptKey(newKey)
-          if (user !== null) {
-            // Pull the fresh vault material from the server (kdf_salt + params changed).
-            void fetchMe().then(() => {
-              const next = useAuth.getState().user
-              if (next !== null) setMaterial(next.vault, useVault.getState().vaultVersion + 1)
-            })
-          }
+        onRotated={(result) => {
+          // Adopt the new key and the server-confirmed material together (the
+          // old key is wiped), so this device keeps working without a re-unlock.
+          replaceKey(result.key, result.material, result.vaultVersion)
+          void fetchMe()
         }}
       />
     </div>
@@ -275,27 +233,35 @@ function TwoFactorSection({ enabled, onChange }: { enabled: boolean; onChange: (
 }
 
 function ChangeMasterPasswordSection({
-  currentVaultKey,
-  userEmail,
+  user,
+  material,
+  vaultVersion,
+  isUnlocked,
   refreshToken,
   onRotated,
 }: {
-  currentVaultKey: Uint8Array | null
-  userEmail: string | null
+  user: UserDto | null
+  material: UserVaultMaterial | null
+  vaultVersion: number
+  isUnlocked: boolean
   refreshToken: string | null
-  onRotated: (newVaultKey: Uint8Array) => void
+  onRotated: (result: RotationResult) => void
 }) {
+  const [currentMaster, setCurrentMaster] = useState('')
   const [next, setNext] = useState('')
   const [confirm, setConfirm] = useState('')
+  const [loginPassword, setLoginPassword] = useState('')
+  const [twoFactorCode, setTwoFactorCode] = useState('')
   const [show, setShow] = useState(false)
   const [status, setStatus] = useState<Status>({ kind: 'idle' })
+  const twoFactorEnabled = user?.two_factor_enabled ?? false
 
   async function rotate(): Promise<void> {
-    if (currentVaultKey === null) {
+    if (!isUnlocked || material === null) {
       setStatus({ kind: 'error', message: 'Vault is locked.' })
       return
     }
-    if (userEmail === null) {
+    if (user === null) {
       setStatus({ kind: 'error', message: 'No active session.' })
       return
     }
@@ -305,6 +271,14 @@ function ChangeMasterPasswordSection({
     }
     if (next !== confirm) {
       setStatus({ kind: 'error', message: 'Master passwords do not match.' })
+      return
+    }
+    if (loginPassword === '') {
+      setStatus({ kind: 'error', message: 'Enter your login password to confirm.' })
+      return
+    }
+    if (twoFactorEnabled && twoFactorCode.length !== 6) {
+      setStatus({ kind: 'error', message: 'Enter the 6-digit code from your authenticator.' })
       return
     }
     const tokenForRequest = refreshToken ?? (await secureStorage.get('refresh_token'))
@@ -317,44 +291,32 @@ function ChangeMasterPasswordSection({
     }
 
     setStatus({ kind: 'busy' })
-    let newVaultKey: Uint8Array | null = null
     try {
-      const params: KdfParams = DEFAULT_KDF_PARAMS
-      const newSalt = await generateSalt(params.salt_len)
-      newVaultKey = await deriveVaultKey(next, newSalt, params)
-
       const api = await getApiClient()
-      const items: MasterPasswordChangeItem[] = []
-      for (const type of RESOURCE_TYPES) {
-        const records = await api.listVaultRecords(type)
-        for (const record of records) {
-          const fields = await reEncryptRecord(type, record, currentVaultKey, newVaultKey)
-          if (fields !== null) {
-            items.push({ type, id: record.id, fields })
-          }
-        }
-      }
-
-      const payload: MasterPasswordChangeRequest = {
-        new_kdf_salt: await toBase64(newSalt),
-        new_kdf_params: params as unknown as Record<string, unknown>,
-        current_refresh_token: tokenForRequest,
-        items,
-      }
-      await api.changeMasterPassword(payload)
-      onRotated(newVaultKey)
+      const result = await rotateMasterPassword({
+        api,
+        owner: user,
+        material,
+        vaultVersion,
+        currentMasterPassword: currentMaster,
+        newMasterPassword: next,
+        currentPassword: loginPassword,
+        twoFactorCode: twoFactorEnabled ? twoFactorCode : undefined,
+        refreshToken: tokenForRequest,
+      })
+      onRotated(result)
+      setCurrentMaster('')
       setNext('')
       setConfirm('')
+      setLoginPassword('')
+      setTwoFactorCode('')
       setStatus({
         kind: 'ok',
-        message: `Re-encrypted ${items.length} vault item${items.length === 1 ? '' : 's'}.`,
+        message: `Re-encrypted ${result.itemCount} vault item${result.itemCount === 1 ? '' : 's'}. Other devices were signed out.`,
       })
     } catch (err) {
-      if (newVaultKey !== null) wipe(newVaultKey)
-      setStatus({
-        kind: 'error',
-        message: err instanceof Error ? err.message : 'Master password change failed.',
-      })
+      // The current key stays in place; nothing was changed on the server.
+      setStatus({ kind: 'error', message: rotationErrorMessage(err) })
     }
   }
 
@@ -374,11 +336,12 @@ function ChangeMasterPasswordSection({
 
       <div className="flex flex-col gap-2">
         <TextInput
-          label="New master password"
+          label="Current master password"
           type={show ? 'text' : 'password'}
           mono
-          value={next}
-          onChange={(event) => setNext(event.target.value)}
+          autoComplete="current-password"
+          value={currentMaster}
+          onChange={(event) => setCurrentMaster(event.target.value)}
           suffix={
             <button
               type="button"
@@ -391,12 +354,38 @@ function ChangeMasterPasswordSection({
           }
         />
         <TextInput
+          label="New master password"
+          type={show ? 'text' : 'password'}
+          mono
+          autoComplete="new-password"
+          value={next}
+          onChange={(event) => setNext(event.target.value)}
+        />
+        <TextInput
           label="Confirm new master password"
           type={show ? 'text' : 'password'}
           mono
+          autoComplete="new-password"
           value={confirm}
           onChange={(event) => setConfirm(event.target.value)}
         />
+        <TextInput
+          label="Login password"
+          type="password"
+          autoComplete="current-password"
+          value={loginPassword}
+          onChange={(event) => setLoginPassword(event.target.value)}
+        />
+        {twoFactorEnabled && (
+          <TextInput
+            label="Authenticator code"
+            inputMode="numeric"
+            mono
+            maxLength={6}
+            value={twoFactorCode}
+            onChange={(event) => setTwoFactorCode(event.target.value.replace(/\D/g, ''))}
+          />
+        )}
         <Button
           size="sm"
           variant="danger"
@@ -413,117 +402,19 @@ function ChangeMasterPasswordSection({
   )
 }
 
-/**
- * Re-encrypt every encrypted field of a vault record under a new key.
- * Decryption uses the *current* key + the existing AD; encryption uses the
- * *new* key with the same AD. Only ciphertext+nonce columns are returned;
- * the master-password endpoint rejects any other field name.
- */
-async function reEncryptRecord(
-  type: VaultResourceType,
-  record: VaultRecord,
-  currentKey: Uint8Array,
-  newKey: Uint8Array,
-): Promise<VaultRecordPayload | null> {
-  switch (type) {
-    case 'groups': {
-      const item = await decryptGroup(record, currentKey)
-      const payload = await encryptGroupInput(item.id, newKey, {
-        id: item.id,
-        parentId: item.parentId,
-        name: item.name,
-        color: item.color,
-        sortOrder: item.sortOrder,
-      })
-      return cipherFields(payload)
+function rotationErrorMessage(err: unknown): string {
+  if (err instanceof TrominalApiError) {
+    if (err.status === 409) {
+      return 'Your vault changed on another device. Nothing was changed; try again.'
     }
-    case 'hosts': {
-      const item = await decryptHost(record, currentKey)
-      const payload = await encryptHostInput(item.id, newKey, {
-        id: item.id,
-        groupId: item.groupId,
-        name: item.name,
-        hostname: item.hostname,
-        port: item.port,
-        username: item.username,
-        tags: item.tags,
-        color: item.color,
-      })
-      return cipherFields(payload)
+    if (err.status === 429) {
+      return 'Too many attempts. Wait a while before trying again.'
     }
-    case 'host-credentials': {
-      const item = await decryptHostCredential(record, currentKey)
-      const payload = await encryptHostCredentialInput(item.id, newKey, {
-        id: item.id,
-        hostId: item.hostId,
-        identityId: item.identityId,
-        label: item.label,
-        username: item.username,
-        password: item.password,
-        privateKeyPassphrase: item.privateKeyPassphrase,
-      })
-      return cipherFields(payload)
+    const body = err.json<{ message?: string; errors?: Record<string, string[]> }>()
+    if (body?.errors !== undefined) {
+      return Object.values(body.errors).flat().join(' ')
     }
-    case 'snippets': {
-      const item = await decryptSnippet(record, currentKey)
-      const payload = await encryptSnippetInput(item.id, newKey, {
-        id: item.id,
-        title: item.title,
-        body: item.body,
-        tags: item.tags,
-      })
-      return cipherFields(payload)
-    }
-    case 'identities': {
-      const item = await decryptIdentity(record, currentKey)
-      const payload = await encryptIdentityInput(item.id, newKey, {
-        id: item.id,
-        name: item.name,
-        keyType: item.keyType,
-        publicKey: item.publicKey,
-        privateKey: item.privateKey,
-      })
-      return cipherFields(payload)
-    }
-    case 'tunnels': {
-      const item = await decryptTunnel(record, currentKey)
-      const payload = await encryptTunnelInput(item.id, newKey, {
-        id: item.id,
-        hostId: item.hostId,
-        name: item.name,
-        config: item.config,
-        enabled: item.enabled,
-      })
-      return cipherFields(payload)
-    }
-    case 'ai-settings': {
-      const item = await decryptAiSettings(record, currentKey)
-      const payload = await encryptAiSettingsInput(item.id, newKey, {
-        id: item.id,
-        provider: item.provider,
-        endpoint: item.endpoint,
-        model: item.model,
-        apiKey: item.apiKey,
-        features: item.features,
-      })
-      return cipherFields(payload)
-    }
-    default:
-      return null
+    return body?.message ?? `Master password change failed (${err.status}).`
   }
-}
-
-/**
- * Strip the relation columns (id, parent_id, etc.) from an encrypt payload.
- * The master-password endpoint only accepts *_ciphertext / *_nonce; all
- * other keys would trip the controller's allowlist check.
- */
-function cipherFields(payload: VaultRecordPayload): VaultRecordPayload {
-  const out: VaultRecordPayload = {}
-  for (const [key, value] of Object.entries(payload)) {
-    if (key.endsWith('_ciphertext') || key.endsWith('_nonce')) {
-      out[key] = value
-    }
-  }
-  return out
+  return err instanceof Error ? err.message : 'Master password change failed.'
 }

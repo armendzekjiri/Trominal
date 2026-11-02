@@ -55,15 +55,39 @@ export type VaultSyncResponse = {
 export type MasterPasswordChangeItem = {
   type: VaultResourceType
   id: string
-  fields: VaultRecordPayload
+  /** The record's `updated_at` exactly as read; the server rejects concurrent edits. */
+  updated_at: string | null
+  /** Every non-null `*_ciphertext` / `*_nonce` pair, re-encrypted under the new key. */
+  fields: Record<string, string>
 }
 
-/** Request body for server-side master-password rotation finalization. */
+/**
+ * Request body for POST /api/v1/me/master-password/change. The server applies
+ * it atomically only if `items` is exactly the user's current personal records.
+ */
 export type MasterPasswordChangeRequest = {
-  new_kdf_salt: string
-  new_kdf_params: Record<string, unknown>
+  vault_version: number
+  current_password: string
+  two_factor_code?: string
   current_refresh_token: string
+  new_kdf_salt: string
+  new_kdf_params: KdfParamsDto
+  private_key_ciphertext: string
+  private_key_nonce: string
   items: MasterPasswordChangeItem[]
+}
+
+/** Response of the master-password change and private-key rebind endpoints. */
+export type MasterPasswordChangeResponse = {
+  vault_version: number
+  vault: UserVaultMaterial
+}
+
+/** Request body for POST /api/v1/me/private-key/rebind (legacy AD migration). */
+export type PrivateKeyRebindRequest = {
+  vault_version: number
+  private_key_ciphertext: string
+  private_key_nonce: string
 }
 
 /** Public-facing instance metadata returned by GET /api/server-info. */
@@ -94,6 +118,10 @@ export type UserVaultMaterial = {
   public_key: string
   private_key_ciphertext: string
   private_key_nonce: string
+  /** Bumped whenever the vault key or the private-key envelope changes. */
+  vault_version?: number
+  /** 1 = envelope AD bound to the email address (legacy), 2 = bound to the user ID. */
+  private_key_ad_version?: number
 }
 
 /** User as returned by the API. */
@@ -112,6 +140,8 @@ export type UserDto = {
 
 /** Request body for POST /api/v1/auth/register. */
 export type RegisterRequest = {
+  /** Fresh lower-case ULID the private-key envelope's AD is bound to. */
+  id?: string
   name?: string
   email: string
   password: string
@@ -465,11 +495,19 @@ export class TrominalApiClient {
     return this.request<VaultSyncResponse>(`/api/v1/vault/sync${query}`)
   }
 
-  /** Finalize client-side master-password rotation on the server. */
+  /** Atomically replace all vault key material after a client-side master-password change. */
   async changeMasterPassword(
     payload: MasterPasswordChangeRequest,
-  ): Promise<{ vault_version: number }> {
-    return this.request<{ vault_version: number }>('/api/v1/me/master-password/change', {
+  ): Promise<MasterPasswordChangeResponse> {
+    return this.request<MasterPasswordChangeResponse>('/api/v1/me/master-password/change', {
+      method: 'POST',
+      body: payload,
+    })
+  }
+
+  /** Upload the private-key envelope re-bound from the legacy email AD to the user ID. */
+  async rebindPrivateKey(payload: PrivateKeyRebindRequest): Promise<MasterPasswordChangeResponse> {
+    return this.request<MasterPasswordChangeResponse>('/api/v1/me/private-key/rebind', {
       method: 'POST',
       body: payload,
     })

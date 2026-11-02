@@ -36,7 +36,7 @@ export function UnlockPage() {
       if (activeUser === null) {
         throw new Error('Session lost — sign in again.')
       }
-      await unlock(masterPw, activeUser.email)
+      await unlock(masterPw, activeUser)
       navigate('/')
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unlock failed.')
