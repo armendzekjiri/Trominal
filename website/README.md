@@ -62,7 +62,7 @@ Each command prints an `id`. Paste both into `website/wrangler.toml`, replacing 
 The site is an Astro build served by a Cloudflare **Worker** (`website/wrangler.toml`: `main` + `[assets]`), deployed by Workers Builds on every push.
 
 1. Cloudflare dashboard → **Workers & Pages** → **Create** → **Import a repository** → pick the `Trominal` repo.
-2. **Project name:** `trominal`. It **must** match `name` in `website/wrangler.toml`, or the deploy step fails.
+2. **Project name:** `trominal-website`. It **must** match `name` in `website/wrangler.toml`, or the deploy step fails. There should be only one Workers Builds project for this repo.
 3. **Build settings** (Settings → Build):
    - **Root directory:** `/` (repo root, so pnpm installs from `pnpm-lock.yaml` with the pinned versions)
    - **Build command:** `pnpm --filter @trominal/website build`
@@ -89,7 +89,7 @@ If you ever switch RUM to **"Enable with JS Snippet installation"** (manual mode
 
 ### 7. Connect the custom domain
 
-1. Inside the `trominal` Worker: **Settings** → **Domains & Routes** → **Add** → **Custom domain**.
+1. Inside the `trominal-website` Worker: **Settings** → **Domains & Routes** → **Add** → **Custom domain**.
 2. Enter `trominal.app` and confirm. Cloudflare wires up DNS automatically.
 3. Repeat for `www.trominal.app` if you want both — most projects redirect `www` → apex.
 4. Verify HTTPS is green. (Cloudflare provisions a cert automatically.)
