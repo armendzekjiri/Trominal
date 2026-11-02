@@ -19,6 +19,8 @@ import { Button } from '@/components/ui/button'
 import { Dot } from '@/components/ui/dot'
 import { getApiClient } from '@/lib/api-client'
 import { cn } from '@/lib/cn'
+import { formatShortcut, isMac, isTerminalFocused, matchesShortcut } from '@/lib/shortcuts'
+import { useCommandUi } from '@/features/app/command-ui'
 import { isTauri } from '@/lib/platform'
 import { useAuth } from '@/stores/auth'
 import { useHostCredentials, useHosts, useIdentities } from '@/features/vault/hooks'
@@ -228,6 +230,30 @@ function DesktopTerminalPage() {
     }
   }, [searchParams, hosts, queriesReady, setActiveId])
 
+  const shortcutActions = useRef<{ addLocalTab: () => void; cycle: (step: number) => void }>({
+    addLocalTab: () => {},
+    cycle: () => {},
+  })
+  useEffect(() => {
+    function onKeyDown(event: KeyboardEvent): void {
+      if (useCommandUi.getState().open !== null) return
+      // Windows/Linux: Ctrl chords typed into the shell stay with the shell.
+      if (!isMac && isTerminalFocused(event.target)) return
+      if (matchesShortcut(event, 'terminal.newLocal')) {
+        event.preventDefault()
+        shortcutActions.current.addLocalTab()
+      } else if (matchesShortcut(event, 'terminal.next')) {
+        event.preventDefault()
+        shortcutActions.current.cycle(1)
+      } else if (matchesShortcut(event, 'terminal.prev')) {
+        event.preventDefault()
+        shortcutActions.current.cycle(-1)
+      }
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [])
+
   function addLocalTab(): void {
     const id = crypto.randomUUID()
     const tab: TerminalTab = {
@@ -297,22 +323,26 @@ function DesktopTerminalPage() {
     removeStoreTab(id)
   }
 
+  shortcutActions.current = {
+    addLocalTab,
+    cycle: (step: number) => {
+      if (tabs.length < 2 || active === null) return
+      const index = tabs.findIndex((tab) => tab.id === active.id)
+      setActiveId(tabs[(index + step + tabs.length) % tabs.length].id)
+    },
+  }
+
   return (
     <div className="flex h-full min-h-0 flex-col bg-bg">
       <div className="flex h-9 items-stretch border-b border-border bg-bg-elev">
         {tabs.map((tab) => {
           const isActive = active?.id === tab.id
           return (
-            <button
+            <div
               key={tab.id}
-              type="button"
-              onClick={() => setActiveId(tab.id)}
-              aria-pressed={isActive}
               className={cn(
-                'relative flex items-center gap-2 border-r border-border px-3 font-mono text-[12px]',
-                isActive
-                  ? 'bg-bg text-fg font-medium'
-                  : 'bg-bg-elev text-fg-muted hover:bg-surface-2',
+                'group relative flex items-center border-r border-border font-mono text-[12px]',
+                isActive ? 'bg-bg text-fg' : 'bg-bg-elev text-fg-muted hover:bg-surface-2',
               )}
             >
               {/* 2px accent stripe along the top of the active tab —
@@ -321,17 +351,27 @@ function DesktopTerminalPage() {
               {isActive && (
                 <span className="pointer-events-none absolute inset-x-0 top-0 h-[2px] bg-accent" />
               )}
-              <Dot state={statusToDot(tab.status)} />
-              <span>{tabTitle(tab)}</span>
-              <X
-                size={12}
-                className="text-fg-faint hover:text-fg"
-                onClick={(event) => {
-                  event.stopPropagation()
-                  closeTab(tab.id)
-                }}
-              />
-            </button>
+              <button
+                type="button"
+                onClick={() => setActiveId(tab.id)}
+                aria-pressed={isActive}
+                className={cn(
+                  'flex h-full items-center gap-2 pl-3 pr-1.5',
+                  isActive && 'font-medium',
+                )}
+              >
+                <Dot state={statusToDot(tab.status)} />
+                <span>{tabTitle(tab)}</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => closeTab(tab.id)}
+                aria-label={`Close ${tabTitle(tab)}`}
+                className="mr-1.5 rounded-xs p-0.5 text-fg-faint opacity-60 hover:bg-surface-3 hover:text-fg hover:opacity-100 focus-visible:opacity-100 group-hover:opacity-100"
+              >
+                <X size={12} aria-hidden />
+              </button>
+            </div>
           )
         })}
         <div className="flex items-center gap-2 px-2">
@@ -340,6 +380,7 @@ function DesktopTerminalPage() {
             variant="ghost"
             onClick={() => addLocalTab()}
             aria-label="New local shell"
+            title={`New local shell (${formatShortcut('terminal.newLocal')})`}
           >
             <Laptop size={13} />
           </Button>

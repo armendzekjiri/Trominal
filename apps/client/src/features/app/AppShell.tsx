@@ -5,35 +5,72 @@ import {
   KeyRound,
   Lock,
   LogOut,
+  Search,
   Settings,
   Server,
   Terminal,
   Workflow,
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
-import { NavLink, Outlet } from 'react-router-dom'
+import { useEffect } from 'react'
+import { NavLink, Outlet, useNavigate } from 'react-router-dom'
 import { Logo } from '@/components/branding/logo'
+import { Kbd } from '@/components/ui/kbd'
 import { TeamScopeSwitcher } from '@/features/teams/TeamScopeSwitcher'
 import { cn } from '@/lib/cn'
-import { getApiBaseUrl } from '@/lib/config'
-import { openExternal } from '@/lib/open-external'
+import {
+  formatShortcut,
+  isMac,
+  isTerminalFocused,
+  matchesShortcut,
+  type ShortcutId,
+} from '@/lib/shortcuts'
 import { useAuth } from '@/stores/auth'
 import { useVault } from '@/stores/vault'
+import { openAdminPanel } from './admin-panel'
+import { CommandPalette } from './CommandPalette'
+import { useCommandUi } from './command-ui'
+import { ShortcutsDialog } from './ShortcutsDialog'
 
 type NavItem = {
   to: string
   label: string
   permission: string
   icon: LucideIcon
+  shortcut: ShortcutId
 }
 
 const NAV_ITEMS: ReadonlyArray<NavItem> = [
-  { to: '/hosts', label: 'Hosts', permission: 'hosts.read', icon: Server },
-  { to: '/terminal', label: 'Terminal', permission: 'hosts.connect', icon: Terminal },
-  { to: '/snippets', label: 'Snippets', permission: 'snippets.read', icon: Code2 },
-  { to: '/identities', label: 'Identities', permission: 'identities.read', icon: KeyRound },
-  { to: '/tunnels', label: 'Tunnels', permission: 'tunnels.read', icon: Workflow },
-  { to: '/sftp', label: 'SFTP', permission: 'sftp.read', icon: FolderSync },
+  { to: '/hosts', label: 'Hosts', permission: 'hosts.read', icon: Server, shortcut: 'nav.hosts' },
+  {
+    to: '/terminal',
+    label: 'Terminal',
+    permission: 'hosts.connect',
+    icon: Terminal,
+    shortcut: 'nav.terminal',
+  },
+  {
+    to: '/snippets',
+    label: 'Snippets',
+    permission: 'snippets.read',
+    icon: Code2,
+    shortcut: 'nav.snippets',
+  },
+  {
+    to: '/identities',
+    label: 'Identities',
+    permission: 'identities.read',
+    icon: KeyRound,
+    shortcut: 'nav.identities',
+  },
+  {
+    to: '/tunnels',
+    label: 'Tunnels',
+    permission: 'tunnels.read',
+    icon: Workflow,
+    shortcut: 'nav.tunnels',
+  },
+  { to: '/sftp', label: 'SFTP', permission: 'sftp.read', icon: FolderSync, shortcut: 'nav.sftp' },
 ]
 
 const rowClass =
@@ -66,10 +103,48 @@ function initialsFor(email: string): string {
   return letters.toUpperCase() || '?'
 }
 
-async function openAdminPanel(): Promise<void> {
-  const base = await getApiBaseUrl()
-  if (base === null || base === '') return
-  await openExternal(new URL('/admin', base).toString())
+/** App-wide shortcuts. Page-level ones (⌘F, ⌘N on Hosts) live on their page. */
+function useGlobalShortcuts(): void {
+  const navigate = useNavigate()
+  const lock = useVault((s) => s.lock)
+  const hasPermission = useAuth((s) => s.hasPermission)
+
+  useEffect(() => {
+    function onKeyDown(event: KeyboardEvent): void {
+      // In the terminal, Ctrl chords belong to the remote shell on Windows/Linux.
+      if (!isMac && isTerminalFocused(event.target)) return
+      const ui = useCommandUi.getState()
+
+      if (matchesShortcut(event, 'palette')) {
+        event.preventDefault()
+        ui.toggle('palette')
+        return
+      }
+      if (matchesShortcut(event, 'help')) {
+        event.preventDefault()
+        ui.toggle('shortcuts')
+        return
+      }
+      // While an overlay is open, it owns the keyboard.
+      if (ui.open !== null) return
+
+      if (matchesShortcut(event, 'settings')) {
+        event.preventDefault()
+        navigate('/settings')
+      } else if (matchesShortcut(event, 'lock')) {
+        event.preventDefault()
+        lock()
+      } else {
+        const item = NAV_ITEMS.find((nav) => matchesShortcut(event, nav.shortcut))
+        if (item !== undefined && hasPermission(item.permission)) {
+          event.preventDefault()
+          navigate(item.to)
+        }
+      }
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [hasPermission, lock, navigate])
 }
 
 export function AppShell() {
@@ -78,6 +153,8 @@ export function AppShell() {
   const lock = useVault((s) => s.lock)
   const hasPermission = useAuth((s) => s.hasPermission)
   const isAdmin = user?.roles.includes('admin') ?? false
+  const showPalette = useCommandUi((s) => s.show)
+  useGlobalShortcuts()
 
   return (
     <div className="grid h-full grid-cols-[224px_1fr]">
@@ -86,11 +163,26 @@ export function AppShell() {
           <Logo />
         </div>
 
+        <button
+          type="button"
+          onClick={() => showPalette('palette')}
+          className="flex h-8 items-center gap-2 rounded-md border border-border bg-surface px-2.5 text-[12px] text-fg-faint transition-colors hover:border-border-strong hover:text-fg-muted"
+        >
+          <Search size={14} aria-hidden />
+          <span className="min-w-0 flex-1 truncate text-left">Jump to…</span>
+          <Kbd id="palette" />
+        </button>
+
         <TeamScopeSwitcher />
 
         <nav aria-label="Main" className="flex flex-col gap-0.5">
           {NAV_ITEMS.filter((item) => hasPermission(item.permission)).map((item) => (
-            <NavLink key={item.to} to={item.to} className={navRowClass}>
+            <NavLink
+              key={item.to}
+              to={item.to}
+              className={navRowClass}
+              title={`${item.label} (${formatShortcut(item.shortcut)})`}
+            >
               {({ isActive }) => (
                 <>
                   <NavIcon icon={item.icon} active={isActive} />
@@ -102,7 +194,11 @@ export function AppShell() {
         </nav>
 
         <div className="mt-auto flex flex-col gap-0.5">
-          <NavLink to="/settings" className={navRowClass}>
+          <NavLink
+            to="/settings"
+            className={navRowClass}
+            title={`Settings (${formatShortcut('settings')})`}
+          >
             {({ isActive }) => (
               <>
                 <NavIcon icon={Settings} active={isActive} />
@@ -113,6 +209,7 @@ export function AppShell() {
           <button
             type="button"
             onClick={lock}
+            title={`Lock vault (${formatShortcut('lock')})`}
             className={cn(rowClass, 'text-fg-muted hover:bg-surface-2 hover:text-fg')}
           >
             <NavIcon icon={Lock} active={false} />
@@ -161,6 +258,9 @@ export function AppShell() {
       <main id="main-content" className="min-h-0 overflow-auto">
         <Outlet />
       </main>
+
+      <CommandPalette />
+      <ShortcutsDialog />
     </div>
   )
 }
