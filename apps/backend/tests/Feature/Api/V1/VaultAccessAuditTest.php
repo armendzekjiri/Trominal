@@ -12,6 +12,7 @@ use App\Models\TeamMember;
 use App\Models\User;
 use Database\Seeders\RoleAndPermissionSeeder;
 use Illuminate\Auth\AuthManager;
+use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
 use Tests\TestCase;
@@ -53,10 +54,10 @@ final class VaultAccessAuditTest extends TestCase
         $logs = AuditLog::query()->where('action', 'vault.hosts.viewed')->get();
 
         self::assertCount(2, $logs);
-        self::assertSame((string) $user->id, (string) $logs[0]->actor_user_id);
-        self::assertSame('hosts', $logs[0]->resource_type);
-        self::assertSame((string) $host->id, $logs[0]->resource_id);
-        self::assertSame(['scope' => 'personal'], $logs[0]->metadata);
+        self::assertSame((string) $user->id, (string) self::nth($logs, 0)->actor_user_id);
+        self::assertSame('hosts', self::nth($logs, 0)->resource_type);
+        self::assertSame((string) $host->id, self::nth($logs, 0)->resource_id);
+        self::assertSame(['scope' => 'personal'], self::nth($logs, 0)->metadata);
         $this->assertNoVaultPayloadIsAudited();
     }
 
@@ -85,10 +86,10 @@ final class VaultAccessAuditTest extends TestCase
         $logs = AuditLog::query()->where('action', 'vault.hosts.listed')->orderBy('created_at')->get();
 
         self::assertCount(2, $logs);
-        self::assertSame('hosts', $logs[0]->resource_type);
-        self::assertNull($logs[0]->resource_id);
-        self::assertSame(['scope' => 'personal', 'count' => 2], $logs[0]->metadata);
-        self::assertSame(['scope' => 'team', 'team_id' => (string) $team->id, 'count' => 1], $logs[1]->metadata);
+        self::assertSame('hosts', self::nth($logs, 0)->resource_type);
+        self::assertNull(self::nth($logs, 0)->resource_id);
+        self::assertSame(['scope' => 'personal', 'count' => 2], self::nth($logs, 0)->metadata);
+        self::assertSame(['scope' => 'team', 'team_id' => (string) $team->id, 'count' => 1], self::nth($logs, 1)->metadata);
         $this->assertNoVaultPayloadIsAudited();
     }
 
@@ -134,13 +135,13 @@ final class VaultAccessAuditTest extends TestCase
         $logs = AuditLog::query()->where('action', 'vault.synced')->get();
 
         self::assertCount(2, $logs);
-        self::assertSame('vault', $logs[0]->resource_type);
+        self::assertSame('vault', self::nth($logs, 0)->resource_type);
         self::assertSame([
             'mode' => 'full',
             'total' => 4,
             'counts' => ['hosts' => 3, 'snippets' => 1],
             'teams' => 1,
-        ], $logs[0]->metadata);
+        ], self::nth($logs, 0)->metadata);
         $this->assertNoVaultPayloadIsAudited();
     }
 
@@ -158,7 +159,7 @@ final class VaultAccessAuditTest extends TestCase
 
         $empty = AuditLog::query()->where('action', 'vault.synced')->get();
         self::assertCount(1, $empty);
-        self::assertSame(['mode' => 'delta', 'total' => 0, 'counts' => [], 'teams' => 0], $empty[0]->metadata);
+        self::assertSame(['mode' => 'delta', 'total' => 0, 'counts' => [], 'teams' => 0], self::nth($empty, 0)->metadata);
 
         // Delta polls that return records are always recorded.
         $this->createHost($user);
@@ -178,6 +179,17 @@ final class VaultAccessAuditTest extends TestCase
 
         self::assertSame(4, AuditLog::query()->where('action', 'vault.synced')->count());
         $this->assertNoVaultPayloadIsAudited();
+    }
+
+    /**
+     * @param  Collection<int, AuditLog>  $logs
+     */
+    private static function nth(Collection $logs, int $index): AuditLog
+    {
+        $log = $logs->values()->get($index);
+        self::assertInstanceOf(AuditLog::class, $log);
+
+        return $log;
     }
 
     private function assertNoVaultPayloadIsAudited(): void

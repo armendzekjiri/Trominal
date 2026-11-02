@@ -11,6 +11,7 @@ use App\Models\AuditLog;
 use App\Models\TeamMember;
 use App\Models\User;
 use App\Support\Vault\SerializesVaultRecords;
+use App\Support\Vault\VaultAccessAuditor;
 use App\Support\Vault\VaultResourceRegistry;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Database\Eloquent\Collection;
@@ -23,6 +24,8 @@ use Illuminate\Validation\ValidationException;
 final class VaultResourceController extends Controller
 {
     use SerializesVaultRecords;
+
+    public function __construct(private readonly VaultAccessAuditor $accessAudit) {}
 
     public function index(Request $request, string $vaultType): JsonResponse
     {
@@ -44,6 +47,8 @@ final class VaultResourceController extends Controller
             )
             ->latest('updated_at')
             ->get();
+
+        $this->accessAudit->listed($user, $vaultType, $resource['team_scoped'] ? $teamId : null, $records->count());
 
         return response()->json([
             'data' => $records
@@ -91,6 +96,13 @@ final class VaultResourceController extends Controller
         $vaultRecord = $this->resolveRecord($resource['model'], $record);
 
         Gate::authorize('view', $vaultRecord);
+
+        $this->accessAudit->viewed(
+            $this->user($request),
+            $vaultType,
+            (string) $vaultRecord->getKey(),
+            $this->recordTeamId($vaultRecord, $resource),
+        );
 
         return response()->json([
             'data' => $this->serializeVaultRecord($vaultRecord, $vaultType, $resource['fields']),

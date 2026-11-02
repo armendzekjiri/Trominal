@@ -9,6 +9,7 @@ use App\Http\Controllers\Controller;
 use App\Models\TeamMember;
 use App\Models\User;
 use App\Support\Vault\SerializesVaultRecords;
+use App\Support\Vault\VaultAccessAuditor;
 use App\Support\Vault\VaultResourceRegistry;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Model;
@@ -20,6 +21,8 @@ use Illuminate\Support\Carbon;
 final class VaultSyncController extends Controller
 {
     use SerializesVaultRecords;
+
+    public function __construct(private readonly VaultAccessAuditor $accessAudit) {}
 
     public function __invoke(Request $request): JsonResponse
     {
@@ -72,6 +75,13 @@ final class VaultSyncController extends Controller
                 ->values()
                 ->all();
         }
+
+        $this->accessAudit->synced(
+            $user,
+            delta: $since !== null,
+            counts: array_map(count(...), $data),
+            teamCount: count($teamIds),
+        );
 
         return response()->json([
             'cursor' => $serverCursor->toIso8601String(),
