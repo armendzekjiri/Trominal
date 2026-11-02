@@ -56,6 +56,9 @@ importers:
 
   apps/client:
     dependencies:
+      '@fontsource/inter':
+        specifier: ^5.2.8
+        version: 5.2.8
       '@fontsource/jetbrains-mono':
         specifier: ^5.1.2
         version: 5.2.8

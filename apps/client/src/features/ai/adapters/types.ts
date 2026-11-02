@@ -55,8 +55,10 @@ export interface AiAdapter {
   readonly label: string
   /** Default endpoint when the user hasn't typed one. */
   readonly defaultEndpoint: string
-  /** The first suggestion in the model picker. */
-  readonly defaultModel: string
+  /**
+   * There is deliberately no default model: model ids change too often to hardcode, so the
+   * user always picks one from `listModels` (or types one for gateways without a list).
+   */
 
   /**
    * Stream a chat response. The implementation is expected to:

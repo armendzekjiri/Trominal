@@ -252,11 +252,11 @@ export function TunnelsPage() {
   return (
     <div className="grid h-full min-h-0 grid-cols-[minmax(0,1fr)_360px] bg-bg">
       <section className="flex min-h-0 flex-col">
-        <div className="flex h-12 items-center gap-3 border-b border-border px-4">
-          <Workflow size={16} className="text-accent" />
+        <div className="flex h-14 shrink-0 items-center gap-3 border-b border-border px-5">
+          <Workflow size={16} className="text-accent" aria-hidden />
           <div>
-            <div className="text-[14px] font-medium">Tunnels</div>
-            <div className="font-mono text-[11px] text-fg-faint">
+            <h1 className="text-[15px] font-semibold text-fg">Tunnels</h1>
+            <div className="font-mono text-[11px] text-fg-muted">
               {activeCount} active · {tunnels.length - activeCount} saved
             </div>
           </div>
@@ -273,8 +273,8 @@ export function TunnelsPage() {
         </div>
 
         <div className="min-h-0 flex-1 overflow-auto p-4">
-          <div className="overflow-hidden rounded-md border border-border bg-surface">
-            <div className="grid grid-cols-[96px_minmax(140px,1fr)_minmax(160px,1.2fr)_180px_84px_92px] border-b border-border px-3 py-2 text-[11px] uppercase tracking-wide text-fg-faint">
+          <div className="overflow-hidden rounded-lg border border-border bg-surface">
+            <div className="grid grid-cols-[96px_minmax(140px,1fr)_minmax(160px,1.2fr)_180px_84px_92px] border-b border-border px-3 py-2 text-[11px] font-medium text-fg-faint">
               <span>Type</span>
               <span>Bind</span>
               <span>Target</span>
@@ -353,9 +353,7 @@ export function TunnelsPage() {
           />
 
           <label className="flex flex-col gap-1.5">
-            <span className="text-[11px] font-medium uppercase tracking-wide text-fg-muted">
-              Via host
-            </span>
+            <span className="text-[12px] font-medium text-fg-muted">Via host</span>
             <select
               value={draft.hostId ?? ''}
               onChange={(event) =>
@@ -364,7 +362,7 @@ export function TunnelsPage() {
                   hostId: event.target.value === '' ? null : event.target.value,
                 })
               }
-              className="h-10 rounded-md border border-border-strong bg-surface px-3 text-[13px] outline-none focus:border-accent"
+              className="h-10 rounded-md border border-border-input bg-surface px-3 text-[13px] outline-none focus:border-accent"
               required
             >
               <option value="">Select host</option>
@@ -377,9 +375,7 @@ export function TunnelsPage() {
           </label>
 
           <label className="flex flex-col gap-1.5">
-            <span className="text-[11px] font-medium uppercase tracking-wide text-fg-muted">
-              Type
-            </span>
+            <span className="text-[12px] font-medium text-fg-muted">Type</span>
             <select
               value={draft.config.kind}
               onChange={(event) =>
@@ -391,7 +387,7 @@ export function TunnelsPage() {
                   },
                 })
               }
-              className="h-10 rounded-md border border-border-strong bg-surface px-3 text-[13px] outline-none focus:border-accent"
+              className="h-10 rounded-md border border-border-input bg-surface px-3 text-[13px] outline-none focus:border-accent"
             >
               <option value="local">Local</option>
               <option value="remote">Remote</option>

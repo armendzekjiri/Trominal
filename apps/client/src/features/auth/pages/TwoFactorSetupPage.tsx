@@ -148,9 +148,7 @@ function SecretBlock({ secret }: { secret: TwoFactorEnableResponse | null }) {
     <div className="flex flex-col items-center gap-3 rounded-md border border-border-strong bg-surface px-3 py-3">
       <QrCode value={secret.otpauth_uri} label="QR code for your authenticator app" />
       <div className="flex w-full flex-col gap-1">
-        <span className="text-[11px] font-medium uppercase tracking-wide text-fg-muted">
-          Can't scan? Enter this secret
-        </span>
+        <span className="text-[12px] font-medium text-fg-muted">Can't scan? Enter this secret</span>
         <code className="break-all font-mono text-[12px] text-fg">{secret.secret}</code>
       </div>
     </div>

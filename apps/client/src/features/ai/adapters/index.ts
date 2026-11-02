@@ -24,7 +24,6 @@ export const ADAPTERS: Record<AiProvider, AiAdapter> = {
     id: 'ollama',
     label: 'Ollama (local)',
     defaultEndpoint: 'http://localhost:11434/v1',
-    defaultModel: 'llama3',
   },
   custom: customAdapter,
 }

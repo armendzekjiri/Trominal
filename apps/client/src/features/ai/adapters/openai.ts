@@ -21,7 +21,6 @@ function looksLikeChatModel(id: string): boolean {
 }
 
 const DEFAULT_ENDPOINT = 'https://api.openai.com/v1'
-const DEFAULT_MODEL = 'gpt-4o-mini'
 
 /**
  * One adapter for both OpenAI and any OpenAI-compatible server: Ollama,
@@ -33,7 +32,6 @@ export const openAiCompatibleAdapter: AiAdapter = {
   id: 'openai',
   label: 'OpenAI / OpenAI-compatible',
   defaultEndpoint: DEFAULT_ENDPOINT,
-  defaultModel: DEFAULT_MODEL,
 
   async *chat(request: ChatRequest, config: AdapterConfig): AsyncIterable<ChatChunk> {
     const url = joinEndpoint(config.endpoint || DEFAULT_ENDPOINT, '/chat/completions')
@@ -44,7 +42,7 @@ export const openAiCompatibleAdapter: AiAdapter = {
         signal: request.signal,
         headers: buildHeaders(config),
         body: JSON.stringify({
-          model: config.model || DEFAULT_MODEL,
+          model: config.model,
           messages: request.messages,
           temperature: request.temperature,
           max_tokens: request.maxOutputTokens,

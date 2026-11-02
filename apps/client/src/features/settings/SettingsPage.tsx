@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import {
   Bell,
   KeyRound,
@@ -9,6 +9,8 @@ import {
   ShieldCheck,
   type LucideIcon,
 } from 'lucide-react'
+import { Kbd } from '@/components/ui/kbd'
+import { ShortcutList } from '@/features/app/ShortcutList'
 import { cn } from '@/lib/cn'
 import { useAuth } from '@/stores/auth'
 import { AdvancedTab } from './AdvancedTab'
@@ -23,7 +25,7 @@ type SettingsTabId =
   | 'account'
   | 'ai'
   | 'appearance'
-  | 'keys'
+  | 'shortcuts'
   | 'notifications'
   | 'advanced'
 
@@ -69,17 +71,17 @@ const TABS: ReadonlyArray<SettingsTab> = [
     ready: true,
   },
   {
-    id: 'keys',
+    id: 'shortcuts',
     label: 'Shortcuts',
     icon: KeyRound,
-    description: 'Keybindings - Phase 9.',
-    ready: false,
+    description: 'Every keyboard shortcut in the app.',
+    ready: true,
   },
   {
     id: 'notifications',
     label: 'Notifications',
     icon: Bell,
-    description: 'Desktop + audit-log notifications - Phase 9.',
+    description: 'Desktop and audit-log notifications are planned for a later release.',
     ready: false,
   },
   {
@@ -92,7 +94,9 @@ const TABS: ReadonlyArray<SettingsTab> = [
 ]
 
 export function SettingsPage() {
-  const [active, setActive] = useState<SettingsTabId>('connection')
+  const [searchParams, setSearchParams] = useSearchParams()
+  const active = searchParams.get('tab') ?? 'connection'
+  const setActive = (id: SettingsTabId) => setSearchParams({ tab: id }, { replace: true })
   const hasPermission = useAuth((s) => s.hasPermission)
 
   const visibleTabs = TABS.filter(
@@ -102,25 +106,44 @@ export function SettingsPage() {
 
   return (
     <div className="grid h-full min-h-0 grid-cols-[220px_1fr] bg-bg">
-      <aside className="flex flex-col gap-1 border-r border-border bg-bg-elev p-3">
-        <div className="px-2 pb-2 text-[11px] uppercase tracking-wide text-fg-faint">Settings</div>
-        {visibleTabs.map((tab) => (
-          <button
-            key={tab.id}
-            type="button"
-            onClick={() => setActive(tab.id)}
-            className={cn(
-              'flex items-center gap-2 rounded-sm px-2.5 py-1.5 text-left text-[13px] transition-colors',
-              activeTab?.id === tab.id
-                ? 'bg-surface-3 text-fg'
-                : 'text-fg-muted hover:bg-surface-2 hover:text-fg',
-            )}
-          >
-            <tab.icon size={14} className="shrink-0" />
-            <span className="truncate">{tab.label}</span>
-          </button>
-        ))}
-      </aside>
+      <nav
+        aria-label="Settings"
+        className="flex flex-col gap-0.5 border-r border-border bg-bg-elev p-3"
+      >
+        <h1 className="px-2.5 pb-3 pt-1 text-[15px] font-semibold text-fg">Settings</h1>
+        {visibleTabs.map((tab) => {
+          const isActive = activeTab?.id === tab.id
+          return (
+            <button
+              key={tab.id}
+              type="button"
+              onClick={() => setActive(tab.id)}
+              aria-current={isActive ? 'page' : undefined}
+              className={cn(
+                'group flex h-[34px] items-center gap-2.5 rounded-md px-2.5 text-left text-[13px] font-medium transition-colors',
+                isActive
+                  ? 'bg-accent-soft text-fg'
+                  : 'text-fg-muted hover:bg-surface-2 hover:text-fg',
+              )}
+            >
+              <tab.icon
+                size={15}
+                aria-hidden
+                className={cn(
+                  'shrink-0',
+                  isActive ? 'text-accent' : 'text-fg-faint group-hover:text-fg',
+                )}
+              />
+              <span className="flex-1 truncate">{tab.label}</span>
+              {!tab.ready && (
+                <span className="rounded-full bg-surface-3 px-1.5 py-0.5 text-[10px] text-fg-faint">
+                  Soon
+                </span>
+              )}
+            </button>
+          )
+        })}
+      </nav>
 
       <main className="min-h-0 overflow-auto">
         {activeTab !== undefined && activeTab.ready ? (
@@ -143,6 +166,19 @@ function ActiveTabContent({ id }: { id: SettingsTabId }) {
       return <AiSettingsTab />
     case 'appearance':
       return <AppearanceTab />
+    case 'shortcuts':
+      return (
+        <div className="mx-auto flex max-w-2xl flex-col gap-6 p-6">
+          <header>
+            <h1 className="text-[18px] font-semibold">Keyboard shortcuts</h1>
+            <p className="mt-1 text-[12px] text-fg-muted">
+              Press <Kbd id="palette" /> anywhere for the command palette, or <Kbd id="help" /> to
+              see this list.
+            </p>
+          </header>
+          <ShortcutList />
+        </div>
+      )
     case 'advanced':
       return <AdvancedTab />
     default:

@@ -9,14 +9,12 @@ import type {
 import { parseSseStream } from './sse'
 
 const DEFAULT_ENDPOINT = 'https://api.anthropic.com/v1'
-const DEFAULT_MODEL = 'claude-sonnet-4-6'
 const ANTHROPIC_VERSION = '2023-06-01'
 
 export const anthropicAdapter: AiAdapter = {
   id: 'anthropic',
   label: 'Anthropic',
   defaultEndpoint: DEFAULT_ENDPOINT,
-  defaultModel: DEFAULT_MODEL,
 
   async *chat(request: ChatRequest, config: AdapterConfig): AsyncIterable<ChatChunk> {
     const { systemPrompt, messages } = splitSystemPrompt(request.messages)
@@ -35,7 +33,7 @@ export const anthropicAdapter: AiAdapter = {
           'x-api-key': config.apiKey,
         },
         body: JSON.stringify({
-          model: config.model || DEFAULT_MODEL,
+          model: config.model,
           system: systemPrompt,
           messages: messages.map((message) => ({
             role: message.role === 'assistant' ? 'assistant' : 'user',
@@ -94,7 +92,8 @@ export const anthropicAdapter: AiAdapter = {
   },
 
   async listModels(config: AdapterConfig, signal?: AbortSignal): Promise<ModelInfo[]> {
-    const url = joinEndpoint(config.endpoint || DEFAULT_ENDPOINT, '/models')
+    // Pages at 20 by default; 1000 is the API maximum.
+    const url = joinEndpoint(config.endpoint || DEFAULT_ENDPOINT, '/models?limit=1000')
     const response = await fetch(url, {
       method: 'GET',
       signal,

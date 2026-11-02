@@ -2,7 +2,7 @@ import { Loader2, Sparkles, X } from 'lucide-react'
 import { useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { useAuth } from '@/stores/auth'
-import { useAiSettings } from '@/features/vault/hooks'
+import { useReadyAiSettings } from '@/features/vault/hooks'
 import type { SnippetInput } from '@/features/vault/model'
 import { adapterFor, collectChatText, type AdapterConfig } from '@/features/ai/adapters'
 import { buildSnippetPrompt, parseSnippetSuggestion } from '@/features/ai/snippetPrompt'
@@ -21,7 +21,7 @@ type Props = {
  * never persist anything from this dialog directly.
  */
 export function SnippetGenerator({ onApply, onClose }: Props) {
-  const settings = useAiSettings().data ?? null
+  const settings = useReadyAiSettings()
   const canUseAi = useAuth((s) => s.hasPermission('ai.use'))
   const [description, setDescription] = useState('')
   const [submitting, setSubmitting] = useState(false)
@@ -36,7 +36,7 @@ export function SnippetGenerator({ onApply, onClose }: Props) {
     const adapter = adapterFor(settings.provider)
     const config: AdapterConfig = {
       endpoint: settings.endpoint || adapter.defaultEndpoint,
-      model: settings.model || adapter.defaultModel,
+      model: settings.model,
       apiKey: settings.apiKey,
     }
     const controller = new AbortController()
@@ -99,7 +99,7 @@ export function SnippetGenerator({ onApply, onClose }: Props) {
         </p>
       ) : settings === null ? (
         <p className="px-1 text-[12px] text-fg-muted">
-          Configure an AI provider in Settings → AI before generating snippets.
+          Add your API key and pick a model in Settings → AI before generating snippets.
         </p>
       ) : (
         <>
@@ -108,7 +108,7 @@ export function SnippetGenerator({ onApply, onClose }: Props) {
             onChange={(event) => setDescription(event.target.value)}
             rows={4}
             placeholder="Describe what the snippet should do — e.g. follow logs of pods that aren’t ready in a namespace."
-            className="w-full resize-none rounded-md border border-border-strong bg-surface px-2.5 py-2 font-mono text-[12px] text-fg outline-none focus:border-accent focus:ring-2 focus:ring-accent-ring"
+            className="w-full resize-none rounded-md border border-border-input bg-surface px-2.5 py-2 font-mono text-[12px] text-fg outline-none focus:border-accent focus:ring-2 focus:ring-accent-ring"
             disabled={submitting}
           />
           {error !== null && (

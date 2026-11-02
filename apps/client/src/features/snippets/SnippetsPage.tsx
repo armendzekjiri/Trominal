@@ -94,8 +94,14 @@ export function SnippetsPage() {
   return (
     <div className="grid h-full min-h-0 grid-cols-[300px_1fr] bg-bg">
       <aside className="flex min-h-0 flex-col border-r border-border bg-bg-elev">
-        <div className="flex gap-2 border-b border-border p-3">
-          <div className="flex h-8 min-w-0 flex-1 items-center gap-2 rounded-md border border-border-strong bg-surface px-2.5">
+        <div className="flex h-14 shrink-0 items-center gap-2 border-b border-border px-4">
+          <h1 className="text-[15px] font-semibold text-fg">Snippets</h1>
+          <span className="rounded-full bg-surface-2 px-2 py-0.5 font-mono text-[11px] text-fg-muted">
+            {snippets.length}
+          </span>
+        </div>
+        <div className="flex gap-2 border-b border-border-subtle p-3">
+          <div className="flex h-8 min-w-0 flex-1 items-center gap-2 rounded-md border border-border-input bg-surface px-2.5 focus-within:border-accent focus-within:ring-2 focus-within:ring-accent-ring">
             <Search size={13} className="text-fg-faint" />
             <input
               value={search}
@@ -114,6 +120,12 @@ export function SnippetsPage() {
               <Loader2 size={13} className="animate-spin" />
               Loading snippets
             </div>
+          ) : visible.length === 0 ? (
+            <p className="px-2 py-6 text-center text-[12px] leading-relaxed text-fg-muted">
+              {snippets.length === 0
+                ? 'No snippets yet. Write one on the right and save it.'
+                : 'No snippets match this search.'}
+            </p>
           ) : (
             visible.map((snippet) => (
               <button
@@ -121,9 +133,9 @@ export function SnippetsPage() {
                 type="button"
                 onClick={() => setDraft(snippetToInput(snippet))}
                 className={cn(
-                  'mb-1 w-full rounded-md border-l-2 px-2 py-2 text-left',
+                  'mb-1 w-full rounded-md border px-2.5 py-2 text-left transition-colors',
                   draft.id === snippet.id
-                    ? 'border-accent bg-surface-3'
+                    ? 'border-accent bg-accent-soft'
                     : 'border-transparent hover:bg-surface-2',
                 )}
               >
@@ -155,7 +167,7 @@ export function SnippetsPage() {
       <section className="relative grid min-h-0 grid-rows-[auto_1fr]">
         <form
           onSubmit={(event) => void submit(event)}
-          className="flex items-center gap-3 border-b border-border px-4 py-3"
+          className="flex h-14 shrink-0 items-center gap-3 border-b border-border px-5"
         >
           <Code2 size={15} className="text-accent" />
           <input
@@ -186,8 +198,14 @@ export function SnippetsPage() {
             <Copy size={13} />
             Copy
           </Button>
-          <Button type="button" variant="outline" size="sm">
-            <Play size={13} />
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            disabled
+            title="Running a snippet on a host is not available yet"
+          >
+            <Play size={13} aria-hidden />
             Run
           </Button>
           <Button size="sm" disabled={saveSnippet.isPending}>
@@ -198,6 +216,8 @@ export function SnippetsPage() {
               type="button"
               variant="outline"
               size="sm"
+              aria-label="Delete snippet"
+              title="Delete snippet"
               onClick={() =>
                 void deleteSnippet.mutateAsync(draft.id ?? '').then(() => setDraft(EMPTY_SNIPPET))
               }
@@ -219,7 +239,7 @@ export function SnippetsPage() {
 
         <div className="grid min-h-0 grid-cols-2">
           <div className="flex min-h-0 flex-col border-r border-border">
-            <div className="border-b border-border-subtle px-4 py-2 text-[11px] uppercase tracking-wide text-fg-faint">
+            <div className="border-b border-border-subtle px-4 py-2 text-[11px] font-medium text-fg-faint">
               Source
             </div>
             <textarea
@@ -240,7 +260,7 @@ export function SnippetsPage() {
           </div>
 
           <div className="flex min-h-0 flex-col">
-            <div className="flex items-center justify-between border-b border-border-subtle px-4 py-2 text-[11px] uppercase tracking-wide text-fg-faint">
+            <div className="flex items-center justify-between border-b border-border-subtle px-4 py-2 text-[11px] font-medium text-fg-faint">
               <span>Preview</span>
               <span className="text-accent">{variableNames.length} variables</span>
             </div>
