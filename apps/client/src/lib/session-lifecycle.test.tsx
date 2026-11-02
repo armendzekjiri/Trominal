@@ -26,7 +26,14 @@ function makeUser(id: number, email: string): UserDto {
     permissions: [],
     vault: {
       kdf_salt: 'salt',
-      kdf_params: {},
+      kdf_params: {
+        version: 1,
+        alg: 'argon2id',
+        memlimit: 67108864,
+        opslimit: 3,
+        salt_len: 16,
+        out_len: 32,
+      },
       public_key: 'pk',
       private_key_ciphertext: 'pkc',
       private_key_nonce: 'pkn',
@@ -100,13 +107,14 @@ afterEach(() => {
 describe('logout', () => {
   it('wipes the vault key before the network logout settles', async () => {
     let finishLogout: () => void = () => {}
+    const networkLogout = vi.fn(
+      () =>
+        new Promise<void>((resolve) => {
+          finishLogout = resolve
+        }),
+    )
     vi.spyOn(apiClientModule, 'getApiClient').mockResolvedValue({
-      logout: vi.fn(
-        () =>
-          new Promise<void>((resolve) => {
-            finishLogout = resolve
-          }),
-      ),
+      logout: networkLogout,
     } as unknown as ApiClient)
     const key = unlockWith(7)
 
@@ -116,6 +124,8 @@ describe('logout', () => {
     expect(useVault.getState().key).toBeNull()
     expect(Array.from(key).every((byte) => byte === 0)).toBe(true)
 
+    await vi.waitFor(() => expect(networkLogout).toHaveBeenCalled())
+    expect(useVault.getState().key).toBeNull()
     finishLogout()
     await pending
   })
@@ -182,11 +192,9 @@ describe('vault lock', () => {
     unlockWith(5)
     queryClient.setQueryData(['vault', 'host-credentials', 'any-scope'], [{ password: 'x' }])
     queryClient.setQueryData(['teams', 'list', '1'], [{ id: 't1' }])
-    queryClient
-      .getMutationCache()
-      .build(queryClient, {
-        mutationFn: async (input: { secret: string }) => input,
-      }).state.variables = { secret: 'plaintext' }
+    queryClient.getMutationCache().build(queryClient, {
+      mutationFn: async (input: { secret: string }) => input,
+    }).state.variables = { secret: 'plaintext' }
 
     useVault.getState().lock()
 

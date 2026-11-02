@@ -11,6 +11,7 @@ import {
 } from '@trominal/crypto'
 import type { UserVaultMaterial } from '@trominal/api-client'
 import { useTeamScope } from '@/features/teams/store'
+import { purgeDecryptedQueries } from '@/lib/query-client'
 
 const DEFAULT_AUTO_LOCK_MS = 15 * 60 * 1000
 
@@ -133,6 +134,8 @@ export const useVault = create<VaultStore>((set, get) => ({
     }
     useTeamScope.getState().clearSelectedTeamKey()
     set({ key: null, isLocked: true, lockTimerId: null })
+    // Cached query results are decrypted plaintext; they must not outlive the key.
+    purgeDecryptedQueries()
   },
 
   resetIdle() {
