@@ -108,6 +108,9 @@ jobs:
           name: Trominal Backend ${{ steps.image.outputs.version }}
           draft: true
           prerelease: ${{ contains(steps.image.outputs.version, '-') }}
+          # The desktop updater reads releases/latest/download/latest.json, so GitHub's
+          # "Latest" release must always be a client release. Never let a backend take it.
+          make_latest: false
           generate_release_notes: true
           body: |
             Backend Docker image:
