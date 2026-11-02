@@ -44,6 +44,8 @@ Other setups:
 
 For `--domain`, point the domain's DNS at the server and open ports 80 and 443 first. If `.env` already exists, `setup.sh` leaves it alone apart from filling an empty `APP_KEY`.
 
+> **HTTPS is required for anything beyond your own machine.** Clients refuse a plain `http://` server URL unless the host is `localhost`, `127.0.0.1`, `*.localhost` or `*.test`, and web SSH only accepts `wss://` outside those hosts. Use `--domain` (Caddy gets a certificate automatically) or put the stack behind your own TLS proxy — see [HTTPS and reverse proxies](#https-and-reverse-proxies). Never sign in with real credentials over plain HTTP.
+
 Prefer to edit by hand? Copy `docker/env/backend.env.example` to `.env` and set:
 
 - `APP_KEY`: `echo "base64:$(openssl rand -base64 32)"`
@@ -51,6 +53,8 @@ Prefer to edit by hand? Copy `docker/env/backend.env.example` to `.env` and set:
 - `APP_URL` and `ALLOWED_ORIGINS`: the URL you open in the browser (keep `tauri://localhost` in the origins)
 - `HTTP_PORT`: host port, if 80 is taken
 - `TROMINAL_SITE_ADDRESS`: leave at `:80`, or a bare domain for HTTPS. **Never a port** — Caddy listens on 80/443 inside its container; `HTTP_PORT` picks the host port.
+- `TROMINAL_TRUSTED_PROXIES`: only if another reverse proxy sits in front of Caddy (see below). The Compose file already trusts the private Docker network ranges, because PHP-FPM is reachable only from the Caddy container.
+- `SESSION_SECURE_COOKIE`: leave unset. Session cookies are `Secure` whenever `APP_ENV=production`; set it to `false` only for a throwaway plain-HTTP trial.
 - `TROMINAL_SETUP_TOKEN`: optional but recommended, `openssl rand -hex 16`. Required (compared in constant time) for the first registration only; leave empty to disable.
 
 Check health:
@@ -179,9 +183,38 @@ Rate limits are kept in the cache store, so use `CACHE_STORE=redis` when you run
 
 Never commit `.env` or production secrets.
 
+## HTTPS and Reverse Proxies
+
+Every production instance must be served over HTTPS:
+
+- **Caddy terminates TLS (recommended).** Set `TROMINAL_SITE_ADDRESS` to your domain (or run `./docker/setup.sh --domain …`). Caddy gets and renews the certificate, redirects HTTP to HTTPS and sends `Strict-Transport-Security`.
+- **Another proxy terminates TLS** (a load balancer, Traefik, Nginx, Cloudflare Tunnel). Keep `TROMINAL_SITE_ADDRESS=:80`, set `APP_URL=https://…`, send HSTS from that proxy, and tell Caddy to trust it so it passes `X-Forwarded-Proto: https` through instead of overwriting it — add a global block at the top of `docker/Caddyfile`:
+
+  ```caddyfile
+  {
+  	servers {
+  		trusted_proxies static 10.0.0.0/8 # the address range of your TLS proxy
+  	}
+  }
+  ```
+
+  Laravel already trusts Caddy (`TROMINAL_TRUSTED_PROXIES` in `docker-compose.yml`), so the forwarded scheme and client IP reach the app. Even without this, production web SSH URLs are always `wss://`.
+
+The Docker Caddyfile also sends a Content-Security-Policy: `default-src 'none'` for `/api/*`, and a same-origin policy for the admin panel. Filament's Alpine/Livewire runtime needs `'unsafe-inline'` and `'unsafe-eval'` for scripts there; everything else (connections, frames, forms, plugins) is locked to the instance's own origin.
+
+Check the deployed headers and the generated web SSH URL from outside the server:
+
+```bash
+curl -sI https://trominal.example.com/admin/login | grep -iE 'strict-transport|content-security'
+# Should print wss://trominal.example.com/ws/ssh?token=… (needs a signed-in access token):
+curl -s -X POST https://trominal.example.com/api/v1/ws/ssh-token \
+  -H "Authorization: Bearer $ACCESS_TOKEN" -H 'Content-Type: application/json' \
+  -d '{"host_id":"<host id>"}' | grep -o '"websocket_url":"[a-z]*://'
+```
+
 ## Reverse Proxy
 
-Serve the built web client and proxy API/admin traffic to Laravel:
+Serve the built web client and proxy API/admin traffic to Laravel. The web client gets the same strict CSP as the desktop app: no inline or eval'd script, and network access only over HTTPS/WSS (plus local development hosts and local AI endpoints such as Ollama):
 
 ```caddyfile
 trominal.example.com {
@@ -203,13 +236,17 @@ trominal.example.com {
     reverse_proxy 127.0.0.1:8080
   }
 
-  root * /srv/trominal/apps/client/dist
-  try_files {path} /index.html
-  file_server
+  handle {
+    header Strict-Transport-Security "max-age=63072000; includeSubDomains"
+    header Content-Security-Policy "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self' https: wss: http://localhost:* ws://localhost:* http://127.0.0.1:* ws://127.0.0.1:*; object-src 'none'; frame-src 'none'; base-uri 'self'; form-action 'none'; frame-ancestors 'none'"
+    root * /srv/trominal/apps/client/dist
+    try_files {path} /index.html
+    file_server
+  }
 }
 ```
 
-Use HTTPS in production. Desktop clients can point at the same base URL.
+`'wasm-unsafe-eval'` lets libsodium compile its WebAssembly (it does not allow JavaScript `eval`); `style-src 'unsafe-inline'` is needed by xterm.js, which injects its own `<style>` elements. Desktop clients can point at the same base URL.
 
 ## Current v0.1 Transport Notes
 

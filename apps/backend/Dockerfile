@@ -1,6 +1,8 @@
-# syntax=docker/dockerfile:1.7
+# syntax=docker/dockerfile:1.7@sha256:a57df69d0ea827fb7266491f2813635de6f17269be881f696fbfdf2d83dda33e
 
-FROM php:8.4-fpm-bookworm AS php-base
+# Base images are pinned to multi-arch index digests; Dependabot (docker ecosystem) bumps them.
+# php:8.4-fpm-bookworm
+FROM php:8.4-fpm-bookworm@sha256:1b6bb4f3d32dfbcd1e159d7bd47caa8852507f61666db7731d73f34acec781b6 AS php-base
 
 ARG TROMINAL_BACKEND_VERSION=dev
 
@@ -23,7 +25,8 @@ RUN apt-get update \
     && docker-php-ext-enable redis opcache \
     && rm -rf /var/lib/apt/lists/*
 
-COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
+# composer:2
+COPY --from=composer:2@sha256:4ed71c38c6d788eb4e4e3747b5332f5b40d5b5a6fcadd5062a1a70986a118e0a /usr/bin/composer /usr/bin/composer
 
 WORKDIR /var/www/html
 
@@ -43,7 +46,8 @@ RUN composer dump-autoload \
     --no-dev \
     --no-interaction
 
-FROM node:20-bookworm-slim AS assets
+# node:20-bookworm-slim
+FROM node:20-bookworm-slim@sha256:2cf067cfed83d5ea958367df9f966191a942351a2df77d6f0193e162b5febfc0 AS assets
 
 WORKDIR /var/www/html
 

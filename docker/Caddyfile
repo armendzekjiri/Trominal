@@ -6,8 +6,25 @@
 		X-Content-Type-Options "nosniff"
 		X-Frame-Options "DENY"
 		Referrer-Policy "strict-origin-when-cross-origin"
+		Permissions-Policy "camera=(), microphone=(), geolocation=(), payment=(), usb=()"
 		-Server
 	}
+
+	# HSTS only when Caddy itself terminates TLS (TROMINAL_SITE_ADDRESS is a
+	# domain). Behind another TLS proxy, set HSTS on that proxy instead.
+	@https protocol https
+	header @https Strict-Transport-Security "max-age=63072000; includeSubDomains"
+
+	# The JSON API never renders HTML: forbid everything.
+	@api path /api/* /up
+	header @api Content-Security-Policy "default-src 'none'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'"
+
+	# Filament admin panel (Livewire + Alpine). Alpine's standard build evaluates
+	# expressions at runtime and Livewire emits inline bootstrap scripts, so the
+	# panel needs 'unsafe-inline' and 'unsafe-eval' for scripts; everything else
+	# is locked to this origin. ui-avatars.com serves Filament's default avatars.
+	@html not path /api/* /up /ws/*
+	header @html Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://ui-avatars.com; font-src 'self' data:; connect-src 'self'; object-src 'none'; frame-src 'none'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'"
 
 	# Web SSH WebSocket proxy. Caddy replaces any client-supplied
 	# X-Forwarded-For with the real peer address (no trusted_proxies are set),

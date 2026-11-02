@@ -17,7 +17,9 @@ Use GitHub Actions secrets for release signing and updater keys.
 
 ## Required Production Controls
 
-- Serve only over HTTPS.
+- Serve only over HTTPS. Clients refuse plain `http://` servers other than local development hosts, and production web SSH URLs are always `wss://` ([details](SELF_HOSTING.md#https-and-reverse-proxies)).
+- Send HSTS and a Content-Security-Policy (the Docker Caddyfile does both when it terminates TLS).
+- Set `TROMINAL_TRUSTED_PROXIES` to your reverse proxies only; never `*` where clients can reach PHP directly.
 - Set `APP_DEBUG=false`.
 - Restrict `ALLOWED_ORIGINS` to the deployed web origin and `tauri://localhost`.
 - Keep PostgreSQL and Redis private.
@@ -35,6 +37,13 @@ The server stores ciphertext. The client owns decryption.
 - Vault records use XChaCha20-Poly1305.
 - Associated data binds ciphertext to the resource id.
 - Master password rotation re-encrypts records client-side before upload.
+- Locking the vault wipes the key and drops every decrypted record from the client cache. Signing out, a rejected session and switching servers also close terminal, SFTP and tunnel sessions. Cached records are scoped to one server and account.
+
+## Client Hardening
+
+- The desktop app and the web client run under a strict CSP: no inline or eval'd script (`'wasm-unsafe-eval'` only for libsodium's WebAssembly), no plugins, frames or remote images; network access only over HTTPS/WSS plus local development hosts and local AI endpoints.
+- The desktop webview gets only the Tauri permissions it uses (event listen, title-bar dragging, opening web links, the updater).
+- Desktop release builds keep the refresh token in the OS keychain. The web client keeps it in tab-scoped `sessionStorage`, which page scripts can read; the CSP, short-lived access tokens, refresh-token rotation and sign-out wiping limit that exposure.
 
 ## Desktop Versus Web
 

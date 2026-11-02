@@ -8,6 +8,7 @@ import {
   type PrivateKeyOwner,
 } from '@/features/vault/private-key'
 import { getApiClient } from '@/lib/api-client'
+import { purgeDecryptedQueries } from '@/lib/query-client'
 
 const DEFAULT_AUTO_LOCK_MS = 15 * 60 * 1000
 
@@ -182,6 +183,8 @@ export const useVault = create<VaultStore>((set, get) => ({
     }
     useTeamScope.getState().clearSelectedTeamKey()
     set({ key: null, isLocked: true, lockTimerId: null })
+    // Cached query results are decrypted plaintext; they must not outlive the key.
+    purgeDecryptedQueries()
   },
 
   resetIdle() {

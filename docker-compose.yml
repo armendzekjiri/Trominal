@@ -48,6 +48,9 @@ services:
       DB_HOST: postgres
       REDIS_HOST: redis
       TROMINAL_WEB_SSH_PROXY_HOST: 0.0.0.0
+      # PHP-FPM is only reachable from inside the Compose network (Caddy), so
+      # forwarded headers from private Docker ranges are trusted. Override in .env.
+      TROMINAL_TRUSTED_PROXIES: ${TROMINAL_TRUSTED_PROXIES:-10.0.0.0/8,172.16.0.0/12,192.168.0.0/16}
     volumes: *backend-volumes
     depends_on:
       migrate:

@@ -1,5 +1,6 @@
 import { createLocalShellSession, createSshSession, type SshSession } from '@trominal/ssh-transport'
 import { getApiClient } from '@/lib/api-client'
+import { requireSecureWebSocketUrl } from '@/lib/server-url'
 import { isTauri } from '@/lib/platform'
 import { useHostCredentials, useIdentities } from '@/features/vault/hooks'
 import type { HostItem } from '@/features/vault/model'
@@ -37,6 +38,7 @@ export function useTerminalActions() {
     // disabled until the pin-approval flow ships.
     const api = await getApiClient()
     const token = await api.createSshToken({ host_id: host.id, host: host.hostname, port })
+    requireSecureWebSocketUrl(token.websocket_url)
 
     return createSshSession({
       hostId: host.id,

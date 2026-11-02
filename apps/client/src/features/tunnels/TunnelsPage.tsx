@@ -30,6 +30,7 @@ import {
   type TunnelKind,
 } from '@/features/vault/model'
 import { authForHost } from '@/features/vault/ssh-auth'
+import { trackTunnelSession, untrackTunnelSession } from './runtime'
 
 type TauriCore = {
   invoke: <T>(command: string, args?: Record<string, unknown>) => Promise<T>
@@ -119,6 +120,11 @@ export function TunnelsPage() {
         return
       }
 
+      for (const [tunnelId, item] of entries) {
+        if (item === null) untrackTunnelSession(tunnelSessionId(tunnelId))
+        else trackTunnelSession(item.sessionId)
+      }
+
       setRuntime((current) => {
         const next = { ...current }
         for (const [tunnelId, item] of entries) {
@@ -203,6 +209,8 @@ export function TunnelsPage() {
 
     try {
       const sessionId = tunnelSessionId(tunnel.id)
+      // Track before the native call so a logout mid-start still stops it.
+      trackTunnelSession(sessionId)
       const { invoke } = await tauriCore()
       const response = await invoke<SshTunnelOpenResponse>('ssh_tunnel_open', {
         request: {
@@ -214,6 +222,7 @@ export function TunnelsPage() {
           tunnel: nativeTunnelSpec(tunnel.config),
         },
       })
+      trackTunnelSession(response.sessionId)
       setRuntime((current) => ({
         ...current,
         [tunnel.id]: { sessionId: response.sessionId, status: 'running' },
@@ -241,6 +250,7 @@ export function TunnelsPage() {
     try {
       const { invoke } = await tauriCore()
       await invoke('ssh_tunnel_close', { sessionId: running.sessionId })
+      untrackTunnelSession(running.sessionId)
       setStatus('Tunnel stopped.')
     } catch (error) {
       setStatus(error instanceof Error ? error.message : 'Tunnel failed to stop.')

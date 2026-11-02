@@ -1,9 +1,9 @@
 import { create } from 'zustand'
 import type { LoginRequest, RegisterRequest, UserDto } from '@trominal/api-client'
 import { TrominalApiError } from '@trominal/api-client'
-import { useTeamScope } from '@/features/teams/store'
 import { getApiClient, resetApiClient } from '@/lib/api-client'
 import { secureStorage } from '@/lib/secure-storage'
+import { teardownSession } from '@/lib/session-teardown'
 
 type AuthState = {
   user: UserDto | null
@@ -61,6 +61,12 @@ let refreshInflight: Promise<boolean> | null = null
 let hydrateInflight: Promise<void> | null = null
 
 /**
+ * Bumped on every logout. A refresh that was already in flight when the user
+ * signed out must not resurrect the session when its response arrives.
+ */
+let sessionEpoch = 0
+
+/**
  * Distinguish "the server explicitly rejected this token" (clear it; force
  * full re-login) from "we couldn't reach the server / something else broke"
  * (keep the token; let the user retry). Anything else gets the safer
@@ -90,13 +96,19 @@ export const useAuth = create<AuthStore>((set, get) => ({
           set({ isHydrating: false })
           return
         }
+        const epoch = sessionEpoch
         const api = await getApiClient()
         const pair = await api.refresh({ refresh_token: refreshToken })
+        if (epoch !== sessionEpoch) {
+          set({ isHydrating: false })
+          return
+        }
         await applyTokenPair(set, pair)
         set({ isHydrating: false })
       } catch (err) {
         if (shouldClearTokenOnError(err)) {
           await secureStorage.delete('refresh_token')
+          void teardownSession()
           set({
             ...initial,
             isHydrating: false,
@@ -145,8 +157,12 @@ export const useAuth = create<AuthStore>((set, get) => ({
         return false
       }
       try {
+        const epoch = sessionEpoch
         const api = await getApiClient()
         const pair = await api.refresh({ refresh_token: refreshToken })
+        if (epoch !== sessionEpoch) {
+          return false
+        }
         await applyTokenPair(set, pair)
         return true
       } catch (err) {
@@ -171,6 +187,10 @@ export const useAuth = create<AuthStore>((set, get) => ({
   },
 
   async logout() {
+    // Wipe keys, decrypted caches and live sessions before any await, so a
+    // slow or hanging logout request cannot keep them alive.
+    sessionEpoch += 1
+    const teardown = teardownSession()
     try {
       const api = await getApiClient()
       await api.logout()
@@ -181,9 +201,9 @@ export const useAuth = create<AuthStore>((set, get) => ({
       }
     }
     await secureStorage.delete('refresh_token')
-    useTeamScope.getState().setPersonalScope()
     resetApiClient()
     set({ ...initial, isHydrating: false })
+    await teardown
   },
 
   hasPermission(slug) {
