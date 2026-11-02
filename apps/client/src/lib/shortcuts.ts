@@ -27,12 +27,19 @@ export type ShortcutId =
   | 'terminal.newLocal'
   | 'terminal.next'
   | 'terminal.prev'
+  | 'terminal.close'
+  | 'terminal.goto'
   | 'close'
 
 export type Shortcut = {
   id: ShortcutId
   /** Keys in order, e.g. ['mod', 'k']. Single characters are matched case-insensitively. */
   keys: ReadonlyArray<string>
+  /**
+   * Windows/Linux override, for chords whose Ctrl form belongs to the shell (Ctrl+W deletes
+   * a word, so closing a tab is Ctrl+Shift+W there).
+   */
+  pcKeys?: ReadonlyArray<string>
   label: string
   group: 'General' | 'Navigation' | 'Hosts' | 'Terminal'
 }
@@ -65,12 +72,32 @@ export const SHORTCUTS: ReadonlyArray<Shortcut> = [
     label: 'Previous session tab',
     group: 'Terminal',
   },
+  {
+    id: 'terminal.goto',
+    keys: ['mod', 'alt', '1–9'],
+    pcKeys: ['alt', '1–9'],
+    label: 'Go to session 1–9',
+    group: 'Terminal',
+  },
+  {
+    id: 'terminal.close',
+    keys: ['mod', 'w'],
+    pcKeys: ['mod', 'shift', 'w'],
+    label: 'Close session tab',
+    group: 'Terminal',
+  },
 ]
 
 export function shortcut(id: ShortcutId): Shortcut {
   const found = SHORTCUTS.find((item) => item.id === id)
   if (found === undefined) throw new Error(`Unknown shortcut: ${id}`)
   return found
+}
+
+/** The keys for this platform. */
+export function keysFor(id: ShortcutId, mac = isMac): ReadonlyArray<string> {
+  const item = shortcut(id)
+  return mac ? item.keys : (item.pcKeys ?? item.keys)
 }
 
 const MAC_SYMBOLS: Record<string, string> = { mod: '⌘', shift: '⇧', alt: '⌥', esc: 'Esc' }
@@ -84,11 +111,11 @@ export function keyLabels(keys: ReadonlyArray<string>, mac = isMac): string[] {
 
 /** One-string form for tooltips: "⌘K" on macOS, "Ctrl+K" elsewhere. */
 export function formatShortcut(id: ShortcutId, mac = isMac): string {
-  return keyLabels(shortcut(id).keys, mac).join(mac ? '' : '+')
+  return keyLabels(keysFor(id, mac), mac).join(mac ? '' : '+')
 }
 
 export function matchesShortcut(event: KeyboardEvent, id: ShortcutId, mac = isMac): boolean {
-  const keys = shortcut(id).keys
+  const keys = keysFor(id, mac)
   const wantMod = keys.includes('mod')
   const wantShift = keys.includes('shift')
   const wantAlt = keys.includes('alt')
@@ -108,6 +135,18 @@ export function matchesShortcut(event: KeyboardEvent, id: ShortcutId, mac = isMa
   if (main === ']') return event.code === 'BracketRight'
   if (main === '[') return event.code === 'BracketLeft'
   return event.key.toLowerCase() === main
+}
+
+/** Session tab number (1–9) for the "Go to session" chord, or null if this isn't one. */
+export function sessionNumber(event: KeyboardEvent, mac = isMac): number | null {
+  const wantMeta = mac
+  const match =
+    event.altKey &&
+    event.metaKey === wantMeta &&
+    !event.ctrlKey &&
+    !event.shiftKey &&
+    /^Digit[1-9]$/.test(event.code)
+  return match ? Number(event.code.slice(5)) : null
 }
 
 /**
