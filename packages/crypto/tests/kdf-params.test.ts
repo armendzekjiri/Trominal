@@ -30,7 +30,7 @@ describe('KDF parameter bounds', () => {
     ['memlimit below the floor', { memlimit: 8 * MiB }],
     ['memlimit above the ceiling', { memlimit: 4096 * MiB }],
     ['memlimit not a multiple of 1 KiB', { memlimit: 64 * MiB + 1 }],
-    ['fractional memlimit', { memlimit: 64.5 * MiB }],
+    ['fractional memlimit', { memlimit: 64 * MiB + 0.5 }],
     ['opslimit below the floor', { opslimit: 1 }],
     ['opslimit above the ceiling', { opslimit: 1000 }],
     ['non-integer opslimit', { opslimit: 3.5 }],
