@@ -1,6 +1,6 @@
 {$TROMINAL_SITE_ADDRESS::80} {
 	encode zstd gzip
-	root * /srv/trominal/public
+	root * /var/www/html/public
 
 	header {
 		X-Content-Type-Options "nosniff"
