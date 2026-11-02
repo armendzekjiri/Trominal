@@ -2,7 +2,7 @@
 
 # Base images are pinned to multi-arch index digests; Dependabot (docker ecosystem) bumps them.
 # php:8.4-fpm-bookworm
-FROM php:8.4-fpm-bookworm@sha256:1b6bb4f3d32dfbcd1e159d7bd47caa8852507f61666db7731d73f34acec781b6 AS php-base
+FROM php:8.5-fpm-bookworm@sha256:75dc898a8861a777f14c57b2afbb811a848735701593cbc354e4194807a88f3e AS php-base
 
 ARG TROMINAL_BACKEND_VERSION=dev
 
