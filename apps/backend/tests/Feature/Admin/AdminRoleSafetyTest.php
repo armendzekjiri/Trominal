@@ -6,7 +6,9 @@ namespace Tests\Feature\Admin;
 
 use App\Filament\Resources\Roles\Pages\EditRole;
 use App\Filament\Resources\Roles\Pages\ListRoles;
+use App\Filament\Resources\Users\Pages\EditUser;
 use App\Models\AuditLog;
+use App\Models\Permission;
 use App\Models\Role;
 use App\Models\User;
 use Database\Seeders\AppSettingSeeder;
@@ -79,6 +81,116 @@ final class AdminRoleSafetyTest extends TestCase
         $this->assertAuditedOnce('admin.role.deleted', (string) $second->id, $admin);
         self::assertSame(2, AuditLog::query()->where('action', 'admin.role.deleted')->count());
         self::assertTrue($admin->fresh()?->hasRole('admin'));
+    }
+
+    public function test_default_role_names_are_immutable(): void
+    {
+        $admin = $this->createAdmin();
+        $adminRole = Role::findByName('admin', 'web');
+        $this->actingAs($admin);
+
+        Livewire::test(EditRole::class, ['record' => $adminRole->getRouteKey()])
+            ->assertFormFieldIsDisabled('name')
+            ->fillForm(['name' => 'operators'])
+            ->call('save');
+
+        self::assertSame('admin', $adminRole->fresh()?->name);
+        self::assertTrue($admin->fresh()?->hasRole('admin'));
+
+        // Even outside the panel, a default role cannot be renamed.
+        foreach (['admin', 'user', 'guest'] as $name) {
+            $role = Role::findByName($name, 'web');
+            $role->name = "{$name}-renamed";
+
+            try {
+                $role->save();
+                self::fail("Default role {$name} was renamed.");
+            } catch (\RuntimeException) {
+                self::assertSame($name, $role->fresh()?->name);
+            }
+        }
+
+        $this->actingAs($admin)->get('/admin')->assertOk();
+    }
+
+    public function test_custom_roles_can_still_be_renamed(): void
+    {
+        $admin = $this->createAdmin();
+        $role = $this->customRole('auditor');
+        $this->actingAs($admin);
+
+        Livewire::test(EditRole::class, ['record' => $role->getRouteKey()])
+            ->assertFormFieldIsEnabled('name')
+            ->fillForm(['name' => 'auditors'])
+            ->call('save')
+            ->assertHasNoFormErrors();
+
+        self::assertSame('auditors', $role->fresh()?->name);
+        self::assertTrue(AuditLog::query()->where('action', 'admin.role.updated')->where('resource_id', $role->id)->exists());
+    }
+
+    public function test_admin_role_keeps_required_admin_permissions(): void
+    {
+        $admin = $this->createAdmin();
+        $adminRole = Role::findByName('admin', 'web');
+        $keep = Permission::query()->whereNotIn('name', ['admin.users.manage', 'admin.roles.manage'])->pluck('id')->all();
+        $this->actingAs($admin);
+
+        Livewire::test(EditRole::class, ['record' => $adminRole->getRouteKey()])
+            ->fillForm(['permissions' => $keep])
+            ->call('save');
+
+        $names = $adminRole->fresh()?->permissions()->pluck('name')->all() ?? [];
+        self::assertContains('admin.users.manage', $names);
+        self::assertContains('admin.roles.manage', $names);
+        self::assertFalse(AuditLog::query()->where('action', 'admin.role.updated')->where('resource_id', $adminRole->id)->exists());
+
+        // Removing a non-administrative permission from the admin role is fine.
+        $withoutHostDelete = Permission::query()->where('name', '!=', 'hosts.delete')->pluck('id')->all();
+
+        Livewire::test(EditRole::class, ['record' => $adminRole->getRouteKey()])
+            ->fillForm(['permissions' => $withoutHostDelete])
+            ->call('save')
+            ->assertHasNoFormErrors();
+
+        self::assertNotContains('hosts.delete', $adminRole->fresh()?->permissions()->pluck('name')->all() ?? []);
+    }
+
+    public function test_demoting_the_last_usable_administrator_is_rejected(): void
+    {
+        $actingAdmin = $this->createAdmin();
+        $otherAdmin = $this->createAdmin();
+        $userRole = Role::findByName('user', 'web');
+        $this->actingAs($actingAdmin);
+
+        $page = Livewire::test(EditUser::class, ['record' => $otherAdmin->getRouteKey()]);
+
+        // Simulates a concurrent change that suspended the acting admin
+        // before this save commits; demoting the other admin would leave no
+        // usable administrator.
+        $actingAdmin->forceFill(['suspended_at' => now()])->save();
+
+        $page->fillForm(['roles' => [$userRole->id]])->call('save');
+
+        self::assertTrue($otherAdmin->fresh()?->hasRole('admin'));
+        self::assertFalse(AuditLog::query()->where('action', 'admin.user.updated')->exists());
+    }
+
+    public function test_demoting_an_administrator_is_allowed_while_another_remains(): void
+    {
+        $actingAdmin = $this->createAdmin();
+        $otherAdmin = $this->createAdmin();
+        $userRole = Role::findByName('user', 'web');
+        $this->actingAs($actingAdmin);
+
+        Livewire::test(EditUser::class, ['record' => $otherAdmin->getRouteKey()])
+            ->fillForm(['roles' => [$userRole->id]])
+            ->call('save')
+            ->assertHasNoFormErrors();
+
+        $otherAdmin->unsetRelation('roles');
+        self::assertFalse($otherAdmin->fresh()?->hasRole('admin'));
+        self::assertTrue(AuditLog::query()->where('action', 'admin.user.updated')->where('resource_id', $otherAdmin->id)->exists());
     }
 
     private function assertAuditedOnce(string $action, string $resourceId, User $actor): void
