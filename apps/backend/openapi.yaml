@@ -107,6 +107,10 @@ paths:
   /api/v1/auth/forgot-password:
     post:
       summary: Request a password reset link without disclosing account existence.
+      description: |
+        Always answers 202 with the same body, including when delivery fails.
+        The emailed link is `{TROMINAL_CLIENT_URL or APP_URL}/reset-password?token=…&email=…`,
+        the client's reset page.
       requestBody:
         required: true
         content:

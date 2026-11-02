@@ -21,6 +21,7 @@ use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 use PragmaRX\Google2FA\Google2FA;
+use Throwable;
 
 final class AuthService
 {
@@ -583,7 +584,14 @@ final class AuthService
 
     public function sendPasswordResetLink(string $email): void
     {
-        Password::sendResetLink(['email' => $email]);
+        try {
+            Password::sendResetLink(['email' => $email]);
+        } catch (Throwable $exception) {
+            // A delivery failure only happens for existing accounts; surfacing
+            // it would let callers tell which addresses are registered. Report
+            // it for the operator and answer like every other request.
+            report($exception);
+        }
 
         AuditLog::record(null, 'auth.password_reset.requested', 'user', null, [
             'email_hash' => hash('sha256', $email),
@@ -615,8 +623,10 @@ final class AuthService
         });
 
         if ($status !== Password::PASSWORD_RESET) {
+            // An unknown address gets the same answer as a bad token, so the
+            // endpoint cannot be used to find out which accounts exist.
             throw ValidationException::withMessages([
-                'email' => __($status),
+                'email' => __($status === Password::INVALID_USER ? Password::INVALID_TOKEN : $status),
             ]);
         }
     }

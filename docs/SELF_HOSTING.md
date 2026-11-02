@@ -163,6 +163,9 @@ TROMINAL_API_VERSION=v1
 TROMINAL_MIN_CLIENT_VERSION=0.1.0
 ALLOWED_ORIGINS=https://trominal.example.com,tauri://localhost
 
+# Where password-reset emails link to: {TROMINAL_CLIENT_URL}/reset-password?token=…&email=…
+# Defaults to APP_URL; set it when the web client is served from another origin.
+TROMINAL_CLIENT_URL=https://trominal.example.com
 # One-time code for the first (admin) registration; see "First-install checklist".
 TROMINAL_SETUP_TOKEN=
 # Refresh-token lifetime in days (default 7, clamped to 1-30).

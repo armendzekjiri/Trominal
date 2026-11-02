@@ -13,7 +13,9 @@ use App\Models\PersonalAccessToken;
 use App\Models\Snippet;
 use App\Models\Tunnel;
 use App\Policies\VaultRecordPolicy;
+use Illuminate\Auth\Notifications\ResetPassword;
 use Illuminate\Cache\RateLimiting\Limit;
+use Illuminate\Contracts\Auth\CanResetPassword;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\RateLimiter;
@@ -36,6 +38,23 @@ class AppServiceProvider extends ServiceProvider
     public function boot(): void
     {
         Sanctum::usePersonalAccessTokenModel(PersonalAccessToken::class);
+
+        // The API has no server-rendered reset page; reset emails (from the API
+        // and from the admin panel) link to the client's /reset-password page.
+        ResetPassword::createUrlUsing(static function (object $notifiable, string $token): string {
+            $base = config('trominal.client_url');
+
+            if (! is_string($base) || trim($base) === '') {
+                $base = (string) config('app.url');
+            }
+
+            $email = $notifiable instanceof CanResetPassword ? $notifiable->getEmailForPasswordReset() : '';
+
+            return rtrim(trim($base), '/').'/reset-password?'.http_build_query([
+                'token' => $token,
+                'email' => $email,
+            ]);
+        });
 
         foreach ([AiSetting::class, Group::class, Host::class, HostCredential::class, Identity::class, Snippet::class, Tunnel::class] as $model) {
             Gate::policy($model, VaultRecordPolicy::class);
