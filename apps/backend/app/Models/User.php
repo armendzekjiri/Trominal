@@ -55,6 +55,7 @@ class User extends Authenticatable implements FilamentUser, HasAppAuthentication
             'two_fa_secret_enc' => 'encrypted',
             'two_fa_pending_secret_enc' => 'encrypted',
             'two_fa_enabled_at' => 'datetime',
+            'two_fa_last_used_timestep' => 'integer',
             'vault_version' => 'integer',
             'suspended_at' => 'datetime',
         ];

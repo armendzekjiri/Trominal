@@ -25,7 +25,7 @@ Route::middleware(['auth:sanctum', 'not_suspended'])->group(function (): void {
     Route::post('/me/master-password/change', [MasterPasswordController::class, 'update']);
     Route::post('/auth/logout', [AuthController::class, 'logout']);
 
-    Route::prefix('auth/two-factor')->group(function (): void {
+    Route::prefix('auth/two-factor')->middleware('throttle:two-factor')->group(function (): void {
         Route::post('/enable', [TwoFactorController::class, 'enable']);
         Route::post('/verify', [TwoFactorController::class, 'verify']);
         Route::post('/disable', [TwoFactorController::class, 'disable']);

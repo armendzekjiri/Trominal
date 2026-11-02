@@ -13,16 +13,21 @@ use App\Models\RefreshToken;
 use App\Models\User;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Auth\Events\PasswordReset;
+use Illuminate\Http\Exceptions\ThrottleRequestsException;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Password;
+use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 use PragmaRX\Google2FA\Google2FA;
 
 final class AuthService
 {
-    public function __construct(private readonly TwoFactorCodeVerifier $codes) {}
+    public function __construct(
+        private readonly TwoFactorCodeVerifier $codes,
+        private readonly LoginRateLimiter $loginLimiter,
+    ) {}
 
     /**
      * @param  array<string, mixed>  $payload
@@ -129,14 +134,19 @@ final class AuthService
      * @param  array<string, mixed>  $payload
      * @return array{user: User, access_token: string, refresh_token: string, token_type: string, expires_in: int}
      */
-    public function login(array $payload): array
+    public function login(array $payload, ?string $ip = null): array
     {
+        $email = (string) $payload['email'];
+
+        $this->loginLimiter->ensureNotLockedOut($email, $ip);
+
         /** @var User|null $user */
-        $user = User::query()->where('email', $payload['email'])->first();
+        $user = User::query()->where('email', $email)->first();
 
         if (! $user instanceof User || ! Hash::check((string) $payload['password'], $user->password)) {
+            $this->loginLimiter->recordFailure($email, $ip);
             AuditLog::record(null, 'auth.login.failed', 'user', null, [
-                'email_hash' => hash('sha256', (string) $payload['email']),
+                'email_hash' => hash('sha256', $email),
             ]);
 
             throw ValidationException::withMessages([
@@ -155,15 +165,30 @@ final class AuthService
         if ($user->two_fa_enabled_at !== null) {
             $code = (string) ($payload['two_factor_code'] ?? '');
 
+            if ($code === '') {
+                // First step of a 2FA sign-in: ask for the code. Not a guess,
+                // so it does not count as a failure.
+                throw ValidationException::withMessages([
+                    'two_factor_code' => __('The two-factor authentication code is invalid.'),
+                ]);
+            }
+
+            $this->codes->ensureNotLockedOut($user);
+
             if (! $this->verifyTwoFactorCode($user, $code)) {
+                $this->loginLimiter->recordFailure($email, $ip);
+                $this->codes->recordFailure($user);
                 AuditLog::record($user, 'auth.login.failed_2fa', 'user', (string) $user->id);
 
                 throw ValidationException::withMessages([
                     'two_factor_code' => __('The two-factor authentication code is invalid.'),
                 ]);
             }
+
+            $this->codes->clearFailures($user);
         }
 
+        $this->loginLimiter->clearAccount($email);
         AuditLog::record($user, 'auth.login.succeeded', 'user', (string) $user->id);
 
         return $this->issueTokenPair($user, (string) ($payload['device_name'] ?? 'Unknown device'));
@@ -213,6 +238,8 @@ final class AuthService
                 return null;
             }
 
+            $this->throttleRefresh($user);
+
             // Claim the token with a conditional update so two concurrent
             // refreshes can never both rotate it, even without row locks.
             $claimed = RefreshToken::query()
@@ -246,6 +273,29 @@ final class AuthService
         }
 
         return $pair;
+    }
+
+    /**
+     * Bound refresh-token rotations per account (the route throttle bounds
+     * them per IP address). Thrown before anything is modified, so the
+     * presented token stays usable once the window passes.
+     *
+     * @throws ThrottleRequestsException
+     */
+    private function throttleRefresh(User $user): void
+    {
+        $key = 'refresh:user:'.$user->getKey();
+        $maxAttempts = max(1, (int) config('trominal.rate_limits.refresh_per_minute', 10));
+
+        if (RateLimiter::tooManyAttempts($key, $maxAttempts)) {
+            throw new ThrottleRequestsException(
+                __('Too many attempts. Try again later.'),
+                null,
+                ['Retry-After' => RateLimiter::availableIn($key)],
+            );
+        }
+
+        RateLimiter::hit($key, 60);
     }
 
     /**
@@ -352,7 +402,12 @@ final class AuthService
             ]);
         }
 
-        if ($this->codes->match($pendingSecret, $code) === null) {
+        $this->codes->ensureNotLockedOut($user);
+
+        $timestep = $this->codes->match($pendingSecret, $code);
+
+        if ($timestep === null) {
+            $this->codes->recordFailure($user);
             AuditLog::record($user, 'auth.2fa.verify_failed', 'user', (string) $user->id);
 
             throw ValidationException::withMessages([
@@ -362,11 +417,15 @@ final class AuthService
 
         $replacing = $user->two_fa_enabled_at !== null;
 
-        DB::transaction(function () use ($user, $pendingSecret, $replacing): void {
+        $this->codes->clearFailures($user);
+
+        DB::transaction(function () use ($user, $pendingSecret, $replacing, $timestep): void {
             $user->forceFill([
                 'two_fa_secret_enc' => $pendingSecret,
                 'two_fa_pending_secret_enc' => null,
                 'two_fa_enabled_at' => now(),
+                // The confirmation code is spent; it cannot also sign in.
+                'two_fa_last_used_timestep' => $timestep,
             ])->save();
 
             if (! $replacing) {
@@ -415,7 +474,10 @@ final class AuthService
             throw ValidationException::withMessages($missing);
         }
 
+        $this->codes->ensureNotLockedOut($user);
+
         if (! Hash::check((string) $password, $user->password)) {
+            $this->codes->recordFailure($user);
             AuditLog::record($user, $deniedAction, 'user', (string) $user->id, ['reason' => 'password']);
 
             throw ValidationException::withMessages([
@@ -424,6 +486,7 @@ final class AuthService
         }
 
         if (! $this->verifyTwoFactorCode($user, (string) $code)) {
+            $this->codes->recordFailure($user);
             AuditLog::record($user, $deniedAction, 'user', (string) $user->id, ['reason' => 'code']);
 
             throw ValidationException::withMessages([
@@ -568,6 +631,6 @@ final class AuthService
             return false;
         }
 
-        return $this->codes->match($user->two_fa_secret_enc, $code) !== null;
+        return $this->codes->verifyAndConsume($user, $code);
     }
 }
