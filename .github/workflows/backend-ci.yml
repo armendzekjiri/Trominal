@@ -63,13 +63,15 @@ jobs:
           DB_DATABASE: database/database.sqlite
         run: ./vendor/bin/pest
 
-      - name: Docker build smoke test
-        uses: docker/build-push-action@v6
-        with:
-          context: .
-          file: apps/backend/Dockerfile
-          target: runtime
-          push: false
-          tags: trominal-backend:ci
-          build-args: |
-            TROMINAL_BACKEND_VERSION=ci
+  self-hosted-stack:
+    name: Self-hosted stack
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # Builds the image, runs setup.sh + docker compose up from a clean slate, then checks
+      # API, admin panel, first-user registration and that a restart does not re-seed.
+      - name: Smoke test docker compose stack
+        run: ./docker/smoke-test.sh
