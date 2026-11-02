@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react'
 import type { Terminal } from '@xterm/xterm'
 import { cn } from '@/lib/cn'
 import { useAuth } from '@/stores/auth'
-import { useAiSettings } from '@/features/vault/hooks'
+import { useReadyAiSettings } from '@/features/vault/hooks'
 
 type Props = {
   terminal: Terminal
@@ -21,7 +21,7 @@ type MenuState = { open: false } | { open: true; x: number; y: number; selection
  * Ask AI panel. Gated by `ai.use` and `features.explainCommand`.
  */
 export function TerminalContextMenu({ terminal, element, onExplain }: Props) {
-  const settings = useAiSettings().data ?? null
+  const settings = useReadyAiSettings()
   const canUseAi = useAuth((s) => s.hasPermission('ai.use'))
   const enabled = canUseAi && settings !== null && settings.features.explainCommand
 
