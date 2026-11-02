@@ -155,10 +155,14 @@ final class AuthService
         }
 
         if ($user->suspended_at !== null) {
+            // Respond exactly like a wrong password so that someone holding
+            // the credentials learns nothing about the account's state, and
+            // count it like one. The real reason is kept in the audit log.
+            $this->loginLimiter->recordFailure($email, $ip);
             AuditLog::record($user, 'auth.login.blocked_suspended', 'user', (string) $user->id);
 
             throw ValidationException::withMessages([
-                'email' => __('This account is suspended.'),
+                'email' => __('The provided credentials are incorrect.'),
             ]);
         }
 
