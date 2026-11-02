@@ -24,7 +24,7 @@ final class LoginRateLimiter
     public function ensureNotLockedOut(string $email, ?string $ip): void
     {
         foreach ($this->keys($email, $ip) as $scope => $key) {
-            if (! RateLimiter::tooManyAttempts($key, $this->maxAttempts())) {
+            if (! RateLimiter::tooManyAttempts($key, $this->maxAttempts($scope))) {
                 continue;
             }
 
@@ -79,9 +79,13 @@ final class LoginRateLimiter
         return hash('sha256', mb_strtolower(trim($email)));
     }
 
-    private function maxAttempts(): int
+    private function maxAttempts(string $scope): int
     {
-        return max(1, (int) config('trominal.rate_limits.login_max_attempts', 5));
+        $configured = $scope === 'ip'
+            ? config('trominal.rate_limits.login_max_attempts_per_ip', 5)
+            : config('trominal.rate_limits.login_max_attempts', 5);
+
+        return max(1, (int) $configured);
     }
 
     private function decaySeconds(): int

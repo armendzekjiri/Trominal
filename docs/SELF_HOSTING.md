@@ -28,7 +28,7 @@ That's it. Migrations run automatically on every `up`; roles and default setting
 
 ### First-install checklist
 
-1. Keep the instance unreachable from the public internet (firewall, VPN, or `--port` on a private interface) until the first account exists, even with a setup code.
+1. Keep the instance unreachable from the public internet (firewall or VPN) until the first account exists, even with a setup code.
 2. Run `./docker/setup.sh` and note the setup code it prints.
 3. `docker compose up -d`, then register the first (admin) account from a client right away, entering the setup code.
 4. Confirm `curl http://localhost/api/server-info` reports `"registration_open": false` and `"setup_token_required": false`.
@@ -172,7 +172,7 @@ TROMINAL_LOGIN_MAX_ATTEMPTS=5
 TROMINAL_LOGIN_DECAY_MINUTES=15
 ```
 
-Rate limits are kept in the cache store, so use `CACHE_STORE=redis` when you run more than one backend worker (the Docker stack does). Failed TOTP codes and step-up passwords are limited separately per account (`TROMINAL_TWO_FACTOR_MAX_ATTEMPTS`, default 5 per `TROMINAL_TWO_FACTOR_DECAY_MINUTES`, default 15).
+Rate limits are kept in the cache store, so use `CACHE_STORE=redis` when you run more than one backend worker (the Docker stack does). The per-IP limit relies on the backend seeing real client addresses: Caddy passes them through, but if you put another reverse proxy or CDN in front, every client can appear to come from one address and a few failed sign-ins would lock everyone out. In that case raise `TROMINAL_LOGIN_MAX_ATTEMPTS_PER_IP` (defaults to `TROMINAL_LOGIN_MAX_ATTEMPTS`) or make the proxy forward client addresses. Failed TOTP codes and step-up passwords are limited separately per account (`TROMINAL_TWO_FACTOR_MAX_ATTEMPTS`, default 5 per `TROMINAL_TWO_FACTOR_DECAY_MINUTES`, default 15).
 
 Never commit `.env` or production secrets.
 

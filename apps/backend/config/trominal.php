@@ -15,6 +15,9 @@ return [
     'rate_limits' => [
         // Failed sign-ins tolerated per account and per IP address within the decay window.
         'login_max_attempts' => (int) env('TROMINAL_LOGIN_MAX_ATTEMPTS', 5),
+        // Raise this if many users reach the backend from one address (shared NAT,
+        // or a proxy that is not forwarding client addresses).
+        'login_max_attempts_per_ip' => (int) env('TROMINAL_LOGIN_MAX_ATTEMPTS_PER_IP', env('TROMINAL_LOGIN_MAX_ATTEMPTS', 5)),
         'login_decay_minutes' => (int) env('TROMINAL_LOGIN_DECAY_MINUTES', 15),
         // Failed TOTP codes / step-up passwords tolerated per account within the decay window.
         'two_factor_max_attempts' => (int) env('TROMINAL_TWO_FACTOR_MAX_ATTEMPTS', 5),

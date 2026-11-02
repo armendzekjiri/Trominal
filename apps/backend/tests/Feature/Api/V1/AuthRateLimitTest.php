@@ -55,6 +55,18 @@ final class AuthRateLimitTest extends TestCase
         $this->loginFrom('203.0.113.11')->assertOk();
     }
 
+    public function test_the_per_ip_limit_can_be_raised_independently(): void
+    {
+        config(['trominal.rate_limits.login_max_attempts_per_ip' => 8]);
+        $this->registerUser()->assertCreated();
+
+        foreach (range(1, 5) as $attempt) {
+            $this->loginFrom('203.0.113.10', "unknown-{$attempt}@example.test")->assertUnprocessable();
+        }
+
+        $this->loginFrom('203.0.113.10')->assertOk();
+    }
+
     public function test_a_successful_login_clears_the_account_failure_counter(): void
     {
         $this->registerUser()->assertCreated();
