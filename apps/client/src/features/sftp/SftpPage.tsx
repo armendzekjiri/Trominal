@@ -8,6 +8,7 @@ import { useHostCredentials, useHosts, useIdentities } from '@/features/vault/ho
 import type { HostCredentialItem, HostItem, IdentityItem } from '@/features/vault/model'
 import { authForHost } from '@/features/vault/ssh-auth'
 import { EmptyPlaceholder } from '@/features/app/EmptyPlaceholder'
+import { useHostKeyGate } from '@/features/hosts/use-host-key-gate'
 import { FilePane } from './FilePane'
 import {
   sftpDownload,
@@ -64,6 +65,7 @@ function SftpPageDesktop() {
 
   const [selectedHostId, setSelectedHostId] = useState<string | null>(null)
   const selectedHost = hosts.find((host) => host.id === selectedHostId) ?? null
+  const { ensureHostKeys, handleHostKeyError } = useHostKeyGate()
 
   const [hostArgs, setHostArgs] = useState<SftpHostArgs | null>(null)
   const [hostError, setHostError] = useState<string | null>(null)
@@ -155,20 +157,31 @@ function SftpPageDesktop() {
       }
       setResolvingHost(true)
       try {
+        // Approve the server's fingerprint (first use) before anything else.
+        const hostKeys = await ensureHostKeys(selectedHost)
+        if (cancelled) return
+        if (hostKeys === null) {
+          setHostError('The host key was not approved, so Trominal did not connect.')
+          return
+        }
         const auth = await authForHost(selectedHost, credentials, identities)
         if (cancelled) return
         if (auth?.kind !== 'private-key') {
           setHostError('Attach an SSH identity to this host before using SFTP.')
           return
         }
+        const passphrase = auth.passphrase ? new TextEncoder().encode(auth.passphrase) : null
         const args: SftpHostArgs = {
           host: selectedHost.hostname,
           port: parsePort(selectedHost.port),
           username: selectedHost.username,
           privateKeyPem: Array.from(auth.privateKeyPem),
+          ...(passphrase === null ? {} : { passphrase: Array.from(passphrase) }),
+          hostKeys,
         }
-        // Wipe the original byte buffer once we've copied it for IPC.
+        // Wipe the original byte buffers once we've copied them for IPC.
         auth.privateKeyPem.fill(0)
+        passphrase?.fill(0)
 
         // Resolve the user's home directory before flipping the page into
         // "connected" mode so the very first listing already lands on
@@ -180,8 +193,14 @@ function SftpPageDesktop() {
           if (cancelled) return
           home = response.path
         } catch (homeErr) {
-          // Home lookup is best-effort: if the server doesn't speak `pwd`
-          // sensibly, we still let the user browse from `/`.
+          if (cancelled) return
+          // A changed or unapproved host key stops here, with its own dialog.
+          if (handleHostKeyError(homeErr, selectedHost)) {
+            setHostError('Host key verification failed, so Trominal did not connect.')
+            return
+          }
+          // Home lookup is otherwise best-effort: if the server doesn't speak
+          // `pwd` sensibly, we still let the user browse from `/`.
           if (import.meta.env.DEV) {
             console.warn('sftp_remote_home failed:', homeErr)
           }
@@ -193,7 +212,13 @@ function SftpPageDesktop() {
         setHostArgs(args)
       } catch (err) {
         if (cancelled) return
-        setHostError(err instanceof Error ? err.message : 'Could not resolve SSH identity.')
+        setHostError(
+          typeof err === 'string'
+            ? err
+            : err instanceof Error
+              ? err.message
+              : 'Could not resolve SSH identity.',
+        )
       } finally {
         if (!cancelled) setResolvingHost(false)
       }
@@ -202,7 +227,7 @@ function SftpPageDesktop() {
     return () => {
       cancelled = true
     }
-  }, [selectedHost, credentials, identities])
+  }, [selectedHost, credentials, identities, ensureHostKeys, handleHostKeyError])
 
   useEffect(() => {
     if (hostArgs === null) {
@@ -220,6 +245,10 @@ function SftpPageDesktop() {
         setRemoteEntries(entries)
       } catch (err) {
         if (cancelled) return
+        if (handleHostKeyError(err, selectedHost ?? undefined)) {
+          setRemoteError('Host key verification failed.')
+          return
+        }
         setRemoteError(err instanceof Error ? err.message : 'Could not list remote directory.')
       } finally {
         if (!cancelled) setRemoteLoading(false)
@@ -229,7 +258,7 @@ function SftpPageDesktop() {
     return () => {
       cancelled = true
     }
-  }, [hostArgs, remotePath])
+  }, [hostArgs, remotePath, selectedHost, handleHostKeyError])
 
   function navigateLocal(entry: SftpEntry): void {
     if (entry.kind !== 'dir') return

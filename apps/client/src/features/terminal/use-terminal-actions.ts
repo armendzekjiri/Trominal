@@ -1,7 +1,8 @@
 import { createLocalShellSession, createSshSession, type SshSession } from '@trominal/ssh-transport'
 import { getApiClient } from '@/lib/api-client'
 import { isTauri } from '@/lib/platform'
-import { useHostCredentials, useIdentities } from '@/features/vault/hooks'
+import { useHostKeyGate } from '@/features/hosts/use-host-key-gate'
+import { useHostCredentials, useHosts, useIdentities } from '@/features/vault/hooks'
 import type { HostItem } from '@/features/vault/model'
 import { authForHost } from '@/features/vault/ssh-auth'
 import { useTerminalTabs, type TerminalTab } from '@/stores/terminal'
@@ -13,24 +14,34 @@ import { useTerminalTabs, type TerminalTab } from '@/stores/terminal'
 export function useTerminalActions() {
   const hostCredentials = useHostCredentials().data ?? []
   const identities = useIdentities().data ?? []
+  const hosts = useHosts().data ?? []
   const addStoreTab = useTerminalTabs((state) => state.addTab)
   const patchTab = useTerminalTabs((state) => state.patchTab)
   const removeStoreTab = useTerminalTabs((state) => state.removeTab)
+  const { ensureHostKeys, handleHostKeyError } = useHostKeyGate()
 
-  async function hostSession(host: HostItem): Promise<SshSession> {
-    const auth = await authForHost(host, hostCredentials, identities)
+  /** `null` when the user declined to trust the server's host key. */
+  async function hostSession(host: HostItem): Promise<SshSession | null> {
     const port = Number.parseInt(host.port || '22', 10)
 
     if (isTauri) {
+      // Approve the fingerprint (first use) before any key leaves the vault.
+      // Tabs keep a host snapshot, so prefer the freshest vault copy.
+      const hostKeys = await ensureHostKeys(hosts.find((item) => item.id === host.id) ?? host)
+      if (hostKeys === null) return null
+      const auth = await authForHost(host, hostCredentials, identities)
       return createSshSession({
         hostId: host.id,
         host: host.hostname,
         port,
         username: host.username,
         auth,
+        hostKeys,
         sessionName: host.name,
       })
     }
+
+    const auth = await authForHost(host, hostCredentials, identities)
 
     const api = await getApiClient()
     const token = await api.createSshToken({ host_id: host.id })
@@ -53,10 +64,16 @@ export function useTerminalActions() {
         tab.kind === 'local'
           ? createLocalShellSession({ sessionName: tab.title })
           : await hostSession(tab.host)
+      if (session === null) {
+        patchTab(tab.id, { status: 'closed', session: null })
+        return
+      }
       patchTab(tab.id, { session })
       await session.connect()
       patchTab(tab.id, { status: 'connected', session })
-    } catch {
+    } catch (error) {
+      // A changed or unapproved host key gets its own dialog.
+      if (tab.kind === 'host') handleHostKeyError(error, tab.host)
       patchTab(tab.id, { status: 'closed', session: null })
     }
   }

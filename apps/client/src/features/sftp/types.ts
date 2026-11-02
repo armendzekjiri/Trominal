@@ -13,6 +13,10 @@ export type SftpHostArgs = {
   username: string
   /** PEM bytes of the attached private key — derived via authForHost(). */
   privateKeyPem: number[]
+  /** Key passphrase bytes, when the host credential stores one. */
+  passphrase?: number[]
+  /** Approved host keys; the desktop backend refuses any other server key. */
+  hostKeys: { keyType: string; publicKey: string }[]
 }
 
 export type SftpListResponse = { entries: SftpEntry[] }

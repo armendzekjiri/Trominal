@@ -30,6 +30,7 @@ import {
   type TunnelKind,
 } from '@/features/vault/model'
 import { authForHost } from '@/features/vault/ssh-auth'
+import { useHostKeyGate } from '@/features/hosts/use-host-key-gate'
 
 type TauriCore = {
   invoke: <T>(command: string, args?: Record<string, unknown>) => Promise<T>
@@ -84,6 +85,7 @@ export function TunnelsPage() {
   const hosts = hostsQuery.data ?? []
   const credentials = credentialsQuery.data ?? []
   const identities = identitiesQuery.data ?? []
+  const { ensureHostKeys, handleHostKeyError } = useHostKeyGate()
   const [draft, setDraft] = useState<TunnelInput>(EMPTY_TUNNEL)
   const [runtime, setRuntime] = useState<Record<string, TunnelRuntime>>({})
   const [status, setStatus] = useState<string | null>(null)
@@ -194,12 +196,27 @@ export function TunnelsPage() {
     }))
     setStatus(`Starting ${tunnel.name || KIND_LABEL[tunnel.config.kind]}...`)
 
+    let hostKeys: Awaited<ReturnType<typeof ensureHostKeys>>
+    try {
+      hostKeys = await ensureHostKeys(host)
+    } catch (error) {
+      setRuntime((current) => removeRuntime(current, tunnel.id))
+      setStatus(typeof error === 'string' ? error : 'Could not read the host key.')
+      return
+    }
+    if (hostKeys === null) {
+      setRuntime((current) => removeRuntime(current, tunnel.id))
+      setStatus('The host key was not approved, so the tunnel was not started.')
+      return
+    }
+
     const auth = await authForHost(host, credentials, identities)
     if (auth?.kind !== 'private-key') {
       setRuntime((current) => removeRuntime(current, tunnel.id))
       setStatus('Attach an SSH identity to this host before starting a tunnel.')
       return
     }
+    const passphrase = auth.passphrase ? new TextEncoder().encode(auth.passphrase) : null
 
     try {
       const sessionId = tunnelSessionId(tunnel.id)
@@ -211,6 +228,8 @@ export function TunnelsPage() {
           port: sshPort(host.port),
           username: host.username,
           privateKeyPem: Array.from(auth.privateKeyPem),
+          ...(passphrase === null ? {} : { passphrase: Array.from(passphrase) }),
+          hostKeys,
           tunnel: nativeTunnelSpec(tunnel.config),
         },
       })
@@ -221,9 +240,20 @@ export function TunnelsPage() {
       setStatus(`${tunnel.name || KIND_LABEL[tunnel.config.kind]} is running.`)
     } catch (error) {
       setRuntime((current) => removeRuntime(current, tunnel.id))
-      setStatus(error instanceof Error ? error.message : 'Tunnel failed to start.')
+      if (handleHostKeyError(error, host)) {
+        setStatus('Host key verification failed, so the tunnel was not started.')
+      } else {
+        setStatus(
+          typeof error === 'string'
+            ? error
+            : error instanceof Error
+              ? error.message
+              : 'Tunnel failed to start.',
+        )
+      }
     } finally {
       auth.privateKeyPem.fill(0)
+      passphrase?.fill(0)
     }
   }
 
