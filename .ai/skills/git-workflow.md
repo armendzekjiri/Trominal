@@ -9,9 +9,8 @@
 - `feat/short-description` — short-lived, branched from current phase branch.
 - `fix/short-description` — bug fixes.
 - `release/backend-vX.Y` — backend release stabilization branch.
-- `release/client-vX.Y` — client release stabilization branch.
 - `hotfix/backend-vX.Y.Z` — backend patch branch created from the last stable backend tag.
-- `hotfix/client-vX.Y.Z` — client patch branch created from the last stable client tag.
+- Client releases, release candidates and hotfixes go through PRs into `main` (client releases build only from `main`).
 - Squash-merge to `main` after PR review.
 
 ## Conventional Commits
@@ -99,10 +98,11 @@ Plus a hook that runs:
 
 - Backend and client releases are independent.
 - Backend stable tags: `backend-v0.1.0`, `backend-v0.1.1`, etc.
-- Client stable tags: `client-v0.1.0`, `client-v0.1.1`, etc.
-- Release candidate tags: `backend-v0.1.1-rc.1`, `client-v0.1.1-rc.1`, etc.
+- Client stable tags: `client-v0.1.0`, `client-v0.1.1`, etc. The Client Release workflow creates them; never push one by hand.
+- Release candidate versions: `backend-v0.1.1-rc.1` tags; for the client, set `"version": "0.1.1-rc.1"` in `apps/client/src-tauri/tauri.conf.json`.
 - Product milestone tags like `v0.1.0` are informational and do not trigger build workflows.
-- Stable release tags should come from updated `main`, except urgent hotfix tags may come from a reviewed `hotfix/*` branch based on the previous stable deployable tag.
+- Stable backend tags should come from updated `main`, except urgent hotfix tags may come from a reviewed `hotfix/*` branch based on the previous stable backend tag.
+- A client release starts when a commit on `main` has a line starting with `build:` (use it as the PR title, e.g. `build: release client 0.2.0`) and bumps `"version"` in `apps/client/src-tauri/tauri.conf.json`. A reviewer approves the `release` environment, and the workflow publishes. Don't use `build:` for build-system changes; use `chore:` or `ci:`.
 - Never force-move a pushed stable release tag. If a release is wrong, ship the next patch version.
 - `CHANGELOG.md` and `docs/RELEASE.md` must stay accurate in release PRs.
 
@@ -127,7 +127,7 @@ git tag backend-v0.1.0
 git push origin backend-v0.1.0
 ```
 
-Use `release/client-v0.1`, `client-v0.1.0-rc.1`, and `client-v0.1.0` for client releases.
+Client releases do not use release branches or tags; see `docs/RELEASE.md#client-release`.
 
 ### Hotfix release
 

@@ -73,9 +73,9 @@ The Trominal backend is not an AI proxy.
 
 ## Release Flow
 
-Tagged releases are split by deployable:
+Releases are split by deployable:
 
-- `backend-vX.Y.Z` builds and publishes the backend Docker image for `app`, `queue`, `scheduler`, and `ssh-proxy`.
-- `client-vX.Y.Z` builds the web `dist` artifact, Tauri desktop bundles, Linux AppImage/deb/rpm packages, signed updater artifacts, and `latest.json` when release secrets are configured.
+- `backend-vX.Y.Z` tags build and publish the backend Docker image for `app`, `queue`, `scheduler`, and `ssh-proxy`.
+- A `build:` commit on `main` builds the web `dist` artifact, Tauri desktop bundles (a universal macOS bundle, signed and notarized), Linux AppImage/deb/rpm packages, signed updater artifacts, and `latest.json`, then publishes them as `client-vX.Y.Z`. Signing secrets are available only to `main` through the protected `release` environment.
 
 The backend exposes `backend_version`, `api_version`, and `min_client_version` from `/api/server-info` so backend and client versions can move independently.

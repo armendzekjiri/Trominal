@@ -46,17 +46,9 @@ Web SSH/SFTP/tunnel proxying is planned. When enabled, web transport requires tr
 
 Tauri updater artifacts are signed with a private updater key in CI. The public key is embedded in release builds through the Tauri config supplied by `.github/workflows/client-release.yml`.
 
-Keep these secrets in GitHub Actions:
+macOS builds are signed with a Developer ID Application certificate and notarized with an App Store Connect API key.
 
-- `TAURI_SIGNING_PRIVATE_KEY`
-- `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`
-- `APPLE_CERTIFICATE`
-- `APPLE_CERTIFICATE_PASSWORD`
-- `APPLE_SIGNING_IDENTITY`
-- `APPLE_ID`
-- `APPLE_PASSWORD`
-- `APPLE_TEAM_ID`
-- `TAURI_UPDATER_PUBKEY`
+All signing secrets are environment secrets of the GitHub `release` environment, never repository secrets. The environment accepts only jobs running on `main`, and a required reviewer has to approve each run. Workflows edited on other branches, in pull requests or in forks therefore can't read them. The full list and setup are in [RELEASE.md](RELEASE.md#how-the-signing-secrets-are-protected).
 
 If the updater private key is lost, installed desktop clients cannot verify future updates signed by a replacement key.
 
