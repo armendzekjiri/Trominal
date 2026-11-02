@@ -10,6 +10,8 @@ It lives in the same monorepo as the rest of Trominal but ships independently.
 
 ## Quick start (local dev)
 
+Requires **Node 22.23.4 or newer** (Astro 7).
+
 ```bash
 # From the repo root — first time only:
 pnpm install
@@ -69,7 +71,8 @@ The site is an Astro build served by a Cloudflare **Worker** (`website/wrangler.
    - **Deploy command:** `pnpm --filter @trominal/website exec wrangler deploy`
    - **Non-production branch deploy command:** `pnpm --filter @trominal/website exec wrangler versions upload`
    - **Production branch:** `main`
-4. **Build variables (optional):** `GITHUB_TOKEN` = a GitHub token with **only public repo read access**. Without it the build still works, it just hits the lower anonymous rate limit.
+4. **Build variable (required):** `NODE_VERSION` = `22.23.4` (or any newer 22.x/24.x). Astro 7 refuses to build on older Node versions.
+5. **Build variables (optional):** `GITHUB_TOKEN` = a GitHub token with **only public repo read access**. Without it the build still works, it just hits the lower anonymous rate limit.
 
 Don't use the repo-root `pnpm run build` / `npx wrangler …` defaults: the root build compiles the client app and backend, not the website, and there is no wrangler config at the root.
 

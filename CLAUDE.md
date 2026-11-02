@@ -60,7 +60,7 @@ Load the matching skill file before working in that area:
 - Registration: **single-user mode by default**
 - License: **AGPL-3.0**
 - Visual design: locked in `.ai/design/` — dark-first cool slate, green accent, Inter UI + JetBrains Mono for terminal/code, Termius-style layout (changed with maintainer approval 2026-11-02; see `.ai/design/README.md`)
-- Marketing site: **Astro 5 + MDX + Tailwind**, deployed to **Cloudflare Pages** at `trominal.app`, with a Worker-backed `/api/stats.json` (KV-cached) for live GitHub data
+- Marketing site: **Astro 7 + MDX + Tailwind 3**, deployed as a **Cloudflare Worker** (Workers Builds, static assets + Worker) at `trominal.app`, with a Worker-backed `/api/stats.json` (KV-cached) for live GitHub data (Astro 7 upgrade approved by the maintainer 2026-11-02)
 - Public demo backend: **`https://backend.trominal.app`** — real, secure instance, database wiped periodically, **not for production**
 
 ## First action
