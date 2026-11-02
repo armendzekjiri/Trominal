@@ -29,7 +29,7 @@ This folder is the visual source of truth for the client app. Read it before cha
 
 Approved by the maintainer on 2026-11-02: keep Trominal's green accent, move to a Termius-style structure on cool slate surfaces. Where this section and an older mockup disagree, **this section wins**. The mockups are updated screen by screen as each area is rebuilt.
 
-Rebuilt so far: **app shell** and **Hosts**. Not yet: auth, terminal, snippets, identities, tunnels, SFTP, settings. They keep their current layout on the new tokens.
+Rebuilt so far: **app shell**, **Hosts**, **auth screens**, **Settings**, and the shared header/label/list styles used by Snippets, Identities, Tunnels, SFTP and Terminal. Those five keep their own layouts; only their chrome follows this spec.
 
 ### App shell
 
@@ -49,3 +49,22 @@ Rebuilt so far: **app shell** and **Hosts**. Not yet: auth, terminal, snippets, 
 - **Editor panel**: slides in from the right (380px, `bg-elev`, left border) only while creating or editing a host; `Esc` closes it. It holds the existing host form (label, hostname, port, username, group, identity, colour swatches, tags) and Save / Delete / Connect.
 - **Empty vault**: centred illustration-free empty state: icon tile, "No hosts yet", one-line explanation, **New host** button.
 - Motion: 150-200ms transitions on hover, focus and panel open, disabled under `prefers-reduced-motion`.
+
+### Auth screens
+
+- Two columns at `lg` and up: a brand panel (`bg-elev`, accent glow top-left, one-line claim, three pillars: end-to-end encrypted, self-hosted, built for teams; licence line at the bottom) and the form column. Below `lg`: the form column alone, with the logo above it.
+- Form column: max 380px (register 400px), server badge as a pill top-right, 22px title, field labels in sentence case.
+
+### Page chrome (all sections)
+
+- Every section starts with a 56px header: 15px semibold title, optional count pill, actions on the trailing side.
+- Field labels: 12px medium `fg-muted`, sentence case. Column/section headers: 11px medium `fg-faint`. No uppercase-tracking labels.
+- Selectable list rows: full 1px border, selected = `accent` border + `accent-soft` fill (no left stripe).
+- Settings: left menu styled like the main sidebar, unfinished sections carry a "Soon" pill; the active section is in the URL (`/settings?tab=…`).
+
+### Keyboard
+
+- All bindings live in `apps/client/src/lib/shortcuts.ts`; the palette, tooltips, the ⌘/ sheet and Settings → Shortcuts read from it. Add a binding there, never inline.
+- ⌘K command palette (pages, settings sections, actions, "Connect to <host>"), ⌘/ shortcut sheet, ⌘, settings, ⌘⇧L lock, ⌘1–6 sections, ⌘F / ⌘N on Hosts, ⌘T and ⌘⇧[ / ⌘⇧] in Terminal. Ctrl replaces ⌘ on Windows/Linux.
+- Inside the terminal on Windows/Linux, Ctrl chords go to the shell, not the app.
+- Overlays (palette, sheet) are `role="dialog"` + `aria-modal`, trap Tab, close on Esc and backdrop click, and return focus to where it was.
