@@ -2,6 +2,7 @@ mod event_sink;
 mod local_shell;
 mod secure;
 mod sftp;
+mod sftp_process;
 
 use tauri::menu::{Menu, MenuItem, Submenu};
 use tauri::{Emitter, Manager};
