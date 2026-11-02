@@ -726,22 +726,22 @@ Tunnels and SFTP are separate product areas because they serve different workflo
 
 There is a **third user-facing surface** beyond the client app and admin panel:
 
-- **Marketing site & docs** — `https://trominal.app` — Astro 5 + MDX site living in `/website/`. Hosts the landing page, install guide, full documentation (sourced from `/docs/*.md` and root markdown files), changelog, roadmap, security threat model, brand kit, privacy, terms, license, and a dedicated demo page.
+- **Marketing site & docs** — `https://trominal.app` — Astro 7 + MDX site living in `/website/`. Hosts the landing page, install guide, full documentation (sourced from `/docs/*.md` and root markdown files), changelog, roadmap, security threat model, brand kit, privacy, terms, license, and a dedicated demo page.
 - **Public demo backend** — `https://backend.trominal.app` — a real, hardened Trominal instance we host so people can try the product without spinning up Docker. Database is **wiped periodically without notice**; not for production use. Open registration is enabled.
 
 ### 14.2 Locked decisions for the website
 
-| Decision        | Value                                                            |
-| --------------- | ---------------------------------------------------------------- |
-| Stack           | Astro 5 + MDX + Tailwind 3, hybrid output                        |
-| Adapter         | `@astrojs/cloudflare`                                            |
-| Hosting         | Cloudflare Pages + Workers                                       |
-| Live data       | `/api/stats.json` Worker route, KV-cached 10 min                 |
-| Analytics       | Cloudflare Web Analytics (privacy-friendly, no cookies)          |
-| Fonts           | Self-hosted via `@fontsource/*` — no Google Fonts at runtime     |
-| Design tokens   | Mirror `.ai/design/` — dark cool slate, accent green, Inter UI + JetBrains Mono |
-| License banner  | AGPL-3.0 everywhere — never MIT                                  |
-| Demo policy     | Public, secure, ephemeral (DB wiped periodically), no SLA        |
+| Decision       | Value                                                                                         |
+| -------------- | --------------------------------------------------------------------------------------------- |
+| Stack          | Astro 7 + MDX + Tailwind 3, static output + on-demand API route (Astro 7 approved 2026-11-02) |
+| Adapter        | `@astrojs/cloudflare`                                                                         |
+| Hosting        | Cloudflare Workers (static assets + Worker)                                                   |
+| Live data      | `/api/stats.json` Worker route, KV-cached 10 min                                              |
+| Analytics      | Cloudflare Web Analytics (privacy-friendly, no cookies)                                       |
+| Fonts          | Self-hosted via `@fontsource/*` — no Google Fonts at runtime                                  |
+| Design tokens  | Mirror `.ai/design/` — dark cool slate, accent green, Inter UI + JetBrains Mono               |
+| License banner | AGPL-3.0 everywhere — never MIT                                                               |
+| Demo policy    | Public, secure, ephemeral (DB wiped periodically), no SLA                                     |
 
 ### 14.3 Hard rules
 

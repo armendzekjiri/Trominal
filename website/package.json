@@ -7,25 +7,24 @@
   "license": "AGPL-3.0-only",
   "scripts": {
     "dev": "astro dev",
-    "build": "astro build && node -e \"require('node:fs').writeFileSync('dist/.assetsignore','_worker.js\\n_routes.json\\n')\"",
+    "build": "astro build",
     "preview": "astro preview",
     "astro": "astro",
-    "typecheck": "astro check"
+    "typecheck": "wrangler types && astro check"
   },
   "dependencies": {
-    "@astrojs/cloudflare": "^11.0.4",
-    "@astrojs/mdx": "^3.1.9",
-    "@astrojs/tailwind": "^5.1.4",
+    "@astrojs/cloudflare": "^14.4.4",
+    "@astrojs/mdx": "^8.1.2",
     "@fontsource/inter": "^5.1.1",
     "@fontsource/jetbrains-mono": "^5.1.2",
-    "astro": "^4.16.18",
+    "astro": "^7.4.5",
     "marked": "^14.1.4",
-    "tailwindcss": "^3.4.17"
+    "tailwindcss": "^3.4.19"
   },
   "devDependencies": {
-    "@astrojs/check": "^0.9.9",
-    "@types/node": "^20.17.10",
+    "@astrojs/check": "^0.9.12",
+    "@types/node": "^22.20.5",
     "typescript": "^5.7.2",
-    "wrangler": "^4.90.0"
+    "wrangler": "^4.156.2"
   }
 }

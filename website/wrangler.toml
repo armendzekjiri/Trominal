@@ -2,10 +2,12 @@ name = "trominal-website"
 compatibility_date = "2025-01-01"
 compatibility_flags = ["nodejs_compat"]
 
-# Cloudflare Workers + Static Assets. Astro's Cloudflare adapter outputs
-# the SSR worker to `dist/_worker.js/index.js` and the prerendered HTML
-# plus public/ assets to `dist/` directly.
-main = "./dist/_worker.js/index.js"
+# Cloudflare Workers + Static Assets. `astro build` writes the Worker to
+# `dist/server/` and the prerendered HTML plus public/ assets to
+# `dist/client/`, and emits `dist/server/wrangler.json` (derived from this
+# file, with `main`/`assets.directory` rewritten). `wrangler deploy` finds it
+# via `.wrangler/deploy/config.json`, so deploy from website/ after a build.
+main = "@astrojs/cloudflare/entrypoints/server"
 
 [assets]
 directory = "./dist"

@@ -10,23 +10,23 @@ A static-first marketing/docs site at `https://trominal.app` that explains Tromi
 
 ## Stack (locked)
 
-| Decision        | Value                                                                |
-| --------------- | -------------------------------------------------------------------- |
-| Framework       | **Astro 5** (`output: 'hybrid'`)                                     |
-| Adapter         | **`@astrojs/cloudflare`** (Cloudflare Pages + Workers)               |
-| Content authoring | **MDX** for in-website pages, **markdown sourced from `/docs/*.md`** for docs section |
-| Styling         | **Tailwind 3** + a hand-written `global.css` with CSS custom properties |
-| Fonts           | **`@fontsource/inter` + `@fontsource/jetbrains-mono`** (self-hosted, no Google Fonts) |
-| Analytics       | **Cloudflare Real User Measurements (RUM)** auto-injected at the zone level (no cookies, no fingerprinting). `Base.astro` deliberately does not include a manual beacon — Cloudflare's edge injects it. |
-| Live data       | `/api/stats.json` Worker route, **KV-cached 10 min** (`TROMINAL_STATS` namespace) |
-| Domain          | `trominal.app`                                                        |
-| License banner  | **AGPL-3.0** — never "MIT" anywhere                                  |
+| Decision          | Value                                                                                                                                                                                                   |
+| ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Framework         | **Astro 7** (`output: 'static'` + on-demand `/api/*`; upgrade from Astro 4/5 approved by the maintainer 2026-11-02). Requires **Node ≥ 22.23.4**                                                        |
+| Adapter           | **`@astrojs/cloudflare` 14** (Cloudflare Workers + static assets; `prerenderEnvironment: 'node'` so build-time pages can read repo markdown via `node:fs`)                                              |
+| Content authoring | **MDX** for in-website pages, **markdown sourced from `/docs/*.md`** for docs section                                                                                                                   |
+| Styling           | **Tailwind 3** (wired as a PostCSS plugin in `astro.config.mjs`; `@astrojs/tailwind` doesn't support Astro 6+) + a hand-written `global.css` with CSS custom properties                                 |
+| Fonts             | **`@fontsource/inter` + `@fontsource/jetbrains-mono`** (self-hosted, no Google Fonts)                                                                                                                   |
+| Analytics         | **Cloudflare Real User Measurements (RUM)** auto-injected at the zone level (no cookies, no fingerprinting). `Base.astro` deliberately does not include a manual beacon — Cloudflare's edge injects it. |
+| Live data         | `/api/stats.json` Worker route, **KV-cached 10 min** (`TROMINAL_STATS` namespace)                                                                                                                       |
+| Domain            | `trominal.app`                                                                                                                                                                                          |
+| License banner    | **AGPL-3.0** — never "MIT" anywhere                                                                                                                                                                     |
 
 ## File layout
 
 ```
 website/
-├── astro.config.mjs           # hybrid mode, Cloudflare adapter, MDX, sitemap, Tailwind
+├── astro.config.mjs           # static output, Cloudflare adapter, MDX, Tailwind (PostCSS)
 ├── tailwind.config.mjs        # design tokens mirroring global.css custom props
 ├── wrangler.toml              # Cloudflare config, KV binding for TROMINAL_STATS
 ├── design-reference/          # original HTML/CSS/JS reference — DO NOT MODIFY
@@ -115,6 +115,7 @@ There is no fake data. Stars/contributors/release date all come from the live Gi
 - **`design-reference/` is read-only.** It's the original visual source. Reference it; don't modify it.
 - **Versioned data lives in code, not strings.** Anything that says "v1.4.2" must come from `fetchGithubStats()` or a build-time release lookup, never a hardcoded value in markup.
 - **Server endpoint files (`src/pages/api/*`)** must export `prerender = false`. Static pages should keep the default (or set `prerender = true` explicitly when reading repo files at build time).
+- **Worker bindings** (KV, vars, secrets) are read with `import { env } from 'cloudflare:workers'` — `Astro.locals.runtime` no longer exists. `pnpm --filter @trominal/website typecheck` runs `wrangler types` first to generate the (gitignored) `worker-configuration.d.ts`.
 
 ## Local dev
 
@@ -128,10 +129,10 @@ pnpm --filter @trominal/website dev
 
 ## Deploy
 
-See `website/README.md` for the full Cloudflare Pages setup walkthrough. Short version:
+See `website/README.md` for the full Cloudflare Workers Builds setup walkthrough. Short version:
 
-1. Connect the GitHub repo to Cloudflare Pages with build dir `website/`, build cmd `pnpm install --frozen-lockfile && pnpm --filter @trominal/website build`, output `website/dist`.
-2. Bind the `TROMINAL_STATS` KV namespace to the Pages project.
+1. Workers Builds project `trominal-website`, root `/`, build cmd `pnpm --filter @trominal/website build`, deploy cmd `pnpm --filter @trominal/website exec wrangler deploy`, Node ≥ 22.23.4 (`NODE_VERSION` build variable). The build writes `dist/client/` (assets) and `dist/server/` (Worker + generated `wrangler.json`); `wrangler deploy` picks the generated config up via `.wrangler/deploy/config.json`.
+2. `TROMINAL_STATS` KV is bound in `wrangler.toml`.
 3. Add `trominal.app` as the custom domain.
 4. Set `GITHUB_REPO=armendzekjiri/Trominal` (already in `wrangler.toml`) and optionally `GITHUB_TOKEN` for higher rate limits.
 5. Push to `main` → auto-deploy.

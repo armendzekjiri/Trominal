@@ -1,4 +1,5 @@
 import type { APIRoute } from 'astro'
+import { env } from 'cloudflare:workers'
 import { fetchGithubStats, FALLBACK_STATS, type GithubStats } from '@/lib/github'
 
 export const prerender = false
@@ -26,11 +27,12 @@ function jsonResponse(stats: GithubStats, source: 'fresh' | 'cache' | 'fallback'
   })
 }
 
-export const GET: APIRoute = async ({ locals }) => {
-  const env = (locals as { runtime?: { env?: { TROMINAL_STATS?: KVNamespace; GITHUB_TOKEN?: string } } })
-    .runtime?.env
-  const kv = env?.TROMINAL_STATS
-  const token = env?.GITHUB_TOKEN
+export const GET: APIRoute = async () => {
+  // Bindings come from wrangler.toml; GITHUB_TOKEN is an optional secret.
+  const { TROMINAL_STATS: kv, GITHUB_TOKEN: token } = env as {
+    TROMINAL_STATS?: KVNamespace
+    GITHUB_TOKEN?: string
+  }
 
   // 1. Try the cache.
   if (kv) {
