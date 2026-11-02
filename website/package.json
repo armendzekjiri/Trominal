@@ -18,7 +18,7 @@
     "@astrojs/tailwind": "^5.1.4",
     "@fontsource/inter": "^5.1.1",
     "@fontsource/jetbrains-mono": "^5.1.2",
-    "astro": "^4.16.18",
+    "astro": "^7.3.3",
     "marked": "^14.1.4",
     "tailwindcss": "^3.4.17"
   },
