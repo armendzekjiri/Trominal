@@ -48,7 +48,8 @@ final class SshTokenTest extends TestCase
         self::assertSame('127.0.0.1', $record->ip_address);
         self::assertNotNull($record->expires_at);
         self::assertTrue($record->expires_at->isFuture());
-        self::assertStringContainsString('/ws/ssh?token=', (string) $response->json('websocket_url'));
+        self::assertStringEndsWith('/ws/ssh', (string) $response->json('websocket_url'));
+        self::assertStringNotContainsString($plainToken, (string) $response->json('websocket_url'));
         self::assertTrue(AuditLog::query()->where('action', 'ssh.token.created')->exists());
     }
 
@@ -82,10 +83,7 @@ final class SshTokenTest extends TestCase
             'host_id' => $host->id,
         ], $this->bearerHeaders($user));
 
-        self::assertStringStartsWith(
-            'wss://ssh.example.test/ws/ssh?token=',
-            (string) $response->json('websocket_url'),
-        );
+        self::assertSame('wss://ssh.example.test/ws/ssh', (string) $response->json('websocket_url'));
     }
 
     public function test_ssh_tokens_reject_ip_mismatches(): void
@@ -99,6 +97,87 @@ final class SshTokenTest extends TestCase
         $this->expectExceptionMessage('The SSH session token is invalid or expired.');
 
         app(SshTokenVerifier::class)->consume((string) $response->json('token'), '192.0.2.10');
+    }
+
+    public function test_ssh_tokens_fail_closed_when_the_client_address_is_unknown(): void
+    {
+        $user = $this->userWithRole('user');
+        $host = $this->createHost($user);
+        $response = $this->postJson('/api/v1/ws/ssh-token', [
+            'host_id' => $host->id,
+        ], $this->bearerHeaders($user));
+
+        $this->expectExceptionMessage('The SSH session token is invalid or expired.');
+
+        app(SshTokenVerifier::class)->consume((string) $response->json('token'), null);
+    }
+
+    public function test_ssh_tokens_without_a_recorded_address_are_rejected_when_ip_binding_is_enabled(): void
+    {
+        $user = $this->userWithRole('user');
+        $host = $this->createHost($user);
+        $response = $this->postJson('/api/v1/ws/ssh-token', [
+            'host_id' => $host->id,
+        ], $this->bearerHeaders($user));
+        WsSessionToken::query()->update(['ip_address' => null]);
+
+        $this->expectExceptionMessage('The SSH session token is invalid or expired.');
+
+        app(SshTokenVerifier::class)->consume((string) $response->json('token'), '127.0.0.1');
+    }
+
+    public function test_ssh_token_ip_binding_can_be_disabled_explicitly(): void
+    {
+        config(['trominal.web_ssh_bind_ip' => false]);
+
+        $user = $this->userWithRole('user');
+        $host = $this->createHost($user);
+        $response = $this->postJson('/api/v1/ws/ssh-token', [
+            'host_id' => $host->id,
+        ], $this->bearerHeaders($user));
+
+        $token = app(SshTokenVerifier::class)->consume((string) $response->json('token'), '192.0.2.10');
+
+        self::assertNotNull($token->consumed_at);
+    }
+
+    public function test_ssh_token_ip_binding_treats_mapped_ipv6_as_the_same_address(): void
+    {
+        $user = $this->userWithRole('user');
+        $host = $this->createHost($user);
+        $response = $this->postJson('/api/v1/ws/ssh-token', [
+            'host_id' => $host->id,
+        ], $this->bearerHeaders($user));
+
+        $token = app(SshTokenVerifier::class)->consume((string) $response->json('token'), '::ffff:127.0.0.1');
+
+        self::assertNotNull($token->consumed_at);
+    }
+
+    public function test_ssh_token_ignores_forwarding_headers_from_untrusted_peers(): void
+    {
+        $user = $this->userWithRole('user');
+        $host = $this->createHost($user);
+
+        $this->postJson('/api/v1/ws/ssh-token', [
+            'host_id' => $host->id,
+        ], [...$this->bearerHeaders($user), 'X-Forwarded-For' => '198.51.100.20'])->assertCreated();
+
+        self::assertSame('127.0.0.1', WsSessionToken::query()->firstOrFail()->ip_address);
+    }
+
+    public function test_ssh_token_uses_forwarded_address_from_configured_trusted_proxies(): void
+    {
+        config(['trustedproxy.proxies' => ['127.0.0.1']]);
+
+        $user = $this->userWithRole('user');
+        $host = $this->createHost($user);
+
+        $this->postJson('/api/v1/ws/ssh-token', [
+            'host_id' => $host->id,
+        ], [...$this->bearerHeaders($user), 'X-Forwarded-For' => '198.51.100.20'])->assertCreated();
+
+        self::assertSame('198.51.100.20', WsSessionToken::query()->firstOrFail()->ip_address);
     }
 
     public function test_rejects_web_ssh_tokens_for_unowned_hosts(): void
