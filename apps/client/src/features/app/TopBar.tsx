@@ -6,7 +6,13 @@ import { Dot } from '@/components/ui/dot'
 import { Kbd } from '@/components/ui/kbd'
 import { cn } from '@/lib/cn'
 import { isTauri } from '@/lib/platform'
-import { formatShortcut, isMac, isTerminalFocused, matchesShortcut } from '@/lib/shortcuts'
+import {
+  formatShortcut,
+  isMac,
+  isTerminalFocused,
+  matchesShortcut,
+  sessionNumber,
+} from '@/lib/shortcuts'
 import { useHosts } from '@/features/vault/hooks'
 import { statusToDot, tabTitle, useTerminalActions } from '@/features/terminal/use-terminal-actions'
 import { useAuth } from '@/stores/auth'
@@ -122,9 +128,13 @@ function SessionTabs({ onTerminal }: { onTerminal: boolean }) {
   const currentId = activeId ?? tabs[0]?.id ?? null
   useSessionShortcuts()
 
-  return tabs.map((tab) => {
+  return tabs.map((tab, index) => {
     const isActive = onTerminal && tab.id === currentId
     const title = tabTitle(tab)
+    const target = tab.kind === 'host' ? `${tab.host.username}@${tab.host.hostname}` : title
+    // ⌘⌥1–9 / Alt+1–9 jump to the first nine tabs; the tooltip names the exact key.
+    const jumpKey =
+      index < 9 ? formatShortcut('terminal.goto').replace('1–9', String(index + 1)) : null
     return (
       <div
         key={tab.id}
@@ -140,7 +150,7 @@ function SessionTabs({ onTerminal }: { onTerminal: boolean }) {
             navigate('/terminal')
           }}
           aria-current={isActive ? 'page' : undefined}
-          title={tab.kind === 'host' ? `${tab.host.username}@${tab.host.hostname}` : title}
+          title={jumpKey === null ? target : `${target} (${jumpKey})`}
           className="flex h-full min-w-0 items-center gap-2 pl-3 pr-1"
         >
           <Dot state={statusToDot(tab.status)} size={6} />
@@ -150,6 +160,7 @@ function SessionTabs({ onTerminal }: { onTerminal: boolean }) {
           type="button"
           onClick={() => closeTab(tab.id)}
           aria-label={`Close ${title}`}
+          title={`Close (${formatShortcut('terminal.close')})`}
           className={cn(
             'mr-1.5 shrink-0 rounded-xs p-0.5 text-fg-faint hover:bg-surface-3 hover:text-fg focus-visible:opacity-100 group-hover:opacity-100',
             isActive ? 'opacity-100' : 'opacity-0',
@@ -272,15 +283,16 @@ function NewSessionMenu() {
 }
 
 /**
- * ⌘T, ⌘⇧[ / ⌘⇧] and the native menu's Ctrl+Tab events, from any section. Switching a tab
- * also brings you to the terminal.
+ * Session shortcuts from any section: ⌘T new, ⌘W close, ⌘⇧[ / ⌘⇧] cycle, ⌘⌥1–9 jump, plus
+ * the native Tab menu's events (on macOS the menu owns ⌘T and ⌘W, so they arrive as events).
+ * Switching a tab also brings you to the terminal.
  */
 function useSessionShortcuts(): void {
   const navigate = useNavigate()
-  const { addLocalTab } = useTerminalActions()
-  const addLocalTabRef = useRef(addLocalTab)
+  const { addLocalTab, closeTab } = useTerminalActions()
+  const actionsRef = useRef({ addLocalTab, closeTab })
   useEffect(() => {
-    addLocalTabRef.current = addLocalTab
+    actionsRef.current = { addLocalTab, closeTab }
   })
 
   useEffect(() => {
@@ -298,14 +310,41 @@ function useSessionShortcuts(): void {
       navigate('/terminal')
     }
 
+    function goTo(number: number): void {
+      const { tabs, setActive } = useTerminalTabs.getState()
+      const target = tabs[number - 1]
+      if (target === undefined) return
+      setActive(target.id)
+      navigate('/terminal')
+    }
+
+    function newLocal(): void {
+      navigate('/terminal')
+      actionsRef.current.addLocalTab()
+    }
+
+    /** Closes the session you're looking at; does nothing outside the terminal. */
+    function closeCurrent(): void {
+      if (!window.location.pathname.startsWith('/terminal')) return
+      const { tabs, activeId } = useTerminalTabs.getState()
+      const current = tabs.find((tab) => tab.id === activeId) ?? tabs[0]
+      if (current !== undefined) actionsRef.current.closeTab(current.id)
+    }
+
     function onKeyDown(event: KeyboardEvent): void {
       if (useCommandUi.getState().open !== null) return
       // Windows/Linux: Ctrl chords typed into the shell stay with the shell.
       if (!isMac && isTerminalFocused(event.target)) return
-      if (matchesShortcut(event, 'terminal.newLocal')) {
+      const number = sessionNumber(event)
+      if (number !== null) {
         event.preventDefault()
-        navigate('/terminal')
-        addLocalTabRef.current()
+        goTo(number)
+      } else if (matchesShortcut(event, 'terminal.newLocal')) {
+        event.preventDefault()
+        newLocal()
+      } else if (matchesShortcut(event, 'terminal.close')) {
+        event.preventDefault()
+        closeCurrent()
       } else if (matchesShortcut(event, 'terminal.next')) {
         event.preventDefault()
         cycle(1)
@@ -318,11 +357,14 @@ function useSessionShortcuts(): void {
 
     let disposed = false
     const unlisteners: Array<() => void> = []
-    for (const [event, step] of [
-      ['tab://next', 1],
-      ['tab://prev', -1],
-    ] as const) {
-      void listen(event, () => cycle(step)).then((unlisten) => {
+    const menuEvents: ReadonlyArray<readonly [string, () => void]> = [
+      ['tab://next', () => cycle(1)],
+      ['tab://prev', () => cycle(-1)],
+      ['tab://new-local', newLocal],
+      ['tab://close', closeCurrent],
+    ]
+    for (const [event, handler] of menuEvents) {
+      void listen(event, handler).then((unlisten) => {
         if (disposed) unlisten()
         else unlisteners.push(unlisten)
       })
