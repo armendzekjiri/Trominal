@@ -1,16 +1,5 @@
 ---
-import { fetchGithubStats, FALLBACK_STATS } from '@/lib/github'
-
-let version = FALLBACK_STATS.latestVersion
-try {
-  const stats = await fetchGithubStats()
-  if (stats.latestVersion) version = stats.latestVersion
-} catch {
-  /* fallback */
-}
-
-// Strip leading `v` for display in the docker tag.
-const versionTag = (version ?? 'latest').replace(/^v/, '')
+import { SITE } from '@/lib/site'
 ---
 
 <section class="section">
@@ -21,10 +10,10 @@ const versionTag = (version ?? 'latest').replace(/^v/, '')
     >
       <div>
         <span class="eyebrow">Get started in 2 minutes</span>
-        <h2 style="margin-top:14px">One container. One CLI. Three platforms.</h2>
+        <h2 style="margin-top:14px">Two commands. One server. Every platform.</h2>
         <p class="lede" style="margin-top:14px">
-          Run the server with Docker, point your client at it, and you're connected. The same
-          vault works on macOS, Linux, and Windows — and on the web.
+          Run the server with Docker Compose, point your client at it, and you're connected. The
+          same vault works on macOS, Linux, and Windows — and on the web.
         </p>
         <div style="margin-top:24px;display:flex;gap:10px;flex-wrap:wrap">
           <a href="/install" class="btn btn-primary">Installation guide</a>
@@ -43,24 +32,22 @@ const versionTag = (version ?? 'latest').replace(/^v/, '')
         </div>
         <div class="body">
           <div class="row"><span class="term-c-dim"># Run the Trominal server</span></div>
-          <div class="row"><span class="term-prompt">$</span> docker run -d \</div>
           <div class="row">
-            &nbsp;&nbsp;&nbsp;&nbsp;-p <span class="term-c-yellow">8443</span>:
-            <span class="term-c-yellow">8443</span> \
+            <span class="term-prompt">$</span> git clone <span class="term-c-green">{SITE.github.url}.git</span>
           </div>
-          <div class="row">&nbsp;&nbsp;&nbsp;&nbsp;-v trominal-data:/var/trominal \</div>
+          <div class="row"><span class="term-prompt">$</span> cd Trominal</div>
           <div class="row">
-            &nbsp;&nbsp;&nbsp;&nbsp;ghcr.io/armendzekjiri/trominal:
-            <span class="term-c-cyan" data-version-tag>{versionTag}</span>
+            <span class="term-prompt">$</span> ./docker/setup.sh
+            <span class="term-c-dim"># writes .env with fresh secrets</span>
           </div>
-          <div class="row" style="color:var(--ink-5)">→ trominal listening on :8443</div>
+          <div class="row"><span class="term-prompt">$</span> docker compose up -d</div>
+          <div class="row" style="color:var(--ink-5)">→ trominal up on http://localhost</div>
           <div class="row">&nbsp;</div>
-          <div class="row"><span class="term-c-dim"># Pair the desktop client</span></div>
-          <div class="row">
-            <span class="term-prompt">$</span> trominal pair
-            <span class="term-c-green">https://trominal.acme.internal</span>
+          <div class="row"><span class="term-c-dim"># Open the client</span></div>
+          <div class="row" style="color:var(--ink-3)">
+            → enter <span class="term-c-blue">http://localhost</span> and register
           </div>
-          <div class="row" style="color:var(--accent)">✓ paired as you@acme.io</div>
+          <div class="row" style="color:var(--accent)">✓ first user is admin</div>
           <div class="row">
             <span
               style="display:inline-block;width:7px;height:13px;background:var(--accent);animation:blink 1s step-end infinite"
@@ -71,25 +58,6 @@ const versionTag = (version ?? 'latest').replace(/^v/, '')
     </div>
   </div>
 </section>
-
-<script>
-  // Refresh the docker tag client-side from /api/stats.json.
-  async function refreshTag() {
-    try {
-      const res = await fetch('/api/stats.json', { cache: 'no-store' })
-      if (!res.ok) return
-      const data = (await res.json()) as { latestVersion?: string | null }
-      if (!data.latestVersion) return
-      const tag = data.latestVersion.replace(/^v/, '')
-      document.querySelectorAll<HTMLElement>('[data-version-tag]').forEach((el) => {
-        el.textContent = tag
-      })
-    } catch {
-      /* noop */
-    }
-  }
-  refreshTag()
-</script>
 
 <style>
   @media (max-width: 900px) {
