@@ -106,7 +106,7 @@ export function TopBar() {
         className="flex h-8 w-56 shrink items-center gap-2 rounded-md border border-border bg-surface px-2.5 text-[12px] text-fg-faint transition-colors hover:border-border-strong hover:text-fg-muted"
       >
         <Search size={14} aria-hidden />
-        <span className="min-w-0 flex-1 truncate text-left">Search hosts, commands…</span>
+        <span className="min-w-0 flex-1 truncate text-left">Search…</span>
         <Kbd id="palette" />
       </button>
     </header>
