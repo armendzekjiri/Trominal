@@ -60,12 +60,7 @@ enum SftpError {
 #[tauri::command]
 pub fn sftp_list(request: SftpListRequest) -> Result<SftpListResponse, String> {
     let SftpListRequest { host, remote_path } = request;
-    let path = clean_remote_path(&remote_path);
-    // OpenSSH `sftp` returns absolute names from `ls /path`, so a click on a
-    // child folder would join `/home` + `/home/ubuntu` = `/home//home/ubuntu`.
-    // `cd` first, then a bare `ls -la`, gives plain relative names that the
-    // joinPath helper on the frontend can compose without surprises.
-    let batch = format!("cd {}\nls -la\n", quote_remote(&path));
+    let batch = list_batch(&remote_path)?;
     let stdout = run_sftp_batch(&host, "list", batch.as_bytes())?;
     let entries = parse_sftp_listing(&stdout);
     Ok(SftpListResponse { entries })
@@ -86,10 +81,7 @@ pub fn sftp_remote_home(request: SftpHomeRequest) -> Result<SftpHomeResponse, St
 #[tauri::command]
 pub fn sftp_mkdir(request: SftpPathRequest) -> Result<(), String> {
     let SftpPathRequest { host, remote_path } = request;
-    if remote_path.trim().is_empty() {
-        return Err(SftpError::Operation("remote path is required".to_string()).to_string());
-    }
-    let batch = format!("mkdir {}\n", quote_remote(&remote_path));
+    let batch = mkdir_batch(&remote_path)?;
     run_sftp_batch(&host, "mkdir", batch.as_bytes()).map(|_| ())
 }
 
@@ -100,11 +92,7 @@ pub fn sftp_remove(request: SftpRemoveRequest) -> Result<(), String> {
         remote_path,
         is_dir,
     } = request;
-    if remote_path.trim().is_empty() {
-        return Err(SftpError::Operation("remote path is required".to_string()).to_string());
-    }
-    let cmd = if is_dir { "rmdir" } else { "rm" };
-    let batch = format!("{} {}\n", cmd, quote_remote(&remote_path));
+    let batch = remove_batch(&remote_path, is_dir)?;
     run_sftp_batch(&host, "remove", batch.as_bytes()).map(|_| ())
 }
 
@@ -115,14 +103,7 @@ pub fn sftp_rename(request: SftpRenameRequest) -> Result<(), String> {
         from_path,
         to_path,
     } = request;
-    if from_path.trim().is_empty() || to_path.trim().is_empty() {
-        return Err(SftpError::Operation("rename paths are required".to_string()).to_string());
-    }
-    let batch = format!(
-        "rename {} {}\n",
-        quote_remote(&from_path),
-        quote_remote(&to_path)
-    );
+    let batch = rename_batch(&from_path, &to_path)?;
     run_sftp_batch(&host, "rename", batch.as_bytes()).map(|_| ())
 }
 
@@ -138,14 +119,7 @@ pub fn sftp_upload(
         local_path,
         remote_path,
     } = request;
-    if local_path.trim().is_empty() || remote_path.trim().is_empty() {
-        return Err(SftpError::Operation("transfer paths are required".to_string()).to_string());
-    }
-    let batch = format!(
-        "put {} {}\n",
-        quote_local(&local_path),
-        quote_remote(&remote_path)
-    );
+    let batch = upload_batch(&local_path, &remote_path)?;
     spawn_transfer(app, state, transfer_id, host, "upload", batch)
 }
 
@@ -161,14 +135,7 @@ pub fn sftp_download(
         local_path,
         remote_path,
     } = request;
-    if local_path.trim().is_empty() || remote_path.trim().is_empty() {
-        return Err(SftpError::Operation("transfer paths are required".to_string()).to_string());
-    }
-    let batch = format!(
-        "get {} {}\n",
-        quote_remote(&remote_path),
-        quote_local(&local_path)
-    );
+    let batch = download_batch(&remote_path, &local_path)?;
     spawn_transfer(app, state, transfer_id, host, "download", batch)
 }
 
@@ -438,14 +405,78 @@ fn require_transfer_id(transfer_id: String) -> Result<String, String> {
     Ok(trimmed.to_string())
 }
 
+// ---------- Batch script construction ----------
+//
+// `sftp -b -` reads one command per line, so every path that reaches a batch
+// line goes through `batch_arg`. Each builder returns exactly one command
+// line (plus the trailing `ls -la` for listings).
+
+/// List `remote_path` (or the login directory when empty). OpenSSH `sftp`
+/// returns absolute names from `ls /path`, so a click on a child folder
+/// would join `/home` + `/home/ubuntu` = `/home//home/ubuntu`. `cd` first,
+/// then a bare `ls -la`, gives plain relative names that the joinPath helper
+/// on the frontend can compose without surprises.
+pub(crate) fn list_batch(remote_path: &str) -> Result<String, String> {
+    let path = clean_remote_path(remote_path);
+    Ok(format!("cd {}\nls -la\n", batch_arg(&path)?))
+}
+
+pub(crate) fn mkdir_batch(remote_path: &str) -> Result<String, String> {
+    require_path(remote_path, "remote path is required")?;
+    Ok(format!("mkdir {}\n", batch_arg(remote_path)?))
+}
+
+pub(crate) fn remove_batch(remote_path: &str, is_dir: bool) -> Result<String, String> {
+    require_path(remote_path, "remote path is required")?;
+    let cmd = if is_dir { "rmdir" } else { "rm" };
+    Ok(format!("{cmd} {}\n", batch_arg(remote_path)?))
+}
+
+pub(crate) fn rename_batch(from_path: &str, to_path: &str) -> Result<String, String> {
+    require_path(from_path, "rename paths are required")?;
+    require_path(to_path, "rename paths are required")?;
+    Ok(format!(
+        "rename {} {}\n",
+        batch_arg(from_path)?,
+        batch_arg(to_path)?
+    ))
+}
+
+pub(crate) fn upload_batch(local_path: &str, remote_path: &str) -> Result<String, String> {
+    require_path(local_path, "transfer paths are required")?;
+    require_path(remote_path, "transfer paths are required")?;
+    Ok(format!(
+        "put {} {}\n",
+        batch_arg(local_path)?,
+        batch_arg(remote_path)?
+    ))
+}
+
+pub(crate) fn download_batch(remote_path: &str, local_path: &str) -> Result<String, String> {
+    require_path(remote_path, "transfer paths are required")?;
+    require_path(local_path, "transfer paths are required")?;
+    Ok(format!(
+        "get {} {}\n",
+        batch_arg(remote_path)?,
+        batch_arg(local_path)?
+    ))
+}
+
+fn require_path(path: &str, message: &str) -> Result<(), String> {
+    if path.trim().is_empty() {
+        return Err(SftpError::Operation(message.to_string()).to_string());
+    }
+    Ok(())
+}
+
+/// Encode one path as a single `sftp -b` argument.
+pub(crate) fn batch_arg(path: &str) -> Result<String, String> {
+    Ok(quote_remote(path))
+}
+
 /// Quote a remote path for `sftp -b` so spaces and shell metacharacters survive.
 fn quote_remote(path: &str) -> String {
     format!("\"{}\"", path.replace('"', "\\\""))
-}
-
-/// Quote a local path the same way; sftp uses the same parser for both sides.
-fn quote_local(path: &str) -> String {
-    quote_remote(path)
 }
 
 fn clean_remote_path(path: &str) -> String {
@@ -722,7 +753,10 @@ fn entry_kind_from_perms(perms: &str) -> &'static str {
 
 #[cfg(test)]
 mod tests {
-    use super::{extract_pwd_path, parse_sftp_listing, quote_remote};
+    use super::{
+        batch_arg, download_batch, extract_pwd_path, list_batch, mkdir_batch, parse_sftp_listing,
+        remove_batch, rename_batch, upload_batch,
+    };
 
     #[test]
     fn extracts_pwd_path_from_openssh_output() {
@@ -775,12 +809,187 @@ mod tests {
     }
 
     #[test]
-    fn quotes_remote_paths() {
-        assert_eq!(quote_remote("/srv/app"), "\"/srv/app\"");
-        assert_eq!(quote_remote("with space"), "\"with space\"");
+    fn quotes_batch_paths() {
+        assert_eq!(batch_arg("/srv/app").unwrap(), "\"/srv/app\"");
+        assert_eq!(batch_arg("with space").unwrap(), "\"with space\"");
         assert_eq!(
-            quote_remote("with \"quote\""),
+            batch_arg("with \"quote\"").unwrap(),
             "\"with \\\"quote\\\"\""
         );
+    }
+
+    #[test]
+    fn escapes_backslashes_before_quotes() {
+        // A trailing backslash must not swallow the closing quote, and a
+        // backslash before a quote must not turn into an escaped quote.
+        assert_eq!(batch_arg("/tmp/a\\").unwrap(), "\"/tmp/a\\\\\"");
+        assert_eq!(batch_arg("/tmp/a\\\"b").unwrap(), "\"/tmp/a\\\\\\\"b\"");
+        assert_eq!(
+            batch_arg("C:\\Users\\me\\file.txt").unwrap(),
+            "\"C:\\\\Users\\\\me\\\\file.txt\""
+        );
+    }
+
+    #[test]
+    fn keeps_glob_and_comment_characters_inside_quotes() {
+        // sftp escapes glob metacharacters itself while inside quotes, so
+        // they must stay verbatim; '#' only starts a comment when unquoted.
+        assert_eq!(batch_arg("/srv/a*b?[c]").unwrap(), "\"/srv/a*b?[c]\"");
+        assert_eq!(batch_arg("/srv/x #y").unwrap(), "\"/srv/x #y\"");
+        assert_eq!(batch_arg("/srv/it's").unwrap(), "\"/srv/it's\"");
+    }
+
+    #[test]
+    fn rejects_line_breaks_and_control_characters() {
+        for path in [
+            "/srv/a\nrm /etc/passwd",
+            "/srv/a\rb",
+            "/srv/a\r\nb",
+            "/srv/a\0b",
+            "/srv/a\tb",
+            "/srv/a\u{1b}[31m",
+            "/srv/a\u{7f}",
+            "/srv/a\u{85}b",
+        ] {
+            assert!(batch_arg(path).is_err(), "{path:?} must be rejected");
+        }
+        assert!(upload_batch("/tmp/ok", "/srv/a\nput /etc/shadow x").is_err());
+        assert!(download_batch("/srv/ok", "/tmp/a\nb").is_err());
+        assert!(rename_batch("/srv/a", "/srv/b\nrm /srv/c").is_err());
+        assert!(mkdir_batch("/srv/a\n").is_err());
+        assert!(remove_batch("/srv/a\nrm /srv/b", false).is_err());
+        assert!(list_batch("/srv\nrm x").is_err());
+    }
+
+    #[test]
+    fn leading_hyphen_is_never_parsed_as_a_flag() {
+        assert_eq!(batch_arg("-rf").unwrap(), "\"./-rf\"");
+        assert_eq!(batch_arg("/srv/-rf").unwrap(), "\"/srv/-rf\"");
+        assert_eq!(remove_batch("-r", true).unwrap(), "rmdir \"./-r\"\n");
+    }
+
+    #[test]
+    fn keeps_non_ascii_and_lossy_decoded_names_intact() {
+        // Non-UTF-8 remote names reach us lossily decoded (U+FFFD); they must
+        // pass through verbatim so the command targets nothing else.
+        assert_eq!(batch_arg("/srv/caf\u{e9}").unwrap(), "\"/srv/caf\u{e9}\"");
+        assert_eq!(
+            batch_arg("/srv/bad\u{fffd}name").unwrap(),
+            "\"/srv/bad\u{fffd}name\""
+        );
+    }
+
+    #[test]
+    fn every_builder_emits_single_command_lines() {
+        let hostile = "/srv/we\"ird\\ na*me #1";
+        for batch in [
+            mkdir_batch(hostile).unwrap(),
+            remove_batch(hostile, false).unwrap(),
+            remove_batch(hostile, true).unwrap(),
+            rename_batch(hostile, hostile).unwrap(),
+            upload_batch(hostile, hostile).unwrap(),
+            download_batch(hostile, hostile).unwrap(),
+        ] {
+            assert_eq!(batch.matches('\n').count(), 1, "{batch:?}");
+            assert!(batch.ends_with('\n'));
+        }
+        assert_eq!(list_batch(hostile).unwrap().matches('\n').count(), 2);
+        assert_eq!(list_batch("  ").unwrap(), "cd \".\"\nls -la\n");
+    }
+
+    /// Runs the generated batch lines through the real OpenSSH `sftp`
+    /// parser against a local `sftp-server` (no network, no ssh). Skipped
+    /// when this machine has no sftp-server binary.
+    #[cfg(unix)]
+    #[test]
+    fn real_sftp_parser_round_trips_adversarial_names() {
+        use std::fs;
+        use std::io::Write;
+        use std::process::{Command, Stdio};
+
+        let Some(server) = [
+            "/usr/libexec/sftp-server",
+            "/usr/lib/openssh/sftp-server",
+            "/usr/libexec/openssh/sftp-server",
+            "/usr/lib/ssh/sftp-server",
+        ]
+        .into_iter()
+        .find(|path| std::path::Path::new(path).is_file()) else {
+            eprintln!("skipping: no sftp-server binary found");
+            return;
+        };
+
+        let root = std::env::temp_dir().join(format!(
+            "trominal-sftp-parser-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        let remote = root.join("remote");
+        let local = root.join("local");
+        fs::create_dir_all(&remote).unwrap();
+        fs::create_dir_all(&local).unwrap();
+
+        let names = [
+            "a*b", "l?m", "n[o]", "back\\slash", "tail\\", "q\"uote", "-rf", "sp ace", "h#sh",
+            "it's",
+        ];
+        // Decoys that a mis-parsed glob or split argument would hit.
+        for decoy in ["ab", "axb", "lxm", "no", "backslash", "q"] {
+            fs::write(remote.join(decoy), "decoy").unwrap();
+        }
+        let mut batch = String::new();
+        for (index, name) in names.iter().enumerate() {
+            let r = |suffix: &str| format!("{}/{name}{suffix}", remote.display());
+            let l = |suffix: &str| format!("{}/{name}{suffix}", local.display());
+            fs::write(local.join(name), format!("payload-{index}")).unwrap();
+            batch.push_str(&upload_batch(&l(""), &r("")).unwrap());
+            batch.push_str(&download_batch(&r(""), &l(".down")).unwrap());
+            batch.push_str(&mkdir_batch(&r(".dir")).unwrap());
+            batch.push_str(&list_batch(&r(".dir")).unwrap());
+            batch.push_str(&rename_batch(&r(".dir"), &r(".moved")).unwrap());
+            batch.push_str(&remove_batch(&r(".moved"), true).unwrap());
+            batch.push_str(&rename_batch(&r(""), &r(".renamed")).unwrap());
+            batch.push_str(&remove_batch(&r(".renamed"), false).unwrap());
+        }
+
+        let mut child = Command::new("sftp")
+            .arg("-D")
+            .arg(server)
+            .arg("-b")
+            .arg("-")
+            .current_dir(&remote)
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn()
+            .expect("spawn sftp");
+        child
+            .stdin
+            .take()
+            .unwrap()
+            .write_all(batch.as_bytes())
+            .unwrap();
+        let output = child.wait_with_output().unwrap();
+        let stderr = String::from_utf8_lossy(&output.stderr).to_string();
+
+        let mut leftovers: Vec<String> = fs::read_dir(&remote)
+            .unwrap()
+            .map(|entry| entry.unwrap().file_name().to_string_lossy().into_owned())
+            .collect();
+        leftovers.sort();
+        let downloads: Vec<String> = names
+            .iter()
+            .map(|name| fs::read_to_string(local.join(format!("{name}.down"))).unwrap_or_default())
+            .collect();
+        let _ = fs::remove_dir_all(&root);
+
+        assert!(output.status.success(), "sftp failed: {stderr}");
+        assert_eq!(leftovers, vec!["ab", "axb", "backslash", "lxm", "no", "q"]);
+        for (index, contents) in downloads.iter().enumerate() {
+            assert_eq!(contents, &format!("payload-{index}"), "{}", names[index]);
+        }
     }
 }
