@@ -1,36 +1,145 @@
 name: Client Release
 
+# Builds, signs and publishes a desktop client release from main. It runs when:
+#   - a commit pushed to main has a line starting with `build:` (or `build(scope):`). For
+#     merge and squash commits, the PR title counts.
+#   - someone starts it manually from the Actions tab on main.
+#
+# The signing secrets (Apple Developer ID certificate, App Store Connect API key, Tauri updater
+# key) exist only in the `release` environment. GitHub only lets the main branch use that
+# environment and asks a required reviewer to approve every run. A copy of this workflow
+# edited on another branch, in a pull request or in a fork therefore can't read them, no
+# matter what triggers it. See docs/RELEASE.md.
+
 on:
   push:
-    tags:
-      - 'client-v*.*.*'
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: client-release
+  cancel-in-progress: false
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
+  prepare:
+    name: Prepare
+    # Cheap pre-filter so ordinary pushes to main skip the run; the exact check is below.
+    if: >-
+      github.repository == 'armendzekjiri/Trominal' &&
+      github.ref == 'refs/heads/main' &&
+      (github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, 'build'))
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      release: ${{ steps.trigger.outputs.release }}
+      version: ${{ steps.version.outputs.version }}
+      tag: ${{ steps.version.outputs.tag }}
+      prerelease: ${{ steps.version.outputs.prerelease }}
+      previous_tag: ${{ steps.version.outputs.previous_tag }}
+    steps:
+      - name: Check trigger
+        id: trigger
+        env:
+          EVENT: ${{ github.event_name }}
+          MESSAGE: ${{ github.event.head_commit.message }}
+        run: |
+          if [[ "$EVENT" == workflow_dispatch ]] || grep -qE '^build(\([^)]*\))?!?:' <<<"$MESSAGE"; then
+            echo "release=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "No line of the head commit message starts with 'build:', skipping the release."
+            echo "release=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Checkout
+        if: steps.trigger.outputs.release == 'true'
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+
+      - name: Resolve version
+        id: version
+        if: steps.trigger.outputs.release == 'true'
+        run: |
+          version="$(jq -r .version apps/client/src-tauri/tauri.conf.json)"
+          if ! [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]]; then
+            echo "::error file=apps/client/src-tauri/tauri.conf.json::'$version' is not a SemVer version."
+            exit 1
+          fi
+          tag="client-v$version"
+          tags="$(git ls-remote --tags --refs origin 'refs/tags/client-v*' | sed 's|.*refs/tags/||')"
+          if grep -qxF "$tag" <<<"$tags"; then
+            echo "::error file=apps/client/src-tauri/tauri.conf.json::$tag already exists. Bump \"version\" in apps/client/src-tauri/tauri.conf.json, then push a new build: commit."
+            exit 1
+          fi
+          prerelease=false
+          [[ "$version" == *-* ]] && prerelease=true
+          {
+            echo "version=$version"
+            echo "tag=$tag"
+            echo "prerelease=$prerelease"
+            echo "previous_tag=$(sort -V <<<"$tags" | tail -n1)"
+          } >> "$GITHUB_OUTPUT"
+          echo "Releasing $tag (prerelease: $prerelease)"
+
+  create-release:
+    name: Create draft release
+    needs: prepare
+    if: needs.prepare.outputs.release == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write
+    outputs:
+      id: ${{ steps.draft.outputs.id }}
+    steps:
+      - name: Create draft
+        id: draft
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          TAG: ${{ needs.prepare.outputs.tag }}
+          VERSION: ${{ needs.prepare.outputs.version }}
+          PRERELEASE: ${{ needs.prepare.outputs.prerelease }}
+          PREVIOUS_TAG: ${{ needs.prepare.outputs.previous_tag }}
+        run: |
+          # Drafts have no git tag yet, so the tag check in Prepare can't see them.
+          if gh api "repos/$GH_REPO/releases" --paginate --jq '.[].tag_name' | grep -qxF "$TAG"; then
+            echo "::error::A release for $TAG already exists (possibly a leftover draft). Delete it or bump the version."
+            exit 1
+          fi
+          args=(--draft --target "$GITHUB_SHA" --title "Trominal Client $VERSION" --generate-notes
+                --notes "Desktop installers, updater signatures and latest.json for Trominal Client $VERSION. The macOS build is a universal binary, signed with Developer ID and notarized by Apple.")
+          [[ -n "$PREVIOUS_TAG" ]] && args+=(--notes-start-tag "$PREVIOUS_TAG")
+          [[ "$PRERELEASE" == true ]] && args+=(--prerelease)
+          gh release create "$TAG" "${args[@]}"
+          id="$(gh api "repos/$GH_REPO/releases" --jq ".[] | select(.draft and .tag_name == \"$TAG\") | .id" | head -n1)"
+          [[ -n "$id" ]] || { echo "::error::Draft release for $TAG not found after creating it."; exit 1; }
+          echo "id=$id" >> "$GITHUB_OUTPUT"
+
   web:
     name: Web build
+    needs: prepare
+    if: needs.prepare.outputs.release == 'true'
     runs-on: ubuntu-latest
-
+    timeout-minutes: 15
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Resolve client version
-        id: version
-        shell: bash
-        run: echo "version=${GITHUB_REF_NAME#client-v}" >> "$GITHUB_OUTPUT"
-
-      - name: Setup Node
-        uses: actions/setup-node@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
-          node-version: 20
+          persist-credentials: false
 
       - name: Setup pnpm
-        uses: pnpm/action-setup@v4
+        uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4
         with:
           version: 9.15.9
+
+      - name: Setup Node
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 20
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
@@ -39,63 +148,126 @@ jobs:
         run: pnpm --dir apps/client build
 
       - name: Upload web dist
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          name: trominal-web-dist-${{ steps.version.outputs.version }}
+          name: trominal-web-dist-${{ needs.prepare.outputs.version }}
           path: apps/client/dist
 
-  desktop:
-    name: Desktop bundles
-    runs-on: ${{ matrix.platform }}
+  macos:
+    name: macOS (universal, signed and notarized)
+    needs: [prepare, create-release]
+    runs-on: macos-latest
+    timeout-minutes: 60
+    environment: release
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
 
+      - name: Setup pnpm
+        uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4
+        with:
+          version: 9.15.9
+
+      - name: Setup Node
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 20
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
+        with:
+          toolchain: stable
+          targets: aarch64-apple-darwin,x86_64-apple-darwin
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Write App Store Connect API key
+        env:
+          APPLE_API_KEY_P8: ${{ secrets.APPLE_API_KEY_P8 }}
+        run: |
+          key="$RUNNER_TEMP/AuthKey.p8"
+          (umask 077 && printf '%s\n' "$APPLE_API_KEY_P8" > "$key")
+          echo "APPLE_API_KEY_PATH=$key" >> "$GITHUB_ENV"
+
+      - name: Build, sign, notarize and upload
+        uses: tauri-apps/tauri-action@84b9d35b5fc46c1e45415bdb6144030364f7ebc5 # v0.6.2
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
+          APPLE_API_KEY: ${{ secrets.APPLE_API_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        with:
+          projectPath: apps/client
+          releaseId: ${{ needs.create-release.outputs.id }}
+          args: >-
+            --target universal-apple-darwin
+            --config
+            '{"bundle":{"createUpdaterArtifacts":true},"plugins":{"updater":{"pubkey":"${{ secrets.TAURI_UPDATER_PUBKEY }}","endpoints":["https://github.com/${{ github.repository }}/releases/latest/download/latest.json"],"windows":{"installMode":"passive"}}}}'
+
+      - name: Verify signature and notarization
+        run: |
+          app="$(find target/universal-apple-darwin/release/bundle/macos -maxdepth 1 -name '*.app' | head -n1)"
+          [[ -n "$app" ]] || { echo "::error::No .app bundle found."; exit 1; }
+          codesign --verify --deep --strict --verbose=2 "$app"
+          xcrun stapler validate "$app"
+          spctl --assess --type execute --verbose=4 "$app" 2>&1 | tee /dev/stderr | grep -q 'source=Notarized Developer ID'
+          lipo -archs "$app/Contents/MacOS/"* | grep -q 'x86_64 arm64'
+
+      - name: Remove API key
+        if: always()
+        run: rm -f "$RUNNER_TEMP/AuthKey.p8"
+
+  desktop:
+    name: ${{ matrix.name }}
+    needs: [prepare, create-release]
+    runs-on: ${{ matrix.platform }}
+    timeout-minutes: 60
+    # Needed for the Tauri updater key only; these jobs never receive the Apple secrets.
+    environment: release
+    permissions:
+      contents: write
     strategy:
       fail-fast: false
       matrix:
         include:
-          - platform: macos-latest
-            args: --target aarch64-apple-darwin
-            rustTargets: aarch64-apple-darwin
-          - platform: macos-latest
-            args: --target x86_64-apple-darwin
-            rustTargets: x86_64-apple-darwin
-          - platform: ubuntu-22.04
+          - name: Linux
+            platform: ubuntu-22.04
             args: --bundles appimage,deb,rpm
-            rustTargets: ''
-          - platform: windows-latest
+          - name: Windows
+            platform: windows-latest
             args: ''
-            rustTargets: ''
-
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Resolve client version
-        id: version
-        shell: bash
-        run: echo "version=${GITHUB_REF_NAME#client-v}" >> "$GITHUB_OUTPUT"
-
-      - name: Setup Node
-        uses: actions/setup-node@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
-          node-version: 20
+          persist-credentials: false
 
       - name: Setup pnpm
-        uses: pnpm/action-setup@v4
+        uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4
         with:
           version: 9.15.9
 
-      - name: Setup Rust
-        if: matrix.rustTargets == ''
-        uses: dtolnay/rust-toolchain@stable
-
-      - name: Setup Rust with target
-        if: matrix.rustTargets != ''
-        uses: dtolnay/rust-toolchain@stable
+      - name: Setup Node
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
-          targets: ${{ matrix.rustTargets }}
+          node-version: 20
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
+        with:
+          toolchain: stable
 
       - name: Install Linux dependencies
-        if: matrix.platform == 'ubuntu-22.04'
+        if: runner.os == 'Linux'
         run: |
           sudo apt-get update
           sudo apt-get install -y libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev patchelf rpm
@@ -103,32 +275,63 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Build and upload desktop bundles
-        uses: tauri-apps/tauri-action@v0
+      - name: Build and upload
+        uses: tauri-apps/tauri-action@84b9d35b5fc46c1e45415bdb6144030364f7ebc5 # v0.6.2
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ github.token }}
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
-          # Apple code signing and notarization are consumed only by macOS matrix jobs.
-          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
-          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
-          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
-          APPLE_ID: ${{ secrets.APPLE_ID }}
-          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
-          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         with:
           projectPath: apps/client
-          tagName: ${{ github.ref_name }}
-          releaseName: Trominal Client ${{ steps.version.outputs.version }}
-          releaseBody: |
-            Desktop installers, updater signatures, and updater latest.json for Trominal Client ${{ steps.version.outputs.version }}.
-
-            The web build is attached to this workflow as the trominal-web-dist-${{ steps.version.outputs.version }} artifact.
-          releaseDraft: true
-          prerelease: ${{ contains(steps.version.outputs.version, '-') }}
-          generateReleaseNotes: true
-          uploadUpdaterJson: true
+          releaseId: ${{ needs.create-release.outputs.id }}
           args: >-
             ${{ matrix.args }}
             --config
-            '{"version":"${{ steps.version.outputs.version }}","bundle":{"createUpdaterArtifacts":true},"plugins":{"updater":{"pubkey":"${{ secrets.TAURI_UPDATER_PUBKEY }}","endpoints":["https://github.com/${{ github.repository }}/releases/latest/download/latest.json"],"windows":{"installMode":"passive"}}}}'
+            '{"bundle":{"createUpdaterArtifacts":true},"plugins":{"updater":{"pubkey":"${{ secrets.TAURI_UPDATER_PUBKEY }}","endpoints":["https://github.com/${{ github.repository }}/releases/latest/download/latest.json"],"windows":{"installMode":"passive"}}}}'
+
+  publish:
+    name: Publish release
+    needs: [prepare, create-release, web, macos, desktop]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write
+    steps:
+      - name: Check latest.json and publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          ID: ${{ needs.create-release.outputs.id }}
+          PRERELEASE: ${{ needs.prepare.outputs.prerelease }}
+        run: |
+          asset="$(gh api "repos/$GH_REPO/releases/$ID" --jq '.assets[] | select(.name == "latest.json") | .id')"
+          [[ -n "$asset" ]] || { echo "::error::latest.json is missing from the draft release."; exit 1; }
+          gh api -H 'Accept: application/octet-stream' "repos/$GH_REPO/releases/assets/$asset" > latest.json
+          for platform in darwin-aarch64 darwin-x86_64 linux-x86_64 windows-x86_64; do
+            jq -e --arg p "$platform" '.platforms[$p].signature | length > 0' latest.json >/dev/null \
+              || { echo "::error::latest.json has no signed entry for $platform."; exit 1; }
+          done
+          # Only stable client releases may become Latest: the desktop updater reads releases/latest.
+          latest=true
+          [[ "$PRERELEASE" == true ]] && latest=false
+          gh api -X PATCH "repos/$GH_REPO/releases/$ID" -F draft=false -F prerelease="$PRERELEASE" -f make_latest="$latest" --jq .html_url
+
+  cleanup:
+    name: Delete draft after failure
+    needs: [create-release, web, macos, desktop, publish]
+    if: always() && needs.create-release.result == 'success' && needs.publish.result != 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write
+    steps:
+      - name: Delete draft
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          ID: ${{ needs.create-release.outputs.id }}
+        run: |
+          if [[ "$(gh api "repos/$GH_REPO/releases/$ID" --jq .draft)" == true ]]; then
+            gh api -X DELETE "repos/$GH_REPO/releases/$ID"
+            echo "Deleted draft release $ID so the next run can reuse the version."
+          fi

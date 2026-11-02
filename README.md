@@ -69,7 +69,7 @@ Full guide: [`docs/SELF_HOSTING.md`](docs/SELF_HOSTING.md).
 Backend and client releases are independent:
 
 - `backend-v0.1.0` publishes `ghcr.io/armendzekjiri/trominal-backend:0.1.0`
-- `client-v0.1.0` builds web and desktop client artifacts
+- a `build: release client 0.1.0` commit on `main` builds, signs and publishes the web and desktop client as `client-v0.1.0` (see [`docs/RELEASE.md`](docs/RELEASE.md#client-release))
 
 ## Development
 

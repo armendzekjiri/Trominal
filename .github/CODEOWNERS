@@ -1,0 +1,3 @@
+# CI and release automation run with the signing secrets, so changes to them need a code owner's
+# approval. The main branch ruleset enforces this; see docs/RELEASE.md.
+/.github/ @armendzekjiri @bbilali
