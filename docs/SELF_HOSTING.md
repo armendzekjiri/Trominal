@@ -56,7 +56,7 @@ The production Compose file runs:
 - `app`: Laravel PHP-FPM for `/api`, `/admin`, and Filament/Livewire
 - `queue`: Redis queue worker from the same backend image
 - `scheduler`: Laravel scheduler from the same backend image
-- `ssh-proxy`: WebSocket SSH proxy from the same backend image
+- `ssh-proxy`: WebSocket SSH proxy from the same backend image (only used when web SSH is enabled; see [Web SSH](#web-ssh-disabled-by-default))
 - `postgres`: PostgreSQL 16
 - `redis`: Redis 7
 - `caddy`: the only container with published ports. PHP-FPM speaks FastCGI, not HTTP, so something has to translate browser requests; Caddy does that, serves static assets, routes `/ws/*` to `ssh-proxy`, and gets TLS certificates automatically when `TROMINAL_SITE_ADDRESS` is a domain.
@@ -188,7 +188,32 @@ Use HTTPS in production. Desktop clients can point at the same base URL.
 
 - Desktop terminal, tunnels, and SFTP use local OS facilities through Tauri.
 - Desktop SSH currently runs through the system `ssh` binary so password and keyboard-interactive prompts work inside the terminal.
-- Web SSH, web tunnels, and web SFTP proxying remain planned follow-up work.
+- The web client's terminal is not available yet. Web tunnels and web SFTP proxying are planned follow-up work.
+
+## Web SSH (disabled by default)
+
+The backend ships a WebSocket SSH proxy (the `ssh-proxy` service) for a future browser terminal. It is **off by default** and stays off unless an admin turns on **Web SSH enabled** under Settings in `/admin`. Leave it off unless you need it. The desktop client is the more secure option.
+
+**If you turn it on, the backend sees SSH credentials in plaintext.** Browsers cannot open raw TCP connections, so the client decrypts the SSH password or private key from the vault and sends it to the proxy over the WebSocket. The proxy keeps it in memory for the length of the session. Anyone who controls the backend (or its code) during a session can read those credentials and the terminal traffic. Web SSH is end-to-end encrypted only between your browser and your server, not zero-knowledge.
+
+What the proxy enforces:
+
+- **Host key pinning.** Every connect must carry the server's expected host key fingerprint (`SHA256:...`, the same format `ssh-keygen -lf` prints), which the client keeps in its encrypted vault. The proxy checks the presented key against it before sending any credential and stops if it doesn't match or no fingerprint was sent. On first use, the client asks the proxy for the presented fingerprint without logging in. You confirm it (compare it with `ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub` on the server), and the client pins it.
+- **Destination binding.** A web SSH token lasts 30 seconds, works once, and is tied to one host entry and the host and port the client said it would connect to. The proxy refuses any other destination.
+- **Egress policy.** The proxy resolves the host name once, connects to exactly the address it checked, and confirms that address after connecting. By default it only connects to public addresses. Loopback, link-local (including cloud metadata endpoints such as `169.254.169.254`), private (RFC 1918 / IPv6 ULA), CGNAT (`100.64.0.0/10`), reserved, unspecified and multicast addresses are refused, for IPv4, IPv6 and IPv4 embedded in IPv6.
+- **Client IP binding.** The token is tied to the IP that asked for it. The token goes in the first WebSocket message, never in the URL, so it doesn't show up in proxy access logs.
+- **Audit log.** Token creation, probes, opened, denied and closed sessions are recorded with the host ID, port, address class and host key fingerprint. Addresses, credentials and terminal content are never logged.
+
+Related settings (backend `.env`):
+
+| Variable                           | Default                                                          | Meaning                                                                                                                                                                                                                                                              |
+| ---------------------------------- | ---------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `TROMINAL_WEB_SSH_ALLOWED_CIDRS`   | empty                                                            | Comma-separated CIDR ranges of non-public destinations web SSH may reach, e.g. `10.20.0.0/16,fd00:1234::/32`. Add only networks your users are allowed to reach from the server. Unspecified and multicast addresses are never allowed. Invalid entries are ignored. |
+| `TROMINAL_WEB_SSH_BIND_IP`         | `true`                                                           | Tie each token to the client IP that asked for it. When on, a connection whose client address can't be determined is refused.                                                                                                                                        |
+| `TROMINAL_WEB_SSH_TRUSTED_PROXIES` | empty (`docker-compose.yml` sets private ranges for `ssh-proxy`) | IPs/CIDRs of reverse proxies whose `X-Forwarded-For` the SSH proxy trusts. Otherwise the TCP peer address is used.                                                                                                                                                   |
+| `TROMINAL_TRUSTED_PROXIES`         | empty                                                            | IPs/CIDRs of proxies in front of Laravel whose `X-Forwarded-*` headers are trusted. Wildcards are not supported. Set this if a load balancer or CDN sits in front of Caddy, and make sure that proxy overwrites `X-Forwarded-For`.                                   |
+
+The bundled Caddy config overwrites any client-supplied `X-Forwarded-For` with the real peer address. If you put your own proxy in front, configure it the same way, or IP binding will fail closed and refuse connections. For stronger isolation, run `ssh-proxy` on a network segment whose firewall allows outbound traffic only to the SSH hosts you expect.
 
 ## Backups
 

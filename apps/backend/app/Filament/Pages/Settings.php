@@ -41,7 +41,7 @@ class Settings extends Page
             'mode' => (string) ($value['mode'] ?? 'single'),
             'open' => (bool) ($value['open'] ?? false),
             'instance_name' => (string) ($value['instance_name'] ?? 'Trominal'),
-            'web_ssh_enabled' => (bool) ($value['web_ssh_enabled'] ?? true),
+            'web_ssh_enabled' => (bool) ($value['web_ssh_enabled'] ?? false),
         ];
     }
 
@@ -69,7 +69,8 @@ class Settings extends Page
                         ->label('Registration open')
                         ->helperText('Must be on for any signup to succeed. The API resets this to off automatically after the first single-mode user.'),
                     Toggle::make('web_ssh_enabled')
-                        ->label('Web SSH enabled'),
+                        ->label('Web SSH enabled')
+                        ->helperText('Off by default. When on, browser SSH sessions are proxied through this server, which sees SSH passwords and private keys in plaintext for the duration of each session. Only public destinations are reachable unless TROMINAL_WEB_SSH_ALLOWED_CIDRS lists private ranges.'),
                 ])
                 ->action(function (array $data): void {
                     $setting = AppSetting::setRegistration([
