@@ -448,6 +448,8 @@ async function reEncryptRecord(
         username: item.username,
         tags: item.tags,
         color: item.color,
+        // Re-encrypt approved host keys too, or they'd be unreadable after rotation.
+        hostKeys: item.hostKeys,
       })
       return cipherFields(payload)
     }
