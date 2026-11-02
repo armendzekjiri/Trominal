@@ -11,6 +11,7 @@ use App\Models\WsSessionToken;
 use Database\Seeders\RoleAndPermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Testing\TestResponse;
+use Symfony\Component\HttpFoundation\Response;
 use Tests\TestCase;
 
 final class TransportSecurityTest extends TestCase
@@ -112,6 +113,7 @@ final class TransportSecurityTest extends TestCase
 
     /**
      * @param  array<string, string>  $server
+     * @return TestResponse<Response>
      */
     private function requestToken(string $origin, array $server = []): TestResponse
     {
@@ -136,6 +138,9 @@ final class TransportSecurityTest extends TestCase
             ->assertCreated();
     }
 
+    /**
+     * @param  TestResponse<Response>  $response
+     */
     private function websocketUrl(TestResponse $response): string
     {
         return (string) $response->json('websocket_url');

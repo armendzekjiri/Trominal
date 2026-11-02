@@ -74,11 +74,38 @@ final class SshTokenController extends Controller
             return $this->appendToken($configuredUrl, $plainToken);
         }
 
-        $scheme = $request->isSecure() ? 'wss' : 'ws';
+        $scheme = $this->usesTls($request) ? 'wss' : 'ws';
         $path = config('trominal.web_ssh_proxy_path', '/ws/ssh');
         $normalizedPath = '/'.ltrim(is_string($path) ? $path : '/ws/ssh', '/');
 
         return $this->appendToken($scheme.'://'.$request->getHttpHost().$normalizedPath, $plainToken);
+    }
+
+    /**
+     * Web SSH carries terminal traffic and a session token, so production
+     * always hands out wss:// — even when TLS ends at an upstream proxy that
+     * Laravel is not configured to trust. Plain ws:// is left for loopback,
+     * *.localhost and *.test development hosts.
+     */
+    private function usesTls(Request $request): bool
+    {
+        if ($request->isSecure()) {
+            return true;
+        }
+
+        return app()->isProduction() && ! $this->isDevelopmentHost($request->getHost());
+    }
+
+    private function isDevelopmentHost(string $host): bool
+    {
+        $host = strtolower(rtrim($host, '.'));
+
+        return $host === 'localhost'
+            || str_ends_with($host, '.localhost')
+            || str_ends_with($host, '.test')
+            || $host === '[::1]'
+            || $host === '::1'
+            || preg_match('/^127(?:\.\d{1,3}){3}$/', $host) === 1;
     }
 
     private function appendToken(string $url, string $plainToken): string
