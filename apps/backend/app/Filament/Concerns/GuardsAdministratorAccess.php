@@ -6,6 +6,7 @@ namespace App\Filament\Concerns;
 
 use App\Exceptions\AdminLockoutException;
 use App\Services\AdminAccessGuard;
+use Closure;
 use Filament\Notifications\Notification;
 use Filament\Support\Exceptions\Halt;
 
@@ -34,8 +35,22 @@ trait GuardsAdministratorAccess
      */
     protected function ensureAdministrable(): void
     {
-        try {
+        $this->haltOnLockout(static function (): void {
             app(AdminAccessGuard::class)->assertAdministrable();
+        });
+    }
+
+    /**
+     * Runs $change; a lockout is reported to the admin and rolls the save back.
+     *
+     * @param  Closure(): void  $change
+     *
+     * @throws Halt
+     */
+    protected function haltOnLockout(Closure $change): void
+    {
+        try {
+            $change();
         } catch (AdminLockoutException $exception) {
             Notification::make()
                 ->danger()
