@@ -106,7 +106,7 @@ register() {
         -H 'Accept: application/json' -H 'Content-Type: application/json' \
         -d "{\"email\":\"admin@smoke.test\",\"password\":\"$password\",\"password_confirmation\":\"$password\",
             \"kdf_salt\":\"$(key 16)\",\"kdf_params\":{\"version\":1,\"alg\":\"argon2id\",\"memlimit\":67108864,\"opslimit\":3,\"salt_len\":16,\"out_len\":32},
-            \"public_key\":\"$(key 32)\",\"private_key_ciphertext\":\"$(key 80)\",\"private_key_nonce\":\"$(key 24)\"$1}"
+            \"public_key\":\"$(key 32)\",\"private_key_ciphertext\":\"$(key 48)\",\"private_key_nonce\":\"$(key 24)\"$1}"
 }
 register_status="$(register '')"
 [ "$register_status" = 403 ] || fail "first-user registration without the setup code returned $register_status"
