@@ -93,13 +93,24 @@ roles="$(compose exec -T postgres psql -U trominal -d trominal -tAc 'select coun
 [ "$roles" = 3 ] || fail "expected 3 seeded roles, got $roles"
 echo "ok   roles seeded"
 
+setup_token="$(awk -F= '$1 == "TROMINAL_SETUP_TOKEN" { sub(/^[^=]*=/, ""); print; exit }' "$workdir/.env")"
+[ -n "$setup_token" ] || fail "setup.sh did not generate TROMINAL_SETUP_TOKEN"
+curl -s "$base/api/server-info" | grep -q '"setup_token_required":true' || fail "fresh instance should require the setup code"
+curl -s "$base/api/server-info" | grep -q "$setup_token" && fail "server-info exposes the setup code"
+echo "ok   setup code required and not exposed"
+
 password="smoke-$(openssl rand -hex 12)"
 key() { openssl rand -base64 "$1" | tr -d '\n'; }
-register_status="$(curl -s -o "$workdir/register.json" -w '%{http_code}' -X POST "$base/api/v1/auth/register" \
-    -H 'Accept: application/json' -H 'Content-Type: application/json' \
-    -d "{\"email\":\"admin@smoke.test\",\"password\":\"$password\",\"password_confirmation\":\"$password\",
-        \"kdf_salt\":\"$(key 16)\",\"kdf_params\":{\"version\":1,\"alg\":\"argon2id\",\"memlimit\":67108864,\"opslimit\":3,\"salt_len\":16,\"out_len\":32},
-        \"public_key\":\"$(key 32)\",\"private_key_ciphertext\":\"$(key 80)\",\"private_key_nonce\":\"$(key 24)\"}")"
+register() {
+    curl -s -o "$workdir/register.json" -w '%{http_code}' -X POST "$base/api/v1/auth/register" \
+        -H 'Accept: application/json' -H 'Content-Type: application/json' \
+        -d "{\"email\":\"admin@smoke.test\",\"password\":\"$password\",\"password_confirmation\":\"$password\",
+            \"kdf_salt\":\"$(key 16)\",\"kdf_params\":{\"version\":1,\"alg\":\"argon2id\",\"memlimit\":67108864,\"opslimit\":3,\"salt_len\":16,\"out_len\":32},
+            \"public_key\":\"$(key 32)\",\"private_key_ciphertext\":\"$(key 80)\",\"private_key_nonce\":\"$(key 24)\"$1}"
+}
+register_status="$(register '')"
+[ "$register_status" = 403 ] || fail "first-user registration without the setup code returned $register_status"
+register_status="$(register ",\"setup_token\":\"$setup_token\"")"
 [ "$register_status" = 201 ] || fail "first-user registration returned $register_status: $(cat "$workdir/register.json")"
 curl -s "$base/api/server-info" | grep -q '"registration_open":false' || fail "registration still open after first user"
 echo "ok   first user registered, registration closed"

@@ -24,6 +24,17 @@ docker compose up -d
 
 That's it. Migrations run automatically on every `up`; roles and default settings are seeded only on the first boot. Open `http://localhost/admin` once you've registered the first user from a client.
 
+`setup.sh` also prints a one-time **setup code** (stored in `.env` as `TROMINAL_SETUP_TOKEN`). The first account to register on a new instance becomes the administrator, so the server only accepts that first registration when it carries this code; the client shows a "Setup code" field while it is required. After the first account exists the code is no longer used, and you can remove it from `.env`.
+
+### First-install checklist
+
+1. Keep the instance unreachable from the public internet (firewall, VPN, or `--port` on a private interface) until the first account exists, even with a setup code.
+2. Run `./docker/setup.sh` and note the setup code it prints.
+3. `docker compose up -d`, then register the first (admin) account from a client right away, entering the setup code.
+4. Confirm `curl http://localhost/api/server-info` reports `"registration_open": false` and `"setup_token_required": false`.
+5. Enable two-factor authentication for the admin account (client: Settings → Account), then sign in to `/admin`.
+6. Only then open the instance to its intended network.
+
 Other setups:
 
 ```bash
@@ -40,6 +51,7 @@ Prefer to edit by hand? Copy `docker/env/backend.env.example` to `.env` and set:
 - `APP_URL` and `ALLOWED_ORIGINS`: the URL you open in the browser (keep `tauri://localhost` in the origins)
 - `HTTP_PORT`: host port, if 80 is taken
 - `TROMINAL_SITE_ADDRESS`: leave at `:80`, or a bare domain for HTTPS. **Never a port** — Caddy listens on 80/443 inside its container; `HTTP_PORT` picks the host port.
+- `TROMINAL_SETUP_TOKEN`: optional but recommended, `openssl rand -hex 16`. Required (compared in constant time) for the first registration only; leave empty to disable.
 
 Check health:
 
@@ -67,6 +79,8 @@ Images are published for `linux/amd64` and `linux/arm64`. Update the backend (wi
 docker compose pull
 docker compose up -d
 ```
+
+Upgrade note (auth hardening): the default refresh-token lifetime is now 7 days (`.env` files generated earlier set `TROMINAL_REFRESH_TOKEN_EXPIRATION_DAYS=30`, which is still accepted; values above 30 are clamped). Refresh tokens issued before the upgrade keep working but cannot be linked to their earlier rotations, so reuse detection fully applies from the next sign-in.
 
 Backend tags use `backend-vX.Y.Z`. Client tags use `client-vX.Y.Z`; they do not need to match.
 
@@ -148,7 +162,17 @@ TROMINAL_BACKEND_VERSION=0.1.0
 TROMINAL_API_VERSION=v1
 TROMINAL_MIN_CLIENT_VERSION=0.1.0
 ALLOWED_ORIGINS=https://trominal.example.com,tauri://localhost
+
+# One-time code for the first (admin) registration; see "First-install checklist".
+TROMINAL_SETUP_TOKEN=
+# Refresh-token lifetime in days (default 7, clamped to 1-30).
+TROMINAL_REFRESH_TOKEN_EXPIRATION_DAYS=7
+# Failed sign-ins per account and per IP before a temporary lockout.
+TROMINAL_LOGIN_MAX_ATTEMPTS=5
+TROMINAL_LOGIN_DECAY_MINUTES=15
 ```
+
+Rate limits are kept in the cache store, so use `CACHE_STORE=redis` when you run more than one backend worker (the Docker stack does). Failed TOTP codes and step-up passwords are limited separately per account (`TROMINAL_TWO_FACTOR_MAX_ATTEMPTS`, default 5 per `TROMINAL_TWO_FACTOR_DECAY_MINUTES`, default 15).
 
 Never commit `.env` or production secrets.
 
