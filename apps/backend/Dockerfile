@@ -47,7 +47,7 @@ RUN composer dump-autoload \
     --no-interaction
 
 # node:20-bookworm-slim
-FROM node:20-bookworm-slim@sha256:2cf067cfed83d5ea958367df9f966191a942351a2df77d6f0193e162b5febfc0 AS assets
+FROM node:26-bookworm-slim@sha256:bc0a2afd3b74ce12222fc8bab99271e66257f021078f5f4a5d687a77d280c1d9 AS assets
 
 WORKDIR /var/www/html
 
