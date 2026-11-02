@@ -218,6 +218,11 @@ function relationField(record: VaultRecord, field: string): string | null {
   return typeof value === 'string' && value.length > 0 ? value : null
 }
 
+/** Associated data shared by every encrypted field of a personal vault record. */
+export function personalRecordAd(resource: VaultResourceType, id: string): string {
+  return makeAd(AD_RESOURCE[resource], id)
+}
+
 function recordAd(record: VaultRecord, resource: EncryptedVaultResource): string {
   const teamId = relationField(record, 'team_id')
 

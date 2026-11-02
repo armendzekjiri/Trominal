@@ -1,7 +1,27 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
-  "description": "Capability for the main window",
+  "description": "Least-privilege capability for the main window: only the core APIs the client calls (event listen, title-bar dragging, updater resource cleanup) and opening web links in the system browser.",
   "windows": ["main"],
-  "permissions": ["core:default", "opener:default", "core:window:allow-start-dragging"]
+  "permissions": [
+    "core:event:allow-listen",
+    "core:event:allow-unlisten",
+    "core:resources:allow-close",
+    "core:window:allow-start-dragging",
+    "core:window:allow-internal-toggle-maximize",
+    {
+      "identifier": "opener:allow-open-url",
+      "allow": [
+        { "url": "https://*" },
+        { "url": "http://localhost:*" },
+        { "url": "http://localhost/*" },
+        { "url": "http://127.0.0.1:*" },
+        { "url": "http://127.0.0.1/*" },
+        { "url": "http://*.localhost:*" },
+        { "url": "http://*.localhost/*" },
+        { "url": "http://*.test:*" },
+        { "url": "http://*.test/*" }
+      ]
+    }
+  ]
 }

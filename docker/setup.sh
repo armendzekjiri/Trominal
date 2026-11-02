@@ -63,9 +63,12 @@ fi
 cp docker/env/backend.env.example .env
 
 db_password="$(openssl rand -hex 24)"
+setup_token="$(openssl rand -hex 16)"
 set_env APP_KEY "base64:$(openssl rand -base64 32)"
 set_env POSTGRES_PASSWORD "$db_password"
 set_env DB_PASSWORD "$db_password"
+# The first account to register becomes the admin; require this code for it.
+set_env TROMINAL_SETUP_TOKEN "$setup_token"
 
 if [ -n "$domain" ]; then
     url="https://$domain"
@@ -81,3 +84,8 @@ set_env ALLOWED_ORIGINS "$url,tauri://localhost"
 
 echo "Wrote .env for $url"
 echo "Next: docker compose up -d"
+echo ""
+echo "Setup code for the first account: $setup_token"
+echo "Enter it in the \"Setup code\" field when you create the first (admin) account."
+echo "This is the only time it is printed (it is stored in .env as TROMINAL_SETUP_TOKEN);"
+echo "it is no longer needed once the first account exists."

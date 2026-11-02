@@ -34,11 +34,17 @@ use Spatie\Permission\Traits\HasRoles;
     'two_fa_enabled_at',
     'suspended_at',
 ])]
-#[Hidden(['password', 'remember_token', 'two_fa_secret_enc'])]
+#[Hidden(['password', 'remember_token', 'two_fa_secret_enc', 'two_fa_pending_secret_enc'])]
 class User extends Authenticatable implements FilamentUser, HasAppAuthentication, HasName
 {
     /** @use HasFactory<UserFactory> */
     use HasApiTokens, HasFactory, HasRoles, HasUlids, Notifiable, SoftDeletes;
+
+    /** Private-key envelope AD is `trominal:v1:user_private_key:<email>` (legacy). */
+    public const int PRIVATE_KEY_AD_EMAIL = 1;
+
+    /** Private-key envelope AD is `trominal:v1:user_private_key:<user id>`. */
+    public const int PRIVATE_KEY_AD_USER_ID = 2;
 
     /**
      * Get the attributes that should be cast.
@@ -53,8 +59,11 @@ class User extends Authenticatable implements FilamentUser, HasAppAuthentication
             'kdf_params' => 'array',
             'private_key_ciphertext' => 'encrypted',
             'two_fa_secret_enc' => 'encrypted',
+            'two_fa_pending_secret_enc' => 'encrypted',
             'two_fa_enabled_at' => 'datetime',
+            'two_fa_last_used_timestep' => 'integer',
             'vault_version' => 'integer',
+            'private_key_ad_version' => 'integer',
             'suspended_at' => 'datetime',
         ];
     }
@@ -97,6 +106,7 @@ class User extends Authenticatable implements FilamentUser, HasAppAuthentication
     {
         $this->forceFill([
             'two_fa_secret_enc' => $secret,
+            'two_fa_pending_secret_enc' => null,
             'two_fa_enabled_at' => $secret === null ? null : now(),
         ])->save();
     }

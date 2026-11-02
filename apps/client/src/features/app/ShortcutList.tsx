@@ -25,8 +25,8 @@ export function ShortcutList() {
         </section>
       ))}
       <p className="text-[12px] text-fg-faint">
-        Inside the terminal, Ctrl shortcuts go to the remote shell on Windows and Linux. Use the
-        sidebar or click outside the terminal first.
+        ⌃Tab / ⌃⇧Tab also switch sessions. Inside the terminal, Ctrl shortcuts go to the remote
+        shell on Windows and Linux; click outside the terminal first.
       </p>
     </div>
   )

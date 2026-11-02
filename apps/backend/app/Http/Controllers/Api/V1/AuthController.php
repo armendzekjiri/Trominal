@@ -29,7 +29,7 @@ final class AuthController extends Controller
 
     public function login(LoginRequest $request): JsonResponse
     {
-        $tokenPair = $this->authService->login($request->validated());
+        $tokenPair = $this->authService->login($request->validated(), $request->ip());
 
         return $this->tokenResponse($tokenPair);
     }

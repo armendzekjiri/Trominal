@@ -4,13 +4,16 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers\Api\V1;
 
+use App\Enums\TeamAction;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Api\V1\VaultResourceRequest;
 use App\Models\AuditLog;
 use App\Models\TeamMember;
 use App\Models\User;
 use App\Support\Vault\SerializesVaultRecords;
+use App\Support\Vault\VaultAccessAuditor;
 use App\Support\Vault\VaultResourceRegistry;
+use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Http\JsonResponse;
@@ -22,6 +25,8 @@ final class VaultResourceController extends Controller
 {
     use SerializesVaultRecords;
 
+    public function __construct(private readonly VaultAccessAuditor $accessAudit) {}
+
     public function index(Request $request, string $vaultType): JsonResponse
     {
         $user = $this->user($request);
@@ -30,7 +35,7 @@ final class VaultResourceController extends Controller
         $teamId = $this->scopeTeamId($request, $resource);
 
         if ($teamId !== null) {
-            $this->ensureTeamMember($user, $teamId);
+            $this->ensureTeamAction($user, $teamId, TeamAction::ReadRecords);
         }
 
         /** @var Collection<int, Model> $records */
@@ -42,6 +47,8 @@ final class VaultResourceController extends Controller
             )
             ->latest('updated_at')
             ->get();
+
+        $this->accessAudit->listed($user, $vaultType, $resource['team_scoped'] ? $teamId : null, $records->count());
 
         return response()->json([
             'data' => $records
@@ -61,7 +68,7 @@ final class VaultResourceController extends Controller
         $teamId = $this->payloadTeamId($payload, $resource);
 
         if ($teamId !== null) {
-            $this->ensureTeamMember($user, $teamId);
+            $this->ensureTeamAction($user, $teamId, TeamAction::CreateRecords);
         }
 
         $this->validateRelationshipsBelongToScope($user, $payload, $resource['relationship_fields'], $teamId);
@@ -89,6 +96,13 @@ final class VaultResourceController extends Controller
         $vaultRecord = $this->resolveRecord($resource['model'], $record);
 
         Gate::authorize('view', $vaultRecord);
+
+        $this->accessAudit->viewed(
+            $this->user($request),
+            $vaultType,
+            (string) $vaultRecord->getKey(),
+            $this->recordTeamId($vaultRecord, $resource),
+        );
 
         return response()->json([
             'data' => $this->serializeVaultRecord($vaultRecord, $vaultType, $resource['fields']),
@@ -251,17 +265,22 @@ final class VaultResourceController extends Controller
         return is_string($teamId) && $teamId !== '' ? $teamId : null;
     }
 
-    private function ensureTeamMember(User $user, string $teamId): void
+    /**
+     * Non-members get a validation error (the team is not visible to them);
+     * members whose team role does not allow the action get a 403.
+     */
+    private function ensureTeamAction(User $user, string $teamId, TeamAction $action): void
     {
-        $isMember = TeamMember::query()
-            ->where('team_id', $teamId)
-            ->where('user_id', $user->id)
-            ->exists();
+        $membership = TeamMember::forUser($user, $teamId);
 
-        if (! $isMember) {
+        if (! $membership instanceof TeamMember) {
             throw ValidationException::withMessages([
                 'team_id' => __('The selected team is invalid.'),
             ]);
+        }
+
+        if (! $membership->allows($action)) {
+            throw new AuthorizationException(__('Your team role does not allow this action.'));
         }
     }
 
