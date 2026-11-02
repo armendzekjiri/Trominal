@@ -32,7 +32,9 @@ use std::env;
 use std::fs::{self, OpenOptions};
 use std::io::{self, Write};
 use std::path::{Path, PathBuf};
-use std::process::{Child, Command, Stdio};
+#[cfg(unix)]
+use std::process::Child;
+use std::process::{Command, Stdio};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::thread;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
@@ -51,8 +53,11 @@ pub const ASKPASS_ENV: &str = "TROMINAL_ASKPASS";
 /// Env var carrying the askpass socket path (Unix only).
 pub const ASKPASS_SOCKET_ENV: &str = "TROMINAL_ASKPASS_SOCKET";
 
+#[cfg(unix)]
 const AGENT_SOCKET: &str = "agent.sock";
+#[cfg(unix)]
 const ASKPASS_SOCKET: &str = "askpass.sock";
+#[cfg(unix)]
 const PUBLIC_KEY_FILE: &str = "identity.pub";
 #[cfg(windows)]
 const PRIVATE_KEY_FILE: &str = "identity";
@@ -105,9 +110,10 @@ impl PrivateDir {
                 Err(err) => return Err(IdentityError::Directory(err.to_string())),
             }
         }
-        Err(IdentityError::Directory(
-            last_error.map_or_else(|| "name collision".to_string(), |err| err.to_string()),
-        ))
+        Err(IdentityError::Directory(last_error.map_or_else(
+            || "name collision".to_string(),
+            |err| err.to_string(),
+        )))
     }
 
     pub fn path(&self) -> &Path {
@@ -203,13 +209,15 @@ fn unique_name() -> String {
 }
 
 fn create_private_dir(path: &Path) -> io::Result<()> {
-    let mut builder = fs::DirBuilder::new();
     #[cfg(unix)]
     {
         use std::os::unix::fs::DirBuilderExt;
-        builder.mode(0o700);
+        fs::DirBuilder::new().mode(0o700).create(path)
     }
-    builder.create(path)
+    #[cfg(not(unix))]
+    {
+        fs::DirBuilder::new().create(path)
+    }
 }
 
 #[cfg(unix)]
@@ -961,6 +969,7 @@ b3BlbnNzaC1rZXktdjEAAAAACmFlczI1Ni1jdHIAAAAGYmNyeXB0AAAAGAAAABAOfjCG4c
         assert!(!socket.exists());
     }
 
+    #[cfg(unix)]
     fn assert_no_private_key_on_disk(dir: &Path, key: &SecretBytes) {
         let marker = b"PRIVATE KEY";
         for entry in fs::read_dir(dir).unwrap().flatten() {

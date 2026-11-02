@@ -12,6 +12,7 @@ use crate::secret::SecretBytes;
 use crate::ssh_identity::{
     is_rsa_private_key, ssh_option_path, IdentityError, LoadOptions, LoadedIdentity, PrivateDir,
 };
+use std::path::PathBuf;
 
 /// Private key plus optional passphrase for one connection.
 pub struct SshKeyMaterial<'a> {
@@ -28,7 +29,7 @@ pub struct PreparedSsh {
     config_path: String,
     pins: Vec<HostKey>,
     rsa_key: bool,
-    _dir: PrivateDir,
+    dir: PrivateDir,
 }
 
 impl PreparedSsh {
@@ -77,7 +78,7 @@ impl PreparedSsh {
             config_path: config.to_string_lossy().into_owned(),
             pins,
             rsa_key,
-            _dir: dir,
+            dir,
         })
     }
 
@@ -107,6 +108,14 @@ impl PreparedSsh {
 
     pub fn has_identity(&self) -> bool {
         self.identity.is_some()
+    }
+
+    /// Put a non-secret helper file (e.g. a public key for `ssh-copy-id`)
+    /// in this connection's private directory.
+    pub fn write_public_file(&self, name: &str, contents: &[u8]) -> Result<PathBuf, String> {
+        self.dir
+            .write_file(name, contents)
+            .map_err(|err| err.to_string())
     }
 }
 
@@ -171,7 +180,10 @@ mod tests {
         let args = prepared.ssh_options();
         let known_hosts = option_value(&args, "UserKnownHostsFile").unwrap();
         let contents = fs::read_to_string(known_hosts.trim_matches('"')).unwrap();
-        assert_eq!(contents, format!("trominal-pinned-host ssh-ed25519 {ED25519}\n"));
+        assert_eq!(
+            contents,
+            format!("trominal-pinned-host ssh-ed25519 {ED25519}\n")
+        );
         assert_eq!(option_value(&args, "StrictHostKeyChecking"), Some("yes"));
         assert!(!args.iter().any(|arg| arg.contains("accept-new")));
         // No vault key: the user's own ssh config and agent stay in charge

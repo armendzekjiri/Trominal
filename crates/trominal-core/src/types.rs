@@ -7,6 +7,8 @@
 //! The serde rename rules match the Tauri command surface that the existing
 //! frontend already speaks.
 
+use crate::host_keys::{HostKey, HostKeyPin};
+use crate::secret::SecretBytes;
 use serde::{Deserialize, Serialize};
 
 // ---------- Event payloads ----------
@@ -42,7 +44,12 @@ pub struct SshConnectRequest {
     pub username: String,
     pub cols: u16,
     pub rows: u16,
-    pub private_key_pem: Option<Vec<u8>>,
+    pub private_key_pem: Option<SecretBytes>,
+    #[serde(default)]
+    pub passphrase: Option<SecretBytes>,
+    /// Approved host keys from the vault. Empty means "not approved yet".
+    #[serde(default)]
+    pub host_keys: Vec<HostKeyPin>,
 }
 
 #[derive(Deserialize)]
@@ -51,7 +58,11 @@ pub struct SshKeyTestRequest {
     pub host: String,
     pub port: u16,
     pub username: String,
-    pub private_key_pem: Vec<u8>,
+    pub private_key_pem: SecretBytes,
+    #[serde(default)]
+    pub passphrase: Option<SecretBytes>,
+    #[serde(default)]
+    pub host_keys: Vec<HostKeyPin>,
 }
 
 #[derive(Serialize)]
@@ -66,13 +77,30 @@ pub struct SshKeyInstallRequest {
     pub port: u16,
     pub username: String,
     pub public_key: String,
-    pub password: Vec<u8>,
+    pub password: SecretBytes,
+    #[serde(default)]
+    pub host_keys: Vec<HostKeyPin>,
 }
 
 #[derive(Serialize)]
 pub struct SshKeyInstallResponse {
     pub installed: bool,
     pub method: String,
+}
+
+// ---------- Host key scan ----------
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SshHostKeyScanRequest {
+    pub host: String,
+    pub port: u16,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SshHostKeyScanResponse {
+    pub keys: Vec<HostKey>,
 }
 
 // ---------- SSH tunnel requests / responses ----------
@@ -84,7 +112,11 @@ pub struct SshTunnelOpenRequest {
     pub host: String,
     pub port: u16,
     pub username: String,
-    pub private_key_pem: Vec<u8>,
+    pub private_key_pem: SecretBytes,
+    #[serde(default)]
+    pub passphrase: Option<SecretBytes>,
+    #[serde(default)]
+    pub host_keys: Vec<HostKeyPin>,
     pub tunnel: SshTunnelSpec,
 }
 
@@ -127,14 +159,18 @@ pub struct SshTunnelStatusResponse {
 
 // ---------- SFTP requests / responses ----------
 
-#[derive(Deserialize, Clone)]
+#[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SftpHostArgs {
     pub host: String,
     pub port: u16,
     pub username: String,
-    /// PEM-encoded private key. Caller is responsible for zeroizing after use.
-    pub private_key_pem: Vec<u8>,
+    /// PEM-encoded private key; zeroized when the request is dropped.
+    pub private_key_pem: SecretBytes,
+    #[serde(default)]
+    pub passphrase: Option<SecretBytes>,
+    #[serde(default)]
+    pub host_keys: Vec<HostKeyPin>,
 }
 
 #[derive(Deserialize)]

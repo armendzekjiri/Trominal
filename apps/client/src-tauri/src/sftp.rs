@@ -21,22 +21,47 @@ use std::thread;
 use std::time::UNIX_EPOCH;
 use tauri::{AppHandle, Emitter, State};
 use thiserror::Error;
+use trominal_core::ssh_session::{ssh_destination, PreparedSsh};
 use trominal_core::{
-    cleanup_temp_paths, LocalHomeResponse, LocalListRequest, LocalListResponse, SftpEntry,
+    LocalHomeResponse, LocalListRequest, LocalListResponse, SftpEntry,
     SftpHomeRequest, SftpHomeResponse, SftpHostArgs, SftpListRequest, SftpListResponse,
     SftpPathRequest, SftpRemoveRequest, SftpRenameRequest, SftpTransferEvent, SftpTransferRequest,
     SftpTransferStartResponse,
 };
 
 use crate::local_shell::{
-    destination, is_rsa_private_key, rsa_key_compat_process_options, user_safe_ssh_error,
-    write_temp_ssh_file,
+    host_key_failure_error, key_material, load_options, rsa_key_compat_process_options,
+    user_safe_ssh_error,
 };
 use crate::sftp_process::{CancelResult, TransferOutcome, TransferProcess};
 
 #[derive(Default)]
 pub struct SftpState {
     transfers: Mutex<HashMap<String, TransferHandle>>,
+}
+
+impl SftpState {
+    /// Cancel every running transfer and give the monitor threads a moment
+    /// to unload keys and remove their directories (used on app exit).
+    pub fn cancel_all(&self) {
+        let processes: Vec<Arc<TransferProcess>> = match self.transfers.lock() {
+            Ok(transfers) => transfers
+                .values()
+                .map(|handle| Arc::clone(&handle.process))
+                .collect(),
+            Err(_) => return,
+        };
+        for process in processes {
+            let _ = process.cancel();
+        }
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(2);
+        while std::time::Instant::now() < deadline {
+            if self.transfers.lock().map_or(true, |t| t.is_empty()) {
+                break;
+            }
+            thread::sleep(std::time::Duration::from_millis(20));
+        }
+    }
 }
 
 struct TransferHandle {
@@ -169,14 +194,14 @@ fn spawn_transfer(
     batch: String,
 ) -> Result<SftpTransferStartResponse, String> {
     let transfer_id = require_transfer_id(transfer_id)?;
-    let (command, temp_paths) = build_sftp_command(&host, &transfer_id)?;
-    let process = match TransferProcess::spawn(command, batch.as_bytes()) {
-        Ok(process) => Arc::new(process),
-        Err(err) => {
-            cleanup_temp_paths(&temp_paths);
-            return Err(SftpError::Operation(err).to_string());
-        }
-    };
+    let (command, prepared) = build_sftp_command(&host)?;
+    // `host` (and the key bytes in it) is dropped, and zeroized, here;
+    // the loaded identity lives in `prepared` until the transfer ends.
+    drop(host);
+    let process = Arc::new(
+        TransferProcess::spawn(command, batch.as_bytes())
+            .map_err(|err| SftpError::Operation(err).to_string())?,
+    );
 
     {
         let mut transfers = state.transfers.lock().map_err(|_| SftpError::Locked.to_string())?;
@@ -199,7 +224,7 @@ fn spawn_transfer(
             state_arc,
             transfer_for_thread,
             process,
-            temp_paths,
+            prepared,
             label,
         )
     });
@@ -212,11 +237,13 @@ fn monitor_transfer(
     state: Arc<SftpState>,
     transfer_id: String,
     process: Arc<TransferProcess>,
-    temp_paths: Vec<PathBuf>,
+    prepared: PreparedSsh,
     _label: &'static str,
 ) {
     let outcome = process.wait_for_exit();
-    cleanup_temp_paths(&temp_paths);
+    // Unload the key and remove the private directory now that the child
+    // is gone.
+    drop(prepared);
     if let Ok(mut transfers) = state.transfers.lock() {
         transfers.remove(&transfer_id);
     }
@@ -260,11 +287,9 @@ fn emit_transfer_event(
     );
 }
 
-fn run_sftp_batch(host: &SftpHostArgs, label: &str, batch: &[u8]) -> Result<String, String> {
-    let session_id = format!("sftp-{label}");
-    let (command, temp_paths) = build_sftp_command(host, &session_id)?;
+fn run_sftp_batch(host: &SftpHostArgs, _label: &str, batch: &[u8]) -> Result<String, String> {
+    let (command, prepared) = build_sftp_command(host)?;
     let outcome = TransferProcess::spawn(command, batch).map(|process| process.wait_for_exit());
-    cleanup_temp_paths(&temp_paths);
 
     match outcome.map_err(|err| SftpError::Operation(err).to_string())? {
         TransferOutcome::Exited {
@@ -274,6 +299,11 @@ fn run_sftp_batch(host: &SftpHostArgs, label: &str, batch: &[u8]) -> Result<Stri
         } => Ok(stdout),
         TransferOutcome::Exited { stdout, stderr, .. } => {
             let combined = format!("{stderr}\n{stdout}");
+            if let Some(err) =
+                host_key_failure_error(&host.host, host.port.max(1), prepared.pins(), &combined)
+            {
+                return Err(err);
+            }
             Err(SftpError::Operation(user_safe_ssh_error(combined.trim(), &[])).to_string())
         }
         TransferOutcome::Cancelled => {
@@ -283,12 +313,11 @@ fn run_sftp_batch(host: &SftpHostArgs, label: &str, batch: &[u8]) -> Result<Stri
     }
 }
 
-fn build_sftp_command(
-    host: &SftpHostArgs,
-    session_id: &str,
-) -> Result<(ProcessCommand, Vec<PathBuf>), String> {
-    let host_value = host.host.trim();
-    if host_value.is_empty() {
+/// `sftp -b -` for `host`, using the shared SSH policy: the vault key in a
+/// private agent and the approved host-key pins. The returned
+/// [`PreparedSsh`] must outlive the child process.
+fn build_sftp_command(host: &SftpHostArgs) -> Result<(ProcessCommand, PreparedSsh), String> {
+    if host.host.trim().is_empty() {
         return Err(SftpError::Operation("host is required".to_string()).to_string());
     }
     if host.private_key_pem.is_empty() {
@@ -296,27 +325,18 @@ fn build_sftp_command(
             SftpError::Operation("attached SSH identity is required".to_string()).to_string(),
         );
     }
-
-    let mut key_bytes = host.private_key_pem.clone();
-    let rsa = is_rsa_private_key(&key_bytes);
-    let key_path = write_temp_ssh_file(session_id, "sftp-key", &key_bytes);
-    key_bytes.fill(0);
-    let key_path = key_path?;
-    let config_path = match write_temp_ssh_file(session_id, "sftp-config", &[]) {
-        Ok(path) => path,
-        Err(err) => {
-            cleanup_temp_paths(std::slice::from_ref(&key_path));
-            return Err(err);
-        }
-    };
-    let temp_paths = vec![key_path.clone(), config_path.clone()];
+    let destination = ssh_destination(&host.host, &host.username)?;
+    let prepared = PreparedSsh::prepare(
+        &host.host,
+        host.port.max(1),
+        &host.host_keys,
+        key_material(Some(&host.private_key_pem), host.passphrase.as_ref()),
+        &load_options(),
+    )?;
 
     let mut command = ProcessCommand::new("sftp");
     command
-        .arg("-F")
-        .arg(&config_path)
-        .arg("-i")
-        .arg(&key_path)
+        .args(prepared.ssh_options())
         .arg("-b")
         .arg("-")
         .arg("-o")
@@ -328,21 +348,15 @@ fn build_sftp_command(
         .arg("-o")
         .arg("PreferredAuthentications=publickey")
         .arg("-o")
-        .arg("IdentitiesOnly=yes")
-        .arg("-o")
-        .arg("IdentityAgent=none")
-        .arg("-o")
-        .arg("StrictHostKeyChecking=accept-new")
-        .arg("-o")
         .arg("ConnectTimeout=15")
         .arg("-P")
         .arg(host.port.max(1).to_string());
-    if rsa {
+    if prepared.rsa_key() {
         rsa_key_compat_process_options(&mut command);
     }
-    command.arg(destination(host_value, &host.username)?);
+    command.arg(destination);
 
-    Ok((command, temp_paths))
+    Ok((command, prepared))
 }
 
 fn require_transfer_id(transfer_id: String) -> Result<String, String> {

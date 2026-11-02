@@ -4,8 +4,19 @@ mod secure;
 mod sftp;
 mod sftp_process;
 
+use std::sync::Arc;
 use tauri::menu::{Menu, MenuItem, Submenu};
-use tauri::{Emitter, Manager};
+use tauri::{Emitter, Manager, RunEvent};
+use trominal_core::ssh_identity::{answer_askpass, runtime_base_dir, sweep_stale_dirs, ASKPASS_ENV};
+
+/// `Some(exit code)` when this process was started by `ssh-add` as its
+/// askpass helper (see `trominal_core::ssh_identity`); the caller must exit
+/// with it instead of starting the app.
+pub fn askpass_mode() -> Option<i32> {
+    std::env::var_os(ASKPASS_ENV)?;
+    let mut stdout = std::io::stdout();
+    Some(if answer_askpass(&mut stdout) { 0 } else { 1 })
+}
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -16,6 +27,10 @@ pub fn run() {
     // a debug build would therefore panic with `invalid type: null` on every
     // `pnpm dev:client` start, so we skip it — the user only ever triggers
     // an update from a release build anyway.
+    // Leftovers from a session that ended in a crash: past the key
+    // lifetime nothing in them can still be in use.
+    sweep_stale_dirs(&runtime_base_dir());
+
     let builder = tauri::Builder::default();
     #[cfg(not(debug_assertions))]
     let builder = builder.plugin(tauri_plugin_updater::Builder::new().build());
@@ -68,8 +83,8 @@ pub fn run() {
             }
             _ => {}
         })
-        .manage(std::sync::Arc::new(trominal_core::LocalShellState::default()))
-        .manage(std::sync::Arc::new(sftp::SftpState::default()))
+        .manage(Arc::new(trominal_core::LocalShellState::default()))
+        .manage(Arc::new(sftp::SftpState::default()))
         .plugin(tauri_plugin_opener::init())
         .invoke_handler(tauri::generate_handler![
             secure::secure_set,
@@ -88,6 +103,7 @@ pub fn run() {
             local_shell::ssh_tunnel_open,
             local_shell::ssh_tunnel_close,
             local_shell::ssh_tunnel_status,
+            local_shell::ssh_host_key_scan,
             sftp::sftp_list,
             sftp::sftp_mkdir,
             sftp::sftp_remove,
@@ -99,6 +115,17 @@ pub fn run() {
             sftp::sftp_local_home,
             sftp::sftp_remote_home,
         ])
-        .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+        .build(tauri::generate_context!())
+        .expect("error while building tauri application")
+        .run(|app, event| {
+            if let RunEvent::Exit = event {
+                // Kill every ssh child and private agent before exiting.
+                if let Some(state) = app.try_state::<Arc<trominal_core::LocalShellState>>() {
+                    trominal_core::close_all_sessions(state.inner());
+                }
+                if let Some(state) = app.try_state::<Arc<sftp::SftpState>>() {
+                    state.cancel_all();
+                }
+            }
+        });
 }
