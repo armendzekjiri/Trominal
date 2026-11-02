@@ -84,6 +84,11 @@ curl -s "$base/api/health" | grep -q '"redis":true' || fail "health reports redi
 curl -s "$base/api/server-info" | grep -q '"registration_open":true' || fail "fresh instance should be open for registration"
 echo "ok   database, redis, registration open"
 
+if [ "$image" = "trominal-backend:smoke" ]; then
+    curl -s "$base/api/server-info" | grep -q '"backend_version":"smoke"' || fail "server-info does not report the image version"
+    echo "ok   server-info reports the image version"
+fi
+
 roles="$(compose exec -T postgres psql -U trominal -d trominal -tAc 'select count(*) from roles')"
 [ "$roles" = 3 ] || fail "expected 3 seeded roles, got $roles"
 echo "ok   roles seeded"
