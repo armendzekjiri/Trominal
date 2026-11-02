@@ -22,6 +22,8 @@ use PragmaRX\Google2FA\Google2FA;
 
 final class AuthService
 {
+    public function __construct(private readonly TwoFactorCodeVerifier $codes) {}
+
     /**
      * @param  array<string, mixed>  $payload
      * @return array{user: User, access_token: string, refresh_token: string, token_type: string, expires_in: int}
@@ -301,17 +303,34 @@ final class AuthService
     /**
      * @return array{secret: string, otpauth_uri: string}
      */
-    public function enableTwoFactor(User $user): array
+    /**
+     * Stage a new TOTP secret. The active factor is never modified here; it
+     * is only replaced once the pending secret is confirmed in verify.
+     *
+     * Replacing an already-enabled factor requires the login password and a
+     * valid code from the current authenticator.
+     *
+     * @return array{secret: string, otpauth_uri: string}
+     */
+    public function enableTwoFactor(User $user, ?string $password = null, ?string $code = null): array
     {
+        $replacing = $user->two_fa_enabled_at !== null;
+
+        if ($replacing) {
+            $this->assertTwoFactorStepUp($user, $password, $code, 'auth.2fa.replace_denied');
+        }
+
         $google2fa = new Google2FA;
         $secret = $google2fa->generateSecretKey();
 
-        $user->forceFill([
-            'two_fa_secret_enc' => $secret,
-            'two_fa_enabled_at' => null,
-        ])->save();
+        $user->forceFill(['two_fa_pending_secret_enc' => $secret])->save();
 
-        AuditLog::record($user, 'auth.2fa.enable_started', 'user', (string) $user->id);
+        AuditLog::record(
+            $user,
+            $replacing ? 'auth.2fa.replace_started' : 'auth.2fa.enable_started',
+            'user',
+            (string) $user->id,
+        );
 
         return [
             'secret' => $secret,
@@ -319,38 +338,130 @@ final class AuthService
         ];
     }
 
+    /**
+     * Confirm the pending secret and promote it to the active factor. When it
+     * replaces an existing factor, every other session is revoked.
+     */
     public function verifyTwoFactor(User $user, string $code): void
     {
-        if (! $this->verifyTwoFactorCode($user, $code)) {
+        $pendingSecret = $user->two_fa_pending_secret_enc;
+
+        if ($pendingSecret === null) {
+            throw ValidationException::withMessages([
+                'code' => __('There is no pending two-factor setup to confirm.'),
+            ]);
+        }
+
+        if ($this->codes->match($pendingSecret, $code) === null) {
+            AuditLog::record($user, 'auth.2fa.verify_failed', 'user', (string) $user->id);
+
             throw ValidationException::withMessages([
                 'code' => __('The two-factor authentication code is invalid.'),
             ]);
         }
 
-        $user->forceFill(['two_fa_enabled_at' => now()])->save();
-        AuditLog::record($user, 'auth.2fa.enabled', 'user', (string) $user->id);
+        $replacing = $user->two_fa_enabled_at !== null;
+
+        DB::transaction(function () use ($user, $pendingSecret, $replacing): void {
+            $user->forceFill([
+                'two_fa_secret_enc' => $pendingSecret,
+                'two_fa_pending_secret_enc' => null,
+                'two_fa_enabled_at' => now(),
+            ])->save();
+
+            if (! $replacing) {
+                AuditLog::record($user, 'auth.2fa.enabled', 'user', (string) $user->id);
+
+                return;
+            }
+
+            AuditLog::record($user, 'auth.2fa.replaced', 'user', (string) $user->id, [
+                ...$this->revokeOtherSessions($user),
+            ]);
+        });
     }
 
     public function disableTwoFactor(User $user, string $password, string $code): void
     {
-        if (! Hash::check($password, $user->password)) {
+        $this->assertTwoFactorStepUp($user, $password, $code, 'auth.2fa.disable_denied');
+
+        $user->forceFill([
+            'two_fa_secret_enc' => null,
+            'two_fa_pending_secret_enc' => null,
+            'two_fa_enabled_at' => null,
+        ])->save();
+
+        AuditLog::record($user, 'auth.2fa.disabled', 'user', (string) $user->id);
+    }
+
+    /**
+     * Require the login password and a valid code from the active factor.
+     */
+    private function assertTwoFactorStepUp(User $user, ?string $password, ?string $code, string $deniedAction): void
+    {
+        $missing = [];
+
+        if ($password === null || $password === '') {
+            $missing['password'] = __('Confirm your password to change two-factor authentication.');
+        }
+
+        if ($code === null || $code === '') {
+            $missing['code'] = __('Enter a code from your current authenticator app.');
+        }
+
+        if ($missing !== []) {
+            AuditLog::record($user, $deniedAction, 'user', (string) $user->id, ['reason' => 'missing_step_up']);
+
+            throw ValidationException::withMessages($missing);
+        }
+
+        if (! Hash::check((string) $password, $user->password)) {
+            AuditLog::record($user, $deniedAction, 'user', (string) $user->id, ['reason' => 'password']);
+
             throw ValidationException::withMessages([
                 'password' => __('The password is incorrect.'),
             ]);
         }
 
-        if (! $this->verifyTwoFactorCode($user, $code)) {
+        if (! $this->verifyTwoFactorCode($user, (string) $code)) {
+            AuditLog::record($user, $deniedAction, 'user', (string) $user->id, ['reason' => 'code']);
+
             throw ValidationException::withMessages([
                 'code' => __('The two-factor authentication code is invalid.'),
             ]);
         }
+    }
 
-        $user->forceFill([
-            'two_fa_secret_enc' => null,
-            'two_fa_enabled_at' => null,
-        ])->save();
+    /**
+     * Revoke every access and refresh token of the user except the ones that
+     * belong to the device making the current request.
+     *
+     * @return array{access_tokens_revoked: int, refresh_tokens_revoked: int}
+     */
+    private function revokeOtherSessions(User $user): array
+    {
+        $current = $user->currentAccessToken();
+        $currentTokenId = $current instanceof PersonalAccessToken ? $current->getKey() : null;
+        $currentDeviceId = $current instanceof PersonalAccessToken ? $current->getAttribute('device_id') : null;
 
-        AuditLog::record($user, 'auth.2fa.disabled', 'user', (string) $user->id);
+        $accessTokensRevoked = $user->tokens()
+            ->when($currentTokenId !== null, fn ($query) => $query->whereKeyNot($currentTokenId))
+            ->delete();
+
+        $refreshTokensRevoked = RefreshToken::query()
+            ->where('user_id', $user->id)
+            ->whereNull('revoked_at')
+            ->when($currentDeviceId !== null, function ($query) use ($currentDeviceId): void {
+                $query->where(function ($query) use ($currentDeviceId): void {
+                    $query->whereNull('device_id')->orWhere('device_id', '!=', $currentDeviceId);
+                });
+            })
+            ->update(['revoked_at' => now()]);
+
+        return [
+            'access_tokens_revoked' => (int) $accessTokensRevoked,
+            'refresh_tokens_revoked' => $refreshTokensRevoked,
+        ];
     }
 
     public function sendPasswordResetLink(string $email): void
@@ -447,12 +558,16 @@ final class AuthService
         ];
     }
 
+    /**
+     * Verify a code against the active factor only. A pending (unconfirmed)
+     * secret is never accepted for sign-in or step-up.
+     */
     private function verifyTwoFactorCode(User $user, string $code): bool
     {
-        if ($user->two_fa_secret_enc === null || $code === '') {
+        if ($user->two_fa_enabled_at === null) {
             return false;
         }
 
-        return (bool) (new Google2FA)->verifyKey($user->two_fa_secret_enc, $code);
+        return $this->codes->match($user->two_fa_secret_enc, $code) !== null;
     }
 }

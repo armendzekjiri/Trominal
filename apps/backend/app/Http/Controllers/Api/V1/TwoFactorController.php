@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Requests\Api\V1\Auth\TwoFactorDisableRequest;
+use App\Http\Requests\Api\V1\Auth\TwoFactorEnableRequest;
 use App\Http\Requests\Api\V1\Auth\TwoFactorVerifyRequest;
 use App\Models\User;
 use App\Services\AuthService;
@@ -16,9 +17,16 @@ final class TwoFactorController extends Controller
 {
     public function __construct(private readonly AuthService $authService) {}
 
-    public function enable(Request $request): JsonResponse
+    public function enable(TwoFactorEnableRequest $request): JsonResponse
     {
-        return response()->json($this->authService->enableTwoFactor($this->currentUser($request)));
+        $password = $request->validated('password');
+        $code = $request->validated('code');
+
+        return response()->json($this->authService->enableTwoFactor(
+            $this->currentUser($request),
+            is_string($password) ? $password : null,
+            is_string($code) ? $code : null,
+        ));
     }
 
     public function verify(TwoFactorVerifyRequest $request): JsonResponse

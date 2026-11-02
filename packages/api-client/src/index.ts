@@ -165,6 +165,12 @@ export type TwoFactorEnableResponse = {
   otpauth_uri: string
 }
 
+/**
+ * Request body for POST /api/v1/auth/two-factor/enable. Omit for a first
+ * enrollment; replacing an enabled factor requires both fields.
+ */
+export type TwoFactorEnableRequest = { password?: string; code?: string }
+
 /** Request body for POST /api/v1/auth/two-factor/verify. */
 export type TwoFactorVerifyRequest = { code: string }
 
@@ -370,10 +376,16 @@ export class TrominalApiClient {
     return response.data
   }
 
-  /** Begin TOTP setup. Returns a base32 secret and otpauth:// URI for QR rendering. */
-  async enableTwoFactor(): Promise<TwoFactorEnableResponse> {
+  /**
+   * Stage a TOTP enrollment. Returns a base32 secret and otpauth:// URI for QR
+   * rendering; nothing changes until the code is confirmed with
+   * `verifyTwoFactor`. Replacing an enabled factor requires `password` and a
+   * current `code`.
+   */
+  async enableTwoFactor(payload: TwoFactorEnableRequest = {}): Promise<TwoFactorEnableResponse> {
     return this.request<TwoFactorEnableResponse>('/api/v1/auth/two-factor/enable', {
       method: 'POST',
+      body: payload,
     })
   }
 

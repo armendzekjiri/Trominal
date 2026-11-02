@@ -145,29 +145,81 @@ paths:
           description: Invalid token or validation failed.
   /api/v1/auth/two-factor/enable:
     post:
-      summary: Start TOTP setup and return the secret and otpauth URI.
+      summary: Stage a new TOTP secret and return it with its otpauth URI.
+      description: |
+        The secret is stored as a pending enrollment; the active factor is not
+        changed until the pending secret is confirmed via
+        `/api/v1/auth/two-factor/verify`. When two-factor authentication is
+        already enabled, this call replaces the factor and requires the login
+        `password` and a current `code` from the existing authenticator.
       security:
         - bearerAuth: []
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TwoFactorEnableRequest'
       responses:
         '200':
-          description: TOTP setup payload.
+          description: Pending TOTP setup payload.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [secret, otpauth_uri]
+                properties:
+                  secret:
+                    type: string
+                  otpauth_uri:
+                    type: string
         '401':
           description: Unauthenticated.
+        '422':
+          description: Two-factor authentication is enabled and the password or current code is missing or invalid.
   /api/v1/auth/two-factor/verify:
     post:
-      summary: Confirm TOTP setup with a six-digit code.
+      summary: Confirm the pending TOTP secret with a six-digit code.
+      description: |
+        Promotes the pending secret to the active factor. When it replaces an
+        existing factor, every other session (access and refresh tokens of
+        other devices) is revoked.
       security:
         - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [code]
+              properties:
+                code:
+                  type: string
+                  pattern: "^\\d{6}$"
       responses:
         '200':
           description: TOTP enabled.
         '422':
-          description: Invalid code.
+          description: Invalid code, or no pending setup.
   /api/v1/auth/two-factor/disable:
     post:
-      summary: Disable TOTP after password and code confirmation.
+      summary: Disable TOTP after password and current code confirmation.
       security:
         - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [password, code]
+              properties:
+                password:
+                  type: string
+                code:
+                  type: string
+                  pattern: "^\\d{6}$"
       responses:
         '200':
           description: TOTP disabled.
@@ -643,6 +695,17 @@ components:
         invite_code:
           type: string
           description: Required when server registration mode is invite.
+    TwoFactorEnableRequest:
+      type: object
+      description: Empty for a first enrollment. Both fields are required to replace an enabled factor.
+      properties:
+        password:
+          type: string
+          description: Current login password.
+        code:
+          type: string
+          pattern: "^\\d{6}$"
+          description: Current code from the active authenticator.
     LoginRequest:
       type: object
       required: [email, password]

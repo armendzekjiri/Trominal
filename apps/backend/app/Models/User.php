@@ -34,7 +34,7 @@ use Spatie\Permission\Traits\HasRoles;
     'two_fa_enabled_at',
     'suspended_at',
 ])]
-#[Hidden(['password', 'remember_token', 'two_fa_secret_enc'])]
+#[Hidden(['password', 'remember_token', 'two_fa_secret_enc', 'two_fa_pending_secret_enc'])]
 class User extends Authenticatable implements FilamentUser, HasAppAuthentication, HasName
 {
     /** @use HasFactory<UserFactory> */
@@ -53,6 +53,7 @@ class User extends Authenticatable implements FilamentUser, HasAppAuthentication
             'kdf_params' => 'array',
             'private_key_ciphertext' => 'encrypted',
             'two_fa_secret_enc' => 'encrypted',
+            'two_fa_pending_secret_enc' => 'encrypted',
             'two_fa_enabled_at' => 'datetime',
             'vault_version' => 'integer',
             'suspended_at' => 'datetime',
@@ -97,6 +98,7 @@ class User extends Authenticatable implements FilamentUser, HasAppAuthentication
     {
         $this->forceFill([
             'two_fa_secret_enc' => $secret,
+            'two_fa_pending_secret_enc' => null,
             'two_fa_enabled_at' => $secret === null ? null : now(),
         ])->save();
     }
