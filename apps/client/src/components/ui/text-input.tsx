@@ -22,20 +22,19 @@ export const TextInput = React.forwardRef<HTMLInputElement, TextInputProps>(func
 ) {
   const generatedId = React.useId()
   const inputId = id ?? generatedId
+  const messageId = `${inputId}-message`
+  const hasMessage = error !== undefined || hint !== undefined
 
   return (
     <div className="flex flex-col gap-1.5">
       {label !== undefined && (
-        <label
-          htmlFor={inputId}
-          className="text-[11px] font-medium uppercase tracking-wide text-fg-muted"
-        >
+        <label htmlFor={inputId} className="text-[12px] font-medium text-fg-muted">
           {label}
         </label>
       )}
       <div
         className={cn(
-          'flex h-10 items-center gap-2.5 rounded-md border border-border-strong bg-surface px-3',
+          'flex h-10 items-center gap-2.5 rounded-md border border-border-input bg-surface px-3',
           'transition-colors focus-within:border-accent focus-within:ring-2 focus-within:ring-accent-ring',
           error !== undefined ? 'border-danger focus-within:border-danger' : '',
         )}
@@ -48,8 +47,10 @@ export const TextInput = React.forwardRef<HTMLInputElement, TextInputProps>(func
         <input
           id={inputId}
           ref={ref}
+          aria-invalid={error !== undefined ? true : undefined}
+          aria-describedby={hasMessage ? messageId : undefined}
           className={cn(
-            'flex-1 bg-transparent text-[13px] text-fg outline-none placeholder:text-fg-faint',
+            'min-w-0 flex-1 bg-transparent text-[13px] text-fg outline-none placeholder:text-fg-faint',
             mono === true ? 'font-mono' : '',
             className,
           )}
@@ -58,9 +59,13 @@ export const TextInput = React.forwardRef<HTMLInputElement, TextInputProps>(func
         {suffix !== undefined && <span className="flex shrink-0 text-fg-faint">{suffix}</span>}
       </div>
       {error !== undefined ? (
-        <span className="text-[11px] text-danger">{error}</span>
+        <span id={messageId} className="text-[11px] text-danger">
+          {error}
+        </span>
       ) : hint !== undefined ? (
-        <span className="text-[11px] text-fg-faint">{hint}</span>
+        <span id={messageId} className="text-[11px] text-fg-faint">
+          {hint}
+        </span>
       ) : null}
     </div>
   )

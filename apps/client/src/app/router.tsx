@@ -1,4 +1,4 @@
-import { createBrowserRouter, RouterProvider } from 'react-router-dom'
+import { createBrowserRouter, Navigate, RouterProvider } from 'react-router-dom'
 import { AuthGuard, ConnectGuard, GuestGuard, VaultGuard } from './guards'
 import { ConnectPage } from '@/features/auth/pages/ConnectPage'
 import { LoginPage } from '@/features/auth/pages/LoginPage'
@@ -48,7 +48,7 @@ const router = createBrowserRouter([
               {
                 element: <AppShell />,
                 children: [
-                  { index: true, element: <HostsPage /> },
+                  { index: true, element: <Navigate to="/hosts" replace /> },
                   { path: 'hosts', element: <HostsPage /> },
                   { path: 'terminal', element: <TerminalPage /> },
                   { path: 'snippets', element: <SnippetsPage /> },
