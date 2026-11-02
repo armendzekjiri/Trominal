@@ -534,7 +534,9 @@ paths:
         '403':
           description: Missing hosts.connect permission or web SSH disabled.
         '422':
-          description: Host does not belong to the authenticated user.
+          description: >-
+            Host does not belong to the authenticated user, or the destination
+            host/port is missing or invalid.
 components:
   securitySchemes:
     bearerAuth:
@@ -966,10 +968,24 @@ components:
                 $ref: '#/components/schemas/VaultRecordPayload'
     SshTokenRequest:
       type: object
-      required: [host_id]
+      required: [host_id, host, port]
+      description: >-
+        Host addresses are end-to-end encrypted, so the client states the
+        destination it is about to connect to. The token stores only a keyed
+        hash of host + port; the proxy refuses any connect or probe frame whose
+        host_id, host or port differs.
       properties:
         host_id:
           type: string
+          description: ID of a host owned by the authenticated user.
+        host:
+          type: string
+          maxLength: 255
+          description: Hostname or IP literal (IPv6 may be bracketed). Compared case-insensitively.
+        port:
+          type: integer
+          minimum: 1
+          maximum: 65535
     SshTokenResponse:
       type: object
       required: [token, expires_at, websocket_url]

@@ -7,6 +7,7 @@ namespace Tests\Support\WebSsh;
 use App\Models\AppSetting;
 use App\Models\Host;
 use App\Models\User;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Testing\TestResponse;
 use Tests\TestCase;
 
@@ -63,6 +64,7 @@ final class WebSshTestKit
 
     /**
      * @param  array<string, mixed>  $payload
+     * @return TestResponse<JsonResponse>
      */
     public static function requestToken(TestCase $test, User $user, array $payload): TestResponse
     {

@@ -33,7 +33,7 @@ export function useTerminalActions() {
     }
 
     const api = await getApiClient()
-    const token = await api.createSshToken({ host_id: host.id })
+    const token = await api.createSshToken({ host_id: host.id, host: host.hostname, port })
 
     return createSshSession({
       hostId: host.id,

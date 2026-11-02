@@ -22,4 +22,9 @@ return [
     // WebSocket proxy trusts (e.g. the reverse proxy in front of it). Empty
     // means forwarding headers are ignored and the TCP peer address is used.
     'web_ssh_trusted_proxies' => env('TROMINAL_WEB_SSH_TRUSTED_PROXIES', ''),
+
+    // Comma-separated CIDR ranges of non-public destinations (private,
+    // loopback, link-local, CGNAT, reserved) that web SSH may connect to.
+    // Empty (default) means web SSH can only reach public addresses.
+    'web_ssh_allowed_cidrs' => env('TROMINAL_WEB_SSH_ALLOWED_CIDRS', ''),
 ];

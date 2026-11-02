@@ -23,6 +23,9 @@ export class WebSocketSshSession implements SshSession {
     if (this.options.websocketToken === undefined) {
       throw new Error('WebSocket SSH requires a session token.')
     }
+    if (this.options.hostId === undefined) {
+      throw new Error('WebSocket SSH requires a host id bound to the session token.')
+    }
 
     this.currentState = 'connecting'
     const socket = new WebSocket(this.options.websocketUrl)

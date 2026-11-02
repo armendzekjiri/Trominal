@@ -10,7 +10,7 @@ use Illuminate\Validation\ValidationException;
 final class WebSshConnectFrame
 {
     public function __construct(
-        public readonly ?string $hostId,
+        public readonly string $hostId,
         public readonly string $host,
         public readonly int $port,
         public readonly string $username,
@@ -35,9 +35,17 @@ final class WebSshConnectFrame
         }
 
         /** @var array<string, mixed> $decoded */
+        return self::fromArray($decoded);
+    }
+
+    /**
+     * @param  array<string, mixed>  $decoded
+     */
+    public static function fromArray(array $decoded): self
+    {
         $validated = Validator::make($decoded, [
             'type' => ['required', 'in:connect'],
-            'host_id' => ['nullable', 'string'],
+            'host_id' => ['required', 'string', 'max:64'],
             'host' => ['required', 'string', 'max:255'],
             'port' => ['required', 'integer', 'min:1', 'max:65535'],
             'username' => ['required', 'string', 'max:255'],
@@ -54,7 +62,7 @@ final class WebSshConnectFrame
         $auth = self::optionalArray($validated['auth'] ?? null);
 
         return new self(
-            hostId: self::optionalString($validated['host_id'] ?? null),
+            hostId: self::requiredString($validated, 'host_id'),
             host: self::requiredString($validated, 'host'),
             port: self::requiredInt($validated, 'port'),
             username: self::requiredString($validated, 'username'),

@@ -10,7 +10,9 @@ use App\Models\AuditLog;
 use App\Models\Host;
 use App\Models\User;
 use App\Models\WsSessionToken;
+use App\Services\Ssh\WebSshDestination;
 use App\Support\Network\IpAddress;
+use Closure;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\ValidationException;
@@ -28,9 +30,20 @@ final class SshTokenController extends Controller
             abort(403, 'Web SSH is disabled for this instance.');
         }
 
-        /** @var array{host_id: string} $payload */
+        /** @var array{host_id: string, host: string, port: int} $payload */
         $payload = validator($request->all(), [
-            'host_id' => ['required', 'string'],
+            'host_id' => ['required', 'string', 'max:64'],
+            'host' => [
+                'required',
+                'string',
+                'max:255',
+                static function (string $attribute, mixed $value, Closure $fail): void {
+                    if (! is_string($value) || ! WebSshDestination::isValid($value, 22)) {
+                        $fail(__('The SSH host must be a hostname or IP address.'));
+                    }
+                },
+            ],
+            'port' => ['required', 'integer', 'between:1,65535'],
         ])->validate();
 
         /** @var Host|null $host */
@@ -45,6 +58,10 @@ final class SshTokenController extends Controller
             ]);
         }
 
+        // Host addresses are end-to-end encrypted, so the client states the
+        // destination here and the proxy only connects to that destination.
+        $destination = WebSshDestination::from($payload['host'], (int) $payload['port']);
+
         $plainToken = bin2hex(random_bytes(32));
         $expiresAt = now()->addSeconds(30);
 
@@ -52,12 +69,14 @@ final class SshTokenController extends Controller
             'user_id' => $user->id,
             'host_id' => $host->id,
             'token_hash' => hash('sha256', $plainToken),
+            'destination_hash' => $destination->bindingHash(WebSshDestination::appKey()),
             'ip_address' => IpAddress::normalize($request->ip()),
             'expires_at' => $expiresAt,
         ]);
 
         AuditLog::record($user, 'ssh.token.created', 'host', (string) $host->id, [
             'expires_at' => $expiresAt->toIso8601String(),
+            'port' => $destination->port,
         ]);
 
         return response()->json([

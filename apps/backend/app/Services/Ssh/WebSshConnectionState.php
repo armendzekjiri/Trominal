@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace App\Services\Ssh;
 
 use App\Models\WsSessionToken;
-use phpseclib3\Net\SSH2;
+use App\Services\Ssh\Client\WebSshClient;
 use React\EventLoop\TimerInterface;
 
 /**
@@ -21,7 +21,7 @@ final class WebSshConnectionState
 
     public ?WsSessionToken $token = null;
 
-    public ?SSH2 $ssh = null;
+    public ?WebSshClient $client = null;
 
     public ?TimerInterface $readTimer = null;
 }

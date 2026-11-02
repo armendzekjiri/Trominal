@@ -6,11 +6,9 @@ namespace App\Services\Ssh;
 
 use App\Models\AuditLog;
 use App\Models\WsSessionToken;
-use Illuminate\Validation\ValidationException;
+use App\Services\Ssh\Client\WebSshClient;
 use Laravel\Reverb\Servers\Reverb\Connection as WebSocketConnection;
 use Laravel\Reverb\Servers\Reverb\Http\Response;
-use phpseclib3\Crypt\PublicKeyLoader;
-use phpseclib3\Net\SSH2;
 use Psr\Http\Message\RequestInterface;
 use Ratchet\RFC6455\Messaging\DataInterface;
 use Ratchet\RFC6455\Messaging\Frame;
@@ -18,12 +16,22 @@ use React\EventLoop\Loop;
 use React\EventLoop\TimerInterface;
 use Throwable;
 
+/**
+ * WebSocket endpoint for web SSH.
+ *
+ * Protocol (client → server, first text frame, JSON):
+ *   connect: {type:"connect", token, host_id, host, port, username, cols, rows, auth}
+ * Server → client control frames (JSON text):
+ *   {type:"ready"} once the shell is open, or
+ *   {type:"error", code, message} followed by close.
+ * After "ready", binary/text frames carry terminal data; {type:"resize"} frames resize.
+ */
 final class WebSshProxy
 {
     private const HANDSHAKE_TIMEOUT_SECONDS = 10.0;
 
     public function __construct(
-        private readonly SshTokenVerifier $tokens,
+        private readonly WebSshSessionOpener $opener,
         private readonly WebSshClientAddress $clientAddress,
     ) {
         //
@@ -52,7 +60,7 @@ final class WebSshProxy
             $state->handshakeTimer = null;
 
             if (! $state->handshakeStarted) {
-                $this->sendError($connection, 'The SSH session token is invalid or expired.');
+                $this->sendError($connection, WebSshError::make(WebSshError::INVALID_TOKEN));
                 $connection->close();
             }
         });
@@ -66,15 +74,15 @@ final class WebSshProxy
                 return;
             }
 
-            if (! $state->ssh instanceof SSH2) {
+            if (! $state->client instanceof WebSshClient) {
                 return;
             }
 
-            if ($this->handleResizeFrame($message->getPayload(), $state->ssh)) {
+            if ($this->handleResizeFrame($message->getPayload(), $state->client)) {
                 return;
             }
 
-            $state->ssh->write($message->getPayload());
+            $state->client->write($message->getPayload());
         });
 
         $connection->onClose(function () use ($ipAddress, $state): void {
@@ -85,13 +93,13 @@ final class WebSshProxy
                 $state->readTimer = null;
             }
 
-            if ($state->ssh instanceof SSH2) {
-                $state->ssh->disconnect();
-                $state->ssh = null;
-            }
+            if ($state->client instanceof WebSshClient) {
+                $state->client->disconnect();
+                $state->client = null;
 
-            if ($state->token instanceof WsSessionToken) {
-                $this->audit($state->token, 'ssh.session.closed', $ipAddress);
+                if ($state->token instanceof WsSessionToken) {
+                    $this->audit($state->token, 'ssh.session.closed', $ipAddress);
+                }
             }
         });
 
@@ -103,109 +111,51 @@ final class WebSshProxy
     private function handshake(string $payload, WebSocketConnection $connection, ?string $ipAddress, WebSshConnectionState $state): void
     {
         try {
-            $state->token = $this->tokens->consume($this->plainToken($payload), $ipAddress);
-        } catch (ValidationException) {
-            $this->sendError($connection, 'The SSH session token is invalid or expired.');
+            $result = $this->opener->open($payload, $ipAddress);
+        } catch (WebSshError $error) {
+            $this->sendError($connection, $error);
+            $connection->close();
+
+            return;
+        } catch (Throwable) {
+            $this->sendError($connection, WebSshError::make(WebSshError::SESSION_FAILED));
             $connection->close();
 
             return;
         }
 
-        $this->openSshSession($payload, $connection, $state->token, $ipAddress, $state);
-    }
+        $state->token = $result->token;
 
-    private function openSshSession(
-        string $payload,
-        WebSocketConnection $connection,
-        WsSessionToken $token,
-        ?string $ipAddress,
-        WebSshConnectionState $state,
-    ): void {
-        try {
-            $frame = WebSshConnectFrame::fromJson($payload);
-
-            if ($token->host_id !== null && $frame->hostId !== null && $token->host_id !== $frame->hostId) {
-                throw ValidationException::withMessages([
-                    'host_id' => __('The SSH connect frame does not match the session token.'),
-                ]);
-            }
-
-            $ssh = new SSH2($frame->host, $frame->port, 10);
-            $ssh->setWindowSize($frame->cols, $frame->rows);
-
-            if (! $this->authenticate($ssh, $frame)) {
-                $frame->wipeSecrets();
-                $this->sendError($connection, 'SSH authentication failed.');
-                $connection->close();
-
-                return;
-            }
-
-            $frame->wipeSecrets();
-            $ssh->setTimeout(0.05);
-            $ssh->openShell();
-            $state->ssh = $ssh;
-            $state->readTimer = $this->readPump($connection, $ssh);
-
-            $this->audit($token, 'ssh.session.opened', $ipAddress, [
-                'transport' => 'websocket',
-                'cols' => $frame->cols,
-                'rows' => $frame->rows,
-            ]);
-        } catch (Throwable) {
-            $this->sendError($connection, 'Unable to open SSH session.');
+        if (! $result->client instanceof WebSshClient) {
             $connection->close();
+
+            return;
         }
+
+        $state->client = $result->client;
+        $connection->send($this->jsonFrame(['type' => 'ready']));
+        $state->readTimer = $this->readPump($connection, $result->client);
     }
 
-    private function authenticate(SSH2 $ssh, WebSshConnectFrame $frame): bool
+    private function readPump(WebSocketConnection $connection, WebSshClient $client): TimerInterface
     {
-        try {
-            if ($frame->authKind === 'password' && $frame->password !== null) {
-                return $ssh->login($frame->username, $frame->password);
-            }
-
-            if ($frame->authKind === 'private-key' && $frame->privateKeyPemB64 !== null) {
-                $privateKeyPem = base64_decode($frame->privateKeyPemB64, strict: true);
-
-                if (! is_string($privateKeyPem)) {
-                    return false;
-                }
-
-                try {
-                    $key = PublicKeyLoader::loadPrivateKey($privateKeyPem, $frame->passphrase ?? '');
-
-                    return $ssh->login($frame->username, $key);
-                } finally {
-                    $this->wipeString($privateKeyPem);
-                }
-            }
-
-            return $ssh->login($frame->username);
-        } finally {
-            $frame->wipeSecrets();
-        }
-    }
-
-    private function readPump(WebSocketConnection $connection, SSH2 $ssh): TimerInterface
-    {
-        return Loop::addPeriodicTimer(0.05, function () use ($connection, $ssh): void {
+        return Loop::addPeriodicTimer(0.05, function () use ($connection, $client): void {
             try {
-                $chunk = $ssh->read('', SSH2::READ_NEXT);
+                $chunk = $client->read();
             } catch (Throwable) {
-                $this->sendError($connection, 'SSH channel closed.');
+                $this->sendError($connection, new WebSshError('channel_closed', 'SSH channel closed.'));
                 $connection->close();
 
                 return;
             }
 
-            if (is_string($chunk) && $chunk !== '') {
+            if ($chunk !== '') {
                 $connection->send(new Frame($chunk, opcode: Frame::OP_BINARY));
             }
         });
     }
 
-    private function handleResizeFrame(string $payload, SSH2 $ssh): bool
+    private function handleResizeFrame(string $payload, WebSshClient $client): bool
     {
         $decoded = json_decode($payload, associative: true);
 
@@ -216,21 +166,13 @@ final class WebSshProxy
         $cols = $decoded['cols'] ?? null;
         $rows = $decoded['rows'] ?? null;
 
-        if (! is_int($cols) || ! is_int($rows) || $cols < 1 || $rows < 1) {
+        if (! is_int($cols) || ! is_int($rows) || $cols < 1 || $rows < 1 || $cols > 500 || $rows > 500) {
             return true;
         }
 
-        $ssh->setWindowSize($cols, $rows);
+        $client->resize($cols, $rows);
 
         return true;
-    }
-
-    private function plainToken(string $payload): string
-    {
-        $decoded = json_decode($payload, associative: true);
-        $token = is_array($decoded) ? ($decoded['token'] ?? null) : null;
-
-        return is_string($token) ? $token : '';
     }
 
     private function remoteAddress(WebSocketConnection $connection): ?string
@@ -252,17 +194,14 @@ final class WebSshProxy
         }
     }
 
-    /**
-     * @param  array<string, mixed>  $metadata
-     */
-    private function audit(WsSessionToken $token, string $action, ?string $ipAddress, array $metadata = []): void
+    private function audit(WsSessionToken $token, string $action, ?string $ipAddress): void
     {
         AuditLog::query()->create([
             'actor_user_id' => $token->user_id,
             'action' => $action,
             'resource_type' => 'host',
             'resource_id' => $token->host_id,
-            'metadata' => $metadata === [] ? null : $metadata,
+            'metadata' => ['transport' => 'websocket'],
             'ip_address' => $ipAddress,
             'user_agent' => 'trominal-web-ssh-proxy',
         ]);
@@ -276,18 +215,8 @@ final class WebSshProxy
         return json_encode($payload, JSON_THROW_ON_ERROR);
     }
 
-    private function sendError(WebSocketConnection $connection, string $message): void
+    private function sendError(WebSocketConnection $connection, WebSshError $error): void
     {
-        $connection->send($this->jsonFrame([
-            'type' => 'error',
-            'message' => $message,
-        ]));
-    }
-
-    private function wipeString(string $value): void
-    {
-        if (function_exists('sodium_memzero')) {
-            sodium_memzero($value);
-        }
+        $connection->send($this->jsonFrame($error->toFrame()));
     }
 }
