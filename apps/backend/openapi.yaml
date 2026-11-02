@@ -86,6 +86,7 @@ paths:
   /api/v1/me:
     get:
       summary: Get the authenticated user with roles and permissions.
+      description: The `vault` object follows the UserVaultMaterial schema.
       security:
         - bearerAuth: []
       responses:
@@ -490,6 +491,17 @@ paths:
   /api/v1/me/master-password/change:
     post:
       summary: Atomically rotate all encrypted vault material after a client-side master-password change.
+      description: |
+        The client derives a new vault key, re-encrypts the private-key envelope and every
+        personal (non-team, non-deleted) vault record, and submits them together with the
+        `vault_version` it started from. The server applies everything in one transaction or
+        nothing at all. It rejects the request when the version is stale, when the item set is
+        not exactly the user's current personal records (missing, extra, duplicate, foreign or
+        concurrently modified records), when a record's encrypted fields are not all re-encrypted,
+        or when the KDF parameters are out of bounds. Requires step-up: the current login
+        password, a current TOTP code when 2FA is enabled, and the caller's own active refresh
+        token. On success `vault_version` is bumped, every other session is revoked and an audit
+        entry is written. Rate limited per user.
       security:
         - bearerAuth: []
       requestBody:
@@ -500,19 +512,66 @@ paths:
               $ref: '#/components/schemas/MasterPasswordChangeRequest'
       responses:
         '200':
-          description: Vault version bumped and other sessions invalidated.
+          description: Vault material rotated, version bumped and other sessions invalidated.
           content:
             application/json:
               schema:
                 type: object
-                required: [vault_version]
+                required: [vault_version, vault]
                 properties:
                   vault_version:
                     type: integer
+                  vault:
+                    $ref: '#/components/schemas/UserVaultMaterial'
         '401':
           description: Unauthenticated.
+        '409':
+          description: |
+            The vault changed since the client read it (stale `vault_version`, or the submitted
+            items do not match the current personal records). Nothing was changed; re-fetch and retry.
+        '422':
+          description: Validation or step-up failed (password, 2FA code, refresh token, KDF bounds, envelope shape).
+        '429':
+          description: Too many attempts.
+  /api/v1/me/private-key/rebind:
+    post:
+      summary: Re-bind a legacy private-key envelope to the immutable user ID.
+      description: |
+        One-time migration for accounts whose private-key envelope was authenticated with the
+        email address as associated data. The client decrypts the envelope with the legacy AD,
+        re-encrypts it under the same vault key with `trominal:v1:user_private_key:<user id>`,
+        and uploads it with the `vault_version` it read. Rejected once the account has already
+        been migrated. KDF salt and parameters are unchanged. Bumps `vault_version`, writes an
+        audit entry, and is rate limited per user.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PrivateKeyRebindRequest'
+      responses:
+        '200':
+          description: Envelope replaced.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [vault_version, vault]
+                properties:
+                  vault_version:
+                    type: integer
+                  vault:
+                    $ref: '#/components/schemas/UserVaultMaterial'
+        '401':
+          description: Unauthenticated.
+        '409':
+          description: Stale `vault_version`, or the envelope is already bound to the user ID.
         '422':
           description: Validation failed.
+        '429':
+          description: Too many attempts.
   /api/v1/ws/ssh-token:
     post:
       summary: Create a short-lived WebSocket SSH token for an owned host.
@@ -611,6 +670,13 @@ components:
         - private_key_ciphertext
         - private_key_nonce
       properties:
+        id:
+          type: string
+          description: |
+            Optional client-generated ULID for the new user, created within the last few minutes.
+            When present, the private-key envelope must be authenticated with
+            `trominal:v1:user_private_key:<id>`. When absent, the legacy email-bound AD is assumed
+            and the client migrates it on first unlock.
         name:
           type: string
         email:
@@ -623,14 +689,18 @@ components:
           type: string
         kdf_salt:
           type: string
+          description: Standard base64 encoding of exactly 16 random bytes.
         kdf_params:
-          type: object
+          $ref: '#/components/schemas/KdfParams'
         public_key:
           type: string
+          description: Base64 X25519 public key (32 bytes).
         private_key_ciphertext:
           type: string
+          description: Base64 XChaCha20-Poly1305 ciphertext of the 32-byte X25519 private key (48 bytes with tag).
         private_key_nonce:
           type: string
+          description: Base64 24-byte nonce.
         device_name:
           type: string
         invite_code:
@@ -942,28 +1012,139 @@ components:
             type: array
             items:
               $ref: '#/components/schemas/VaultRecord'
+    KdfParams:
+      type: object
+      description: |
+        Argon2id parameters. Clients and server accept only supported values: version 1,
+        alg argon2id, memlimit between 64 MiB and 256 MiB (multiple of 1024), opslimit between
+        3 and 10, salt_len 16 and out_len 32. Unknown keys are rejected.
+      additionalProperties: false
+      required: [version, alg, memlimit, opslimit, salt_len, out_len]
+      properties:
+        version:
+          type: integer
+          enum: [1]
+        alg:
+          type: string
+          enum: [argon2id]
+        memlimit:
+          type: integer
+          minimum: 67108864
+          maximum: 268435456
+          multipleOf: 1024
+        opslimit:
+          type: integer
+          minimum: 3
+          maximum: 10
+        salt_len:
+          type: integer
+          enum: [16]
+        out_len:
+          type: integer
+          enum: [32]
+    UserVaultMaterial:
+      type: object
+      required:
+        - kdf_salt
+        - kdf_params
+        - public_key
+        - private_key_ciphertext
+        - private_key_nonce
+        - vault_version
+        - private_key_ad_version
+      properties:
+        kdf_salt:
+          type: string
+        kdf_params:
+          $ref: '#/components/schemas/KdfParams'
+        public_key:
+          type: string
+        private_key_ciphertext:
+          type: string
+        private_key_nonce:
+          type: string
+        vault_version:
+          type: integer
+          description: Bumped whenever the vault key or the private-key envelope changes.
+        private_key_ad_version:
+          type: integer
+          enum: [1, 2]
+          description: 1 = envelope bound to the email address (legacy), 2 = bound to the user ID.
+    MasterPasswordChangeItem:
+      type: object
+      required: [type, id, updated_at, fields]
+      properties:
+        type:
+          $ref: '#/components/schemas/VaultResourceType'
+        id:
+          type: string
+        updated_at:
+          type:
+            - string
+            - 'null'
+          description: The record's `updated_at` exactly as the client read it; used to detect concurrent edits.
+        fields:
+          type: object
+          description: |
+            Every non-null `*_ciphertext` / `*_nonce` pair of the record, re-encrypted under the new
+            key with the record's existing associated data. No other columns are accepted.
+          additionalProperties:
+            type: string
     MasterPasswordChangeRequest:
       type: object
-      required: [new_kdf_salt, new_kdf_params, current_refresh_token, items]
+      required:
+        - vault_version
+        - current_password
+        - current_refresh_token
+        - new_kdf_salt
+        - new_kdf_params
+        - private_key_ciphertext
+        - private_key_nonce
+        - items
       properties:
-        new_kdf_salt:
+        vault_version:
+          type: integer
+          description: The `vault_version` the client read before re-encrypting.
+        current_password:
           type: string
-        new_kdf_params:
-          type: object
+          description: Current login password (step-up). Never logged.
+        two_factor_code:
+          type: string
+          pattern: "^\\d{6}$"
+          description: Required when two-factor authentication is enabled.
         current_refresh_token:
           type: string
+          description: This device's active refresh token; it is the only session kept.
+        new_kdf_salt:
+          type: string
+          description: Standard base64 encoding of exactly 16 random bytes.
+        new_kdf_params:
+          $ref: '#/components/schemas/KdfParams'
+        private_key_ciphertext:
+          type: string
+          description: |
+            The user's X25519 private key re-encrypted under the new vault key with associated data
+            `trominal:v1:user_private_key:<user id>` (base64, 48 bytes).
+        private_key_nonce:
+          type: string
+          description: Base64 24-byte nonce.
         items:
           type: array
+          description: Exactly one entry per current personal vault record of every type.
           items:
-            type: object
-            required: [type, id, fields]
-            properties:
-              type:
-                $ref: '#/components/schemas/VaultResourceType'
-              id:
-                type: string
-              fields:
-                $ref: '#/components/schemas/VaultRecordPayload'
+            $ref: '#/components/schemas/MasterPasswordChangeItem'
+    PrivateKeyRebindRequest:
+      type: object
+      required: [vault_version, private_key_ciphertext, private_key_nonce]
+      properties:
+        vault_version:
+          type: integer
+        private_key_ciphertext:
+          type: string
+          description: Private key re-encrypted under the unchanged vault key with the user-ID AD (base64, 48 bytes).
+        private_key_nonce:
+          type: string
+          description: Base64 24-byte nonce.
     SshTokenRequest:
       type: object
       required: [host_id]
