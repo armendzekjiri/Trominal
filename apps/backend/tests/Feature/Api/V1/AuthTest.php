@@ -322,7 +322,7 @@ final class AuthTest extends TestCase
                 'out_len' => 32,
             ],
             'public_key' => base64_encode(str_repeat('p', 32)),
-            'private_key_ciphertext' => base64_encode(str_repeat('c', 80)),
+            'private_key_ciphertext' => base64_encode(str_repeat('c', 48)),
             'private_key_nonce' => base64_encode(str_repeat('n', 24)),
             'device_name' => 'Feature test',
         ];

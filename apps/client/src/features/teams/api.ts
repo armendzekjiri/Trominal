@@ -1,8 +1,9 @@
 import { useQuery } from '@tanstack/react-query'
 
 import type { TeamDto, TeamRole, UserDto } from '@trominal/api-client'
-import { decrypt, decryptToString, fromBase64, makeAd, unwrapTeamKey, wipe } from '@trominal/crypto'
+import { decryptToString, fromBase64, makeAd, unwrapTeamKey, wipe } from '@trominal/crypto'
 
+import { openUserPrivateKey } from '@/features/vault/private-key'
 import { getApiClient } from '@/lib/api-client'
 import { useAuth } from '@/stores/auth'
 import { useVault } from '@/stores/vault'
@@ -65,15 +66,7 @@ export async function unwrapTeamKeyForTeam(
   let privateKey: Uint8Array | null = null
 
   try {
-    privateKey = await decrypt(
-      {
-        v: 1,
-        ct: user.vault.private_key_ciphertext,
-        n: user.vault.private_key_nonce,
-      },
-      vaultKey,
-      makeAd('user_private_key', user.email),
-    )
+    privateKey = (await openUserPrivateKey(user.vault, vaultKey, user)).privateKey
 
     const publicKey = await fromBase64(user.vault.public_key)
 

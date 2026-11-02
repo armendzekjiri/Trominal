@@ -10,6 +10,7 @@ use App\Http\Controllers\Api\V1\TeamMemberController;
 use App\Http\Controllers\Api\V1\TwoFactorController;
 use App\Http\Controllers\Api\V1\VaultResourceController;
 use App\Http\Controllers\Api\V1\VaultSyncController;
+use App\Http\Middleware\SerializeVaultWrites;
 use Illuminate\Support\Facades\Route;
 
 Route::prefix('auth')->middleware('throttle:auth')->group(function (): void {
@@ -22,7 +23,11 @@ Route::prefix('auth')->middleware('throttle:auth')->group(function (): void {
 
 Route::middleware(['auth:sanctum', 'not_suspended'])->group(function (): void {
     Route::get('/me', [AuthController::class, 'me']);
-    Route::post('/me/master-password/change', [MasterPasswordController::class, 'update']);
+    // Per-user limits (the throttle key is the authenticated user ID).
+    Route::post('/me/master-password/change', [MasterPasswordController::class, 'update'])
+        ->middleware('throttle:10,60');
+    Route::post('/me/private-key/rebind', [MasterPasswordController::class, 'rebindPrivateKey'])
+        ->middleware('throttle:6,1');
     Route::post('/auth/logout', [AuthController::class, 'logout']);
 
     Route::prefix('auth/two-factor')->middleware('throttle:two-factor')->group(function (): void {
@@ -70,15 +75,15 @@ Route::middleware(['auth:sanctum', 'not_suspended'])->group(function (): void {
             ->middleware("can:{$permissions['read']}");
         Route::post("/vault/{$vaultType}", [VaultResourceController::class, 'store'])
             ->defaults('vaultType', $vaultType)
-            ->middleware("can:{$permissions['create']}");
+            ->middleware(["can:{$permissions['create']}", SerializeVaultWrites::class]);
         Route::get("/vault/{$vaultType}/{record}", [VaultResourceController::class, 'show'])
             ->defaults('vaultType', $vaultType)
             ->middleware("can:{$permissions['read']}");
         Route::patch("/vault/{$vaultType}/{record}", [VaultResourceController::class, 'update'])
             ->defaults('vaultType', $vaultType)
-            ->middleware("can:{$permissions['update']}");
+            ->middleware(["can:{$permissions['update']}", SerializeVaultWrites::class]);
         Route::delete("/vault/{$vaultType}/{record}", [VaultResourceController::class, 'destroy'])
             ->defaults('vaultType', $vaultType)
-            ->middleware("can:{$permissions['delete']}");
+            ->middleware(["can:{$permissions['delete']}", SerializeVaultWrites::class]);
     }
 });

@@ -12,13 +12,14 @@ import { TrominalApiError } from '@trominal/api-client'
 import {
   DEFAULT_KDF_PARAMS,
   deriveVaultKey,
-  encrypt,
   fromBase64,
   generateSalt,
   generateX25519KeyPair,
-  makeAd,
   toBase64,
+  wipe,
 } from '@trominal/crypto'
+import { newVaultId } from '@/features/vault/ids'
+import { sealUserPrivateKey } from '@/features/vault/private-key'
 
 const MIN_MASTER_LEN = 12
 
@@ -101,14 +102,21 @@ export function RegisterPage() {
     }
 
     setSubmitting(true)
+    let vaultKey: Uint8Array | null = null
+    let privateKey: Uint8Array | null = null
     try {
       const params = DEFAULT_KDF_PARAMS
       const saltBytes = await generateSalt(params.salt_len)
-      const vaultKey = await deriveVaultKey(masterPw, saltBytes, params)
+      vaultKey = await deriveVaultKey(masterPw, saltBytes, params)
       const keypair = await generateX25519KeyPair()
-      const env = await encrypt(keypair.privateKey, vaultKey, makeAd('user_private_key', email))
+      privateKey = keypair.privateKey
+      // The envelope's AD is bound to a client-chosen user ID (not the email,
+      // which an admin may change later); the server adopts this ID.
+      const userId = newVaultId().toLowerCase()
+      const env = await sealUserPrivateKey(privateKey, vaultKey, userId)
 
       const user = await register({
+        id: userId,
         email,
         password: loginPw,
         password_confirmation: loginPw,
@@ -125,6 +133,7 @@ export function RegisterPage() {
       await fromBase64(user.vault.kdf_salt)
       setMaterial(user.vault)
       adoptKey(vaultKey)
+      vaultKey = null // owned by the vault store now
       navigate('/2fa/setup')
     } catch (err) {
       if (err instanceof TrominalApiError) {
@@ -138,6 +147,8 @@ export function RegisterPage() {
         setError(err instanceof Error ? err.message : 'Sign-up failed.')
       }
     } finally {
+      if (privateKey !== null) wipe(privateKey)
+      if (vaultKey !== null) wipe(vaultKey)
       setSubmitting(false)
     }
   }
