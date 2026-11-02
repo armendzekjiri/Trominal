@@ -8,6 +8,7 @@ use App\Filament\Resources\Roles\RoleResource;
 use App\Models\AuditLog;
 use App\Models\Role;
 use App\Models\User;
+use App\Services\RoleAdministrationService;
 use Filament\Actions\DeleteAction;
 use Filament\Resources\Pages\EditRecord;
 
@@ -19,15 +20,11 @@ class EditRole extends EditRecord
     {
         return [
             DeleteAction::make()
-                ->visible(fn (Role $record): bool => ! in_array($record->name, ['admin', 'user', 'guest'], true))
-                ->after(function (Role $record): void {
-                    AuditLog::record(
-                        actor: auth()->user() instanceof User ? auth()->user() : null,
-                        action: 'admin.role.deleted',
-                        resourceType: 'role',
-                        resourceId: (string) $record->id,
-                    );
-                }),
+                ->visible(fn (Role $record): bool => ! $record->isDefault())
+                ->using(fn (Role $record, RoleAdministrationService $roles): bool => $roles->delete(
+                    auth()->user() instanceof User ? auth()->user() : null,
+                    $record,
+                )),
         ];
     }
 
