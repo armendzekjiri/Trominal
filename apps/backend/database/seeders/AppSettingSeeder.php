@@ -14,7 +14,7 @@ final class AppSettingSeeder extends Seeder
      */
     public function run(): void
     {
-        AppSetting::query()->updateOrCreate(
+        AppSetting::query()->firstOrCreate(
             ['key' => AppSetting::REGISTRATION],
             ['value' => AppSetting::defaultRegistrationValue()],
         );
