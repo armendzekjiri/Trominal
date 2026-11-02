@@ -59,6 +59,15 @@ Rebuilt so far: **app shell** (top bar + collapsible sidebar), **Hosts**, **auth
 - **Empty vault**: centred illustration-free empty state: icon tile, "No hosts yet", one-line explanation, **New host** button.
 - Motion: 150-200ms transitions on hover, focus and panel open, disabled under `prefers-reduced-motion`.
 
+### Host key verification (desktop)
+
+Desktop SSH, SFTP, tunnels and key install never trust a server on their own. The approved keys are stored, encrypted, on the host record.
+
+- **First connect** to a host with no approved key opens the **host key dialog** (`role="dialog"`, `aria-modal`, Tab trapped, Esc / backdrop = Cancel, focus returns to where it was). Header: shield icon tile (`accent-soft`/`accent`), title "Verify host key", `user@host:port` in mono `fg-faint`. Body: one line of explanation ("Compare these fingerprints with the ones your server administrator gave you…"), then one row per key the server offered: key type label (`ED25519`, `ECDSA`, `RSA`, 11px medium `fg-muted`) above the full `SHA256:` fingerprint in 12px mono `fg`, `break-all`, on `surface` with a 1px `border`, `r-3`. Footer: **Cancel** (outline, focused first) and **Trust and connect** (primary). Nothing connects until the user picks Trust.
+- **Key changed** (the server presents none of the approved keys) is a hard stop: same dialog shell with a `danger-soft`/`danger` warning icon, title "Host key changed", a short warning that this can mean an attack, then "Approved" fingerprints and "Server now presents" fingerprints as two labelled lists. The only actions are **Close** and **Open host editor** (outline). There is no accept button here.
+- **Host editor → "Host key" section** (below Tags, desktop only, saved hosts only): label 12px medium `fg-muted`; either "Not verified yet — you'll be asked to approve the fingerprint on first connect." (`fg-faint`) or the approved fingerprints (type + mono fingerprint rows as above). One outline button: **Verify host key** (none approved) or **Check host key** (approved). Checking a matching server shows a `role="status"` line "Server key matches the approved key."; a different key opens the dialog in **replace** mode: the changed-key layout plus a **Replace approved key** danger button, which is the only way to re-approve.
+- Team hosts can't be edited yet, so an approval for them lasts for the app session only and the dialog says so in one `fg-faint` line.
+
 ### Auth screens
 
 - Two columns at `lg` and up: a brand panel (`bg-elev`, accent glow top-left, one-line claim, three pillars: end-to-end encrypted, self-hosted, built for teams; licence line at the bottom) and the form column. Below `lg`: the form column alone, with the logo above it.
@@ -75,6 +84,6 @@ Rebuilt so far: **app shell** (top bar + collapsible sidebar), **Hosts**, **auth
 ### Keyboard
 
 - All bindings live in `apps/client/src/lib/shortcuts.ts`; the palette, tooltips, the ⌘/ sheet and Settings → Shortcuts read from it. Add a binding there, never inline.
-- ⌘K command palette (pages, settings sections, actions, "Connect to <host>"), ⌘/ shortcut sheet, ⌘, settings, ⌘⇧L lock, ⌘1–6 sections, ⌘B sidebar, ⌘F / ⌘N on Hosts, ⌘T new local shell and ⌘⇧[ / ⌘⇧] previous/next session tab (both work from any section). Ctrl replaces ⌘ on Windows/Linux.
+- ⌘K command palette (pages, settings sections, actions, "Connect to <host>"), ⌘/ shortcut sheet, ⌘, settings, ⌘⇧L lock, ⌘1–6 sections, ⌘B sidebar, ⌘F / ⌘N on Hosts, ⌘T new local shell, ⌘W close session tab, ⌘⇧[ / ⌘⇧] (or ⌃Tab / ⌃⇧Tab) previous/next session, ⌘⌥1–9 jump to session N; all work from any section. Windows/Linux: Ctrl+Shift+W closes and Alt+1–9 jumps, because Ctrl+W and Ctrl+T belong to the shell. On macOS the native Tab menu owns ⌘T and ⌘W, and Close Window moves to ⌘⇧W. Ctrl replaces ⌘ on Windows/Linux.
 - Inside the terminal on Windows/Linux, Ctrl chords go to the shell, not the app.
 - Overlays (palette, sheet) are `role="dialog"` + `aria-modal`, trap Tab, close on Esc and backdrop click, and return focus to where it was.

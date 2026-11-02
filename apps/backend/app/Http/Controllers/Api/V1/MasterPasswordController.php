@@ -6,92 +6,61 @@ namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Api\V1\MasterPasswordChangeRequest;
-use App\Models\AuditLog;
-use App\Models\RefreshToken;
+use App\Http\Requests\Api\V1\PrivateKeyRebindRequest;
+use App\Http\Resources\Api\V1\UserResource;
+use App\Models\PersonalAccessToken;
 use App\Models\User;
-use App\Support\Vault\VaultResourceRegistry;
-use Illuminate\Database\Eloquent\Model;
+use App\Services\VaultRotationService;
 use Illuminate\Http\JsonResponse;
-use Illuminate\Support\Facades\DB;
-use Illuminate\Validation\ValidationException;
+use Illuminate\Http\Request;
 
 final class MasterPasswordController extends Controller
 {
+    public function __construct(private readonly VaultRotationService $rotation) {}
+
     public function update(MasterPasswordChangeRequest $request): JsonResponse
     {
-        /** @var User $user */
-        $user = $request->user();
-        $payload = $request->payload();
+        $user = $this->rotation->rotateMasterPassword(
+            $this->user($request),
+            $this->currentAccessToken($request),
+            $request->payload(),
+        );
 
-        DB::transaction(function () use ($payload, $user): void {
-            foreach ($payload['items'] as $item) {
-                $this->updateVaultItem($user, $item['type'], $item['id'], $item['fields']);
-            }
+        return $this->materialResponse($user);
+    }
 
-            $user->forceFill([
-                'kdf_salt' => $payload['new_kdf_salt'],
-                'kdf_params' => $payload['new_kdf_params'],
-                'vault_version' => ((int) $user->vault_version) + 1,
-            ])->save();
+    public function rebindPrivateKey(PrivateKeyRebindRequest $request): JsonResponse
+    {
+        $user = $this->rotation->rebindPrivateKey(
+            $this->user($request),
+            (int) $request->validated('vault_version'),
+            (string) $request->validated('private_key_ciphertext'),
+            (string) $request->validated('private_key_nonce'),
+        );
 
-            $currentRefreshTokenHash = hash('sha256', $payload['current_refresh_token']);
+        return $this->materialResponse($user);
+    }
 
-            RefreshToken::query()
-                ->where('user_id', $user->id)
-                ->where('token_hash', '!=', $currentRefreshTokenHash)
-                ->whereNull('revoked_at')
-                ->update(['revoked_at' => now()]);
-
-            $currentAccessToken = $user->currentAccessToken();
-
-            $user->tokens()
-                ->whereKeyNot($currentAccessToken->getKey())
-                ->delete();
-
-            AuditLog::record($user, 'vault.master_password.changed', 'user', (string) $user->id, [
-                'items' => count($payload['items']),
-                'vault_version' => $user->vault_version,
-            ]);
-        });
-
+    private function materialResponse(User $user): JsonResponse
+    {
         return response()->json([
-            'vault_version' => $user->refresh()->vault_version,
+            'vault_version' => $user->vault_version,
+            'vault' => UserResource::vaultMaterial($user),
         ]);
     }
 
-    /**
-     * @param  array<string, mixed>  $fields
-     */
-    private function updateVaultItem(User $user, string $type, string $id, array $fields): void
+    private function user(Request $request): User
     {
-        $resource = VaultResourceRegistry::get($type);
-        $allowedFields = array_filter(
-            $resource['fields'],
-            static fn (string $field): bool => str_ends_with($field, '_ciphertext') || str_ends_with($field, '_nonce'),
-        );
-        $invalidFields = array_diff(array_keys($fields), $allowedFields);
+        /** @var User $user */
+        $user = $request->user();
 
-        if ($invalidFields !== []) {
-            throw ValidationException::withMessages([
-                'items' => __('One or more vault fields cannot be changed during master password rotation.'),
-            ]);
-        }
+        return $user;
+    }
 
-        $modelClass = $resource['model'];
+    private function currentAccessToken(Request $request): ?PersonalAccessToken
+    {
+        $token = $this->user($request)->currentAccessToken();
 
-        /** @var Model|null $record */
-        $record = $modelClass::query()
-            ->whereKey($id)
-            ->where('user_id', $user->id)
-            ->when($resource['team_scoped'], fn ($query) => $query->whereNull('team_id'))
-            ->first();
-
-        if (! $record instanceof Model) {
-            throw ValidationException::withMessages([
-                'items' => __('One or more vault records are invalid.'),
-            ]);
-        }
-
-        $record->update($fields);
+        return $token instanceof PersonalAccessToken ? $token : null;
     }
 }

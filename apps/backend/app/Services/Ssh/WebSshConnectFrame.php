@@ -10,12 +10,13 @@ use Illuminate\Validation\ValidationException;
 final class WebSshConnectFrame
 {
     public function __construct(
-        public readonly ?string $hostId,
+        public readonly string $hostId,
         public readonly string $host,
         public readonly int $port,
         public readonly string $username,
         public readonly int $cols,
         public readonly int $rows,
+        public readonly ?string $hostKeyFingerprint,
         public readonly ?string $authKind,
         public ?string $password,
         public ?string $privateKeyPemB64,
@@ -35,14 +36,25 @@ final class WebSshConnectFrame
         }
 
         /** @var array<string, mixed> $decoded */
+        return self::fromArray($decoded);
+    }
+
+    /**
+     * @param  array<string, mixed>  $decoded
+     */
+    public static function fromArray(array $decoded): self
+    {
         $validated = Validator::make($decoded, [
             'type' => ['required', 'in:connect'],
-            'host_id' => ['nullable', 'string'],
+            'host_id' => ['required', 'string', 'max:64'],
             'host' => ['required', 'string', 'max:255'],
             'port' => ['required', 'integer', 'min:1', 'max:65535'],
             'username' => ['required', 'string', 'max:255'],
             'cols' => ['required', 'integer', 'min:1', 'max:500'],
             'rows' => ['required', 'integer', 'min:1', 'max:500'],
+            // Validated for syntax here; a missing pin is rejected by the
+            // session opener with a distinct "host key unknown" error.
+            'host_key_fingerprint' => ['nullable', 'string', 'max:64'],
             'auth' => ['nullable', 'array'],
             'auth.kind' => ['required_with:auth', 'in:password,private-key'],
             'auth.password' => ['required_if:auth.kind,password', 'string'],
@@ -54,12 +66,13 @@ final class WebSshConnectFrame
         $auth = self::optionalArray($validated['auth'] ?? null);
 
         return new self(
-            hostId: self::optionalString($validated['host_id'] ?? null),
+            hostId: self::requiredString($validated, 'host_id'),
             host: self::requiredString($validated, 'host'),
             port: self::requiredInt($validated, 'port'),
             username: self::requiredString($validated, 'username'),
             cols: self::requiredInt($validated, 'cols'),
             rows: self::requiredInt($validated, 'rows'),
+            hostKeyFingerprint: self::optionalString($validated['host_key_fingerprint'] ?? null),
             authKind: self::optionalString($auth['kind'] ?? null),
             password: self::optionalString($auth['password'] ?? null),
             privateKeyPemB64: self::optionalString($auth['private_key_pem_b64'] ?? null),

@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTeamScope } from '@/features/teams/store'
-import { getApiClient } from '@/lib/api-client'
+import { getActiveApiBaseUrl, getApiClient } from '@/lib/api-client'
+import { useAuth } from '@/stores/auth'
 import { useVault } from '@/stores/vault'
 import { newVaultId } from './ids'
 import {
@@ -15,6 +16,7 @@ import {
   encryptGroupInput,
   encryptHostCredentialInput,
   encryptHostInput,
+  encryptHostKeysPayload,
   encryptIdentityInput,
   encryptSnippetInput,
   encryptTunnelInput,
@@ -23,6 +25,7 @@ import {
   type GroupInput,
   type HostCredentialInput,
   type HostInput,
+  type HostKeyPin,
   type IdentityInput,
   type SnippetInput,
   type TunnelInput,
@@ -34,6 +37,19 @@ function vaultKey(): Uint8Array {
     throw new Error('Vault is locked.')
   }
   return key
+}
+
+/**
+ * Cache scope for decrypted vault queries: server URL + user id. Two accounts
+ * (or the same id on two servers) never share a cache entry, so a stale hit
+ * cannot surface another account's plaintext. Null while signed out.
+ */
+function useVaultCacheScope(): string | null {
+  const userId = useAuth((s) => s.user?.id ?? null)
+  if (userId === null) {
+    return null
+  }
+  return `${getActiveApiBaseUrl() ?? ''}#${String(userId)}`
 }
 
 function useActiveVaultResourceKey(): Uint8Array | null {
@@ -63,36 +79,39 @@ function assertPersonalWriteScope(): void {
 
 const vaultKeys = {
   groupsRoot: ['vault', 'groups'] as const,
-  groups: (teamId: string | null, keyVersion: number | null) =>
-    ['vault', 'groups', teamId ?? 'personal', keyVersion ?? 0] as const,
+  groups: (scope: string | null, teamId: string | null, keyVersion: number | null) =>
+    ['vault', 'groups', scope, teamId ?? 'personal', keyVersion ?? 0] as const,
   hostCredentialsRoot: ['vault', 'host-credentials'] as const,
-  hostCredentials: (teamId: string | null, keyVersion: number | null) =>
-    ['vault', 'host-credentials', teamId ?? 'personal', keyVersion ?? 0] as const,
+  hostCredentials: (scope: string | null, teamId: string | null, keyVersion: number | null) =>
+    ['vault', 'host-credentials', scope, teamId ?? 'personal', keyVersion ?? 0] as const,
   hostsRoot: ['vault', 'hosts'] as const,
-  hosts: (teamId: string | null, keyVersion: number | null) =>
-    ['vault', 'hosts', teamId ?? 'personal', keyVersion ?? 0] as const,
+  hosts: (scope: string | null, teamId: string | null, keyVersion: number | null) =>
+    ['vault', 'hosts', scope, teamId ?? 'personal', keyVersion ?? 0] as const,
   identitiesRoot: ['vault', 'identities'] as const,
-  identities: (teamId: string | null, keyVersion: number | null) =>
-    ['vault', 'identities', teamId ?? 'personal', keyVersion ?? 0] as const,
+  identities: (scope: string | null, teamId: string | null, keyVersion: number | null) =>
+    ['vault', 'identities', scope, teamId ?? 'personal', keyVersion ?? 0] as const,
   snippetsRoot: ['vault', 'snippets'] as const,
-  snippets: (teamId: string | null, keyVersion: number | null) =>
-    ['vault', 'snippets', teamId ?? 'personal', keyVersion ?? 0] as const,
+  snippets: (scope: string | null, teamId: string | null, keyVersion: number | null) =>
+    ['vault', 'snippets', scope, teamId ?? 'personal', keyVersion ?? 0] as const,
   tunnelsRoot: ['vault', 'tunnels'] as const,
-  tunnels: (teamId: string | null, keyVersion: number | null) =>
-    ['vault', 'tunnels', teamId ?? 'personal', keyVersion ?? 0] as const,
-  aiSettings: ['vault', 'ai-settings'] as const,
+  tunnels: (scope: string | null, teamId: string | null, keyVersion: number | null) =>
+    ['vault', 'tunnels', scope, teamId ?? 'personal', keyVersion ?? 0] as const,
+  aiSettingsRoot: ['vault', 'ai-settings'] as const,
+  aiSettings: (scope: string | null) => ['vault', 'ai-settings', scope] as const,
 }
 
 export function useGroups() {
   const key = useActiveVaultResourceKey()
+  const scope = useVaultCacheScope()
   const selectedTeamId = useTeamScope((s) => s.selectedTeamId)
   const selectedTeamKeyVersion = useTeamScope((s) => s.selectedTeamKeyVersion)
   return useQuery({
     queryKey: vaultKeys.groups(
+      scope,
       selectedTeamId,
       selectedTeamId === null ? null : selectedTeamKeyVersion,
     ),
-    enabled: key !== null,
+    enabled: key !== null && scope !== null,
     queryFn: async () => {
       if (key === null) {
         return []
@@ -106,14 +125,16 @@ export function useGroups() {
 
 export function useHosts() {
   const key = useActiveVaultResourceKey()
+  const scope = useVaultCacheScope()
   const selectedTeamId = useTeamScope((s) => s.selectedTeamId)
   const selectedTeamKeyVersion = useTeamScope((s) => s.selectedTeamKeyVersion)
   return useQuery({
     queryKey: vaultKeys.hosts(
+      scope,
       selectedTeamId,
       selectedTeamId === null ? null : selectedTeamKeyVersion,
     ),
-    enabled: key !== null,
+    enabled: key !== null && scope !== null,
     queryFn: async () => {
       if (key === null) {
         return []
@@ -127,14 +148,16 @@ export function useHosts() {
 
 export function useHostCredentials() {
   const key = useActiveVaultResourceKey()
+  const scope = useVaultCacheScope()
   const selectedTeamId = useTeamScope((s) => s.selectedTeamId)
   const selectedTeamKeyVersion = useTeamScope((s) => s.selectedTeamKeyVersion)
   return useQuery({
     queryKey: vaultKeys.hostCredentials(
+      scope,
       selectedTeamId,
       selectedTeamId === null ? null : selectedTeamKeyVersion,
     ),
-    enabled: key !== null,
+    enabled: key !== null && scope !== null,
     queryFn: async () => {
       if (key === null) {
         return []
@@ -151,14 +174,16 @@ export function useHostCredentials() {
 
 export function useSnippets() {
   const key = useActiveVaultResourceKey()
+  const scope = useVaultCacheScope()
   const selectedTeamId = useTeamScope((s) => s.selectedTeamId)
   const selectedTeamKeyVersion = useTeamScope((s) => s.selectedTeamKeyVersion)
   return useQuery({
     queryKey: vaultKeys.snippets(
+      scope,
       selectedTeamId,
       selectedTeamId === null ? null : selectedTeamKeyVersion,
     ),
-    enabled: key !== null,
+    enabled: key !== null && scope !== null,
     queryFn: async () => {
       if (key === null) {
         return []
@@ -172,14 +197,16 @@ export function useSnippets() {
 
 export function useIdentities() {
   const key = useActiveVaultResourceKey()
+  const scope = useVaultCacheScope()
   const selectedTeamId = useTeamScope((s) => s.selectedTeamId)
   const selectedTeamKeyVersion = useTeamScope((s) => s.selectedTeamKeyVersion)
   return useQuery({
     queryKey: vaultKeys.identities(
+      scope,
       selectedTeamId,
       selectedTeamId === null ? null : selectedTeamKeyVersion,
     ),
-    enabled: key !== null,
+    enabled: key !== null && scope !== null,
     queryFn: async () => {
       if (key === null) {
         return []
@@ -193,14 +220,16 @@ export function useIdentities() {
 
 export function useTunnels() {
   const key = useActiveVaultResourceKey()
+  const scope = useVaultCacheScope()
   const selectedTeamId = useTeamScope((s) => s.selectedTeamId)
   const selectedTeamKeyVersion = useTeamScope((s) => s.selectedTeamKeyVersion)
   return useQuery({
     queryKey: vaultKeys.tunnels(
+      scope,
       selectedTeamId,
       selectedTeamId === null ? null : selectedTeamKeyVersion,
     ),
-    enabled: key !== null,
+    enabled: key !== null && scope !== null,
     queryFn: async () => {
       if (key === null) {
         return []
@@ -239,6 +268,23 @@ export function useSaveHost() {
       return input.id === undefined
         ? api.createVaultRecord('hosts', payload)
         : api.updateVaultRecord('hosts', id, payload)
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: vaultKeys.hostsRoot }),
+  })
+}
+
+/**
+ * Replace only a host's approved SSH host keys (PATCH of the encrypted
+ * `host_keys` field). Personal vault only, like every other write today.
+ */
+export function useSaveHostKeys() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async ({ hostId, hostKeys }: { hostId: string; hostKeys: HostKeyPin[] }) => {
+      assertPersonalWriteScope()
+      const api = await getApiClient()
+      const payload = await encryptHostKeysPayload(hostId, vaultKey(), hostKeys)
+      return api.updateVaultRecord('hosts', hostId, payload)
     },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: vaultKeys.hostsRoot }),
   })
@@ -385,9 +431,10 @@ export function useReadyAiSettings(): AiSettingsItem | null {
  */
 export function useAiSettings() {
   const key = useVault((s) => s.key)
+  const scope = useVaultCacheScope()
   return useQuery({
-    queryKey: vaultKeys.aiSettings,
-    enabled: key !== null,
+    queryKey: vaultKeys.aiSettings(scope),
+    enabled: key !== null && scope !== null,
     queryFn: async (): Promise<AiSettingsItem | null> => {
       const api = await getApiClient()
       const records = await api.listVaultRecords('ai-settings')
@@ -414,6 +461,6 @@ export function useSaveAiSettings() {
         ? api.createVaultRecord('ai-settings', payload)
         : api.updateVaultRecord('ai-settings', id, payload)
     },
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: vaultKeys.aiSettings }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: vaultKeys.aiSettingsRoot }),
   })
 }

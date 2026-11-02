@@ -13,6 +13,7 @@ import { CommandPalette } from './CommandPalette'
 import { useCommandUi } from './command-ui'
 import { NAV_ITEMS } from './nav-items'
 import { ShortcutsDialog } from './ShortcutsDialog'
+import { HostKeyDialog } from '@/features/hosts/HostKeyDialog'
 import { TopBar } from './TopBar'
 
 function rowClass(collapsed: boolean): string {
@@ -225,6 +226,7 @@ export function AppShell() {
 
       <CommandPalette />
       <ShortcutsDialog />
+      <HostKeyDialog />
     </div>
   )
 }

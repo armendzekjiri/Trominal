@@ -169,9 +169,12 @@ return [
     | to the server if the browser has a HTTPS connection. This will keep
     | the cookie from being sent to you when it can't be done securely.
     |
+    | Trominal defaults this to true in production. Only set
+    | SESSION_SECURE_COOKIE=false for a throwaway plain-HTTP trial.
+    |
     */
 
-    'secure' => env('SESSION_SECURE_COOKIE'),
+    'secure' => (bool) env('SESSION_SECURE_COOKIE', env('APP_ENV') === 'production'),
 
     /*
     |--------------------------------------------------------------------------

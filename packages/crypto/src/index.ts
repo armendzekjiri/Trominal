@@ -1,6 +1,12 @@
 export { sodiumReady } from './ready'
 export type { KdfParams } from './kdf-params'
-export { DEFAULT_KDF_PARAMS, isKdfParams } from './kdf-params'
+export {
+  assertKdfParams,
+  assertKdfResourceLimits,
+  DEFAULT_KDF_PARAMS,
+  isKdfParams,
+  KDF_LIMITS,
+} from './kdf-params'
 export { deriveVaultKey } from './kdf'
 export type { Envelope } from './envelope'
 export { makeAd } from './envelope'

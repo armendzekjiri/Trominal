@@ -175,6 +175,18 @@ A **team** is a shared workspace. Members of a team can see and use shared hosts
 
 Each user-team relationship has a **team role**: `owner`, `admin`, `member`, `viewer`. Independent of the global instance role. (Spatie Permission supports this with team scopes.)
 
+Team role × action matrix (single source of truth: `App\Enums\TeamRole`). The server enforces it on every team-scoped operation **in addition to** the global Spatie permission — a request needs both:
+
+| Action                                                 | owner | admin | member | viewer |
+| ------------------------------------------------------ | :---: | :---: | :----: | :----: |
+| Read team vault records (list, show, delta sync)       |   ✓   |   ✓   |   ✓    |   ✓    |
+| Create / update / delete team vault records            |   ✓   |   ✓   |   ✓    |        |
+| Connect to team hosts (web SSH token)                  |   ✓   |   ✓   |   ✓    |        |
+| Update team metadata; add/remove members; change roles |   ✓   |   ✓   |        |        |
+| Assign the owner role; delete the team                 |   ✓   |       |        |        |
+
+`viewer` is read-only: the brief did not define it, so it follows the least-privilege reading that mirrors the global `guest` role (no edits, no SSH connect). Note that a viewer still holds the team key, so client-side decryption cannot be prevented; the matrix governs what the server accepts.
+
 #### Team encryption (the tricky part)
 
 Teams cannot use a single user's master-password-derived key, since each user has a different one. Solution: **per-team symmetric key wrapped with each member's public key.**
@@ -314,6 +326,7 @@ The first user is a **dev user** (their personal vault works) AND an **admin** (
 - Strict CORS — `ALLOWED_ORIGINS` env allowlist.
 - Rate limiting: 5 login attempts per 15 min per IP + per email. Generic API throttle 60/min.
 - Audit log: every vault access, every host connection attempt, every admin action, retained 90 days (configurable).
+  - Vault reads record metadata only (type, scope, record id, counts — never ciphertext or nonces): `vault.<type>.viewed` per record, `vault.<type>.listed` per listing, `vault.synced` per sync. Identical listings from one session are coalesced for 5 minutes and empty delta-sync polls for 15 minutes to keep volume reasonable.
 - Vault DB columns also wrapped with Laravel `encrypted` cast — defense in depth.
 - App key, DB creds via env vars only. Never commit `.env`.
 - Security headers: CSP, X-Frame-Options DENY, X-Content-Type-Options nosniff, Referrer-Policy.
@@ -657,7 +670,7 @@ Tunnels and SFTP are separate product areas because they serve different workflo
 
 - Vault resources now support real team scope through nullable `team_id` columns on groups, hosts, snippets, identities, tunnels, and host credentials. AI settings remain personal-only.
 - `GET /api/v1/vault/{resource}` omits `team` for personal records and accepts `?team=<team_id>` for team records. Delta sync includes personal records plus records from every team where the user is a member.
-- Vault policies allow access when the user owns a personal record or belongs to the record's team. Relationship IDs must stay inside the same scope, so a team host cannot point to a personal group and a personal host cannot point to a team group.
+- Vault policies allow access when the user owns a personal record, or holds a team role on the record's team that permits the action (see the matrix in §5.3). Relationship IDs must stay inside the same scope, so a team host cannot point to a personal group and a personal host cannot point to a team group.
 - Master-password rotation explicitly stays personal-only; team-scoped resources are encrypted with team keys and are rejected from `/api/v1/me/master-password/change`.
 
 #### Phase 8D implementation notes

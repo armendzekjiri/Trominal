@@ -12,6 +12,7 @@ export function useTransferEvents(): void {
   const markStarted = useTransfers((s) => s.markStarted)
   const markDone = useTransfers((s) => s.markDone)
   const markError = useTransfers((s) => s.markError)
+  const markCancelled = useTransfers((s) => s.markCancelled)
 
   useEffect(() => {
     let unlisten: UnlistenFn | undefined
@@ -29,6 +30,9 @@ export function useTransferEvents(): void {
         case 'error':
           markError(payload.transferId, payload.message ?? 'Transfer failed.')
           break
+        case 'cancelled':
+          markCancelled(payload.transferId)
+          break
       }
     }).then((handler) => {
       if (cancelled) {
@@ -42,5 +46,5 @@ export function useTransferEvents(): void {
       cancelled = true
       unlisten?.()
     }
-  }, [markStarted, markDone, markError])
+  }, [markStarted, markDone, markError, markCancelled])
 }

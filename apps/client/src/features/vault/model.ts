@@ -16,6 +16,22 @@ const AD_RESOURCE: Record<EncryptedVaultResource, string> = {
   'ai-settings': 'ai_setting',
 }
 
+/**
+ * An SSH host key the user explicitly approved for a host. Stored encrypted in
+ * the host record; the desktop app refuses to connect unless the server
+ * presents one of these keys.
+ */
+export type HostKeyPin = {
+  /** SSH key type, e.g. `ssh-ed25519`. */
+  keyType: string
+  /** Base64 public key blob as it appears in known_hosts. */
+  publicKey: string
+  /** `SHA256:` fingerprint shown to the user when it was approved. */
+  fingerprint: string
+  /** ISO timestamp of the approval. */
+  approvedAt: string
+}
+
 export type HostItem = {
   id: string
   teamId: string | null
@@ -26,6 +42,8 @@ export type HostItem = {
   username: string
   tags: string[]
   color: string
+  /** Approved host keys; empty for hosts that were never verified. */
+  hostKeys: HostKeyPin[]
   updatedAt: string | null
 }
 
@@ -135,6 +153,8 @@ export type HostInput = {
   username: string
   tags: string[]
   color: string
+  /** Approved host keys. Leave undefined to keep whatever is stored. */
+  hostKeys?: HostKeyPin[]
 }
 
 export type GroupInput = {
@@ -198,6 +218,11 @@ function relationField(record: VaultRecord, field: string): string | null {
   return typeof value === 'string' && value.length > 0 ? value : null
 }
 
+/** Associated data shared by every encrypted field of a personal vault record. */
+export function personalRecordAd(resource: VaultResourceType, id: string): string {
+  return makeAd(AD_RESOURCE[resource], id)
+}
+
 function recordAd(record: VaultRecord, resource: EncryptedVaultResource): string {
   const teamId = relationField(record, 'team_id')
 
@@ -222,6 +247,34 @@ function tagsFromString(value: string): string[] {
       .split(',')
       .map((tag) => tag.trim())
       .filter(Boolean)
+  }
+}
+
+/**
+ * Parse the decrypted `host_keys` field. Records written before pinning
+ * existed have no field (empty string); anything malformed is treated as
+ * "not verified" so the user is asked again rather than trusting junk.
+ */
+export function hostKeysFromString(value: string): HostKeyPin[] {
+  if (value.trim() === '') {
+    return []
+  }
+  try {
+    const parsed = JSON.parse(value) as unknown
+    if (!Array.isArray(parsed)) {
+      return []
+    }
+    return parsed.flatMap((item): HostKeyPin[] => {
+      if (typeof item !== 'object' || item === null) return []
+      const pin = item as Record<string, unknown>
+      const keyType = stringValue(pin.keyType)
+      const publicKey = stringValue(pin.publicKey)
+      const fingerprint = stringValue(pin.fingerprint)
+      if (keyType === '' || publicKey === '' || fingerprint === '') return []
+      return [{ keyType, publicKey, fingerprint, approvedAt: stringValue(pin.approvedAt) }]
+    })
+  } catch {
+    return []
   }
 }
 
@@ -382,6 +435,7 @@ export async function decryptHost(record: VaultRecord, key: Uint8Array): Promise
     username: await decryptText(record, key, 'hosts', 'username'),
     tags: tagsFromString(await decryptText(record, key, 'hosts', 'tags')),
     color: await decryptText(record, key, 'hosts', 'color'),
+    hostKeys: hostKeysFromString(await decryptText(record, key, 'hosts', 'host_keys')),
     updatedAt: record.updated_at,
   }
 }
@@ -478,7 +532,32 @@ export async function encryptHostInput(id: string, key: Uint8Array, input: HostI
   await encryptText(payload, key, 'hosts', id, 'username', input.username)
   await encryptText(payload, key, 'hosts', id, 'tags', JSON.stringify(input.tags))
   await encryptText(payload, key, 'hosts', id, 'color', input.color)
+  if (input.hostKeys !== undefined) {
+    await encryptHostKeysInto(payload, key, id, input.hostKeys)
+  }
   return payload
+}
+
+/** PATCH payload that only replaces a host's approved keys. */
+export async function encryptHostKeysPayload(
+  id: string,
+  key: Uint8Array,
+  hostKeys: HostKeyPin[],
+): Promise<VaultRecordPayload> {
+  const payload: VaultRecordPayload = {}
+  await encryptHostKeysInto(payload, key, id, hostKeys)
+  return payload
+}
+
+async function encryptHostKeysInto(
+  payload: VaultRecordPayload,
+  key: Uint8Array,
+  id: string,
+  hostKeys: HostKeyPin[],
+): Promise<void> {
+  // An empty list clears the field (nullable), so the host is unverified again.
+  const value = hostKeys.length === 0 ? '' : JSON.stringify(hostKeys)
+  await encryptText(payload, key, 'hosts', id, 'host_keys', value)
 }
 
 export async function encryptHostCredentialInput(

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Navigate, Outlet } from 'react-router-dom'
 import { getApiBaseUrl } from '@/lib/config'
+import { parseServerUrl } from '@/lib/server-url'
 import { useAuth } from '@/stores/auth'
 import { useVault } from '@/stores/vault'
 
@@ -24,7 +25,9 @@ export function ConnectGuard() {
     let active = true
     void getApiBaseUrl().then((url) => {
       if (!active) return
-      setState(url !== null && url !== '' ? 'present' : 'absent')
+      // An insecure saved URL (http:// to a non-local host) counts as absent:
+      // the connect page explains why and asks for an https:// one.
+      setState(url !== null && parseServerUrl(url).ok ? 'present' : 'absent')
     })
     return () => {
       active = false

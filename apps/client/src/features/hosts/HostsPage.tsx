@@ -5,6 +5,7 @@ import {
   Plus,
   Search,
   Server,
+  ShieldCheck,
   Tag,
   Terminal,
   Trash2,
@@ -42,6 +43,9 @@ import {
   type IdentityItem,
 } from '@/features/vault/model'
 import { authForIdentity } from '@/features/vault/ssh-auth'
+import { useHostKeyPrompt } from './host-key-prompt'
+import { keyTypeLabel, type HostKeyPinPayload } from './host-keys'
+import { useHostKeyGate } from './use-host-key-gate'
 
 type TauriCore = {
   invoke: <T>(command: string, args?: Record<string, unknown>) => Promise<T>
@@ -57,6 +61,7 @@ type SavedHost = {
 
 type BootstrapPrompt = {
   host: SavedHost
+  hostKeys: HostKeyPinPayload[]
   identity: IdentityItem
   password: string
   status: 'installing' | 'password'
@@ -141,6 +146,11 @@ export function HostsPage() {
   const saveHostCredential = useSaveHostCredential()
   const deleteHostCredential = useDeleteHostCredential()
   const saveGroup = useSaveGroup()
+  const { ensureHostKeys, handleHostKeyError, verifyFromEditor } = useHostKeyGate()
+  const [hostKeyStatus, setHostKeyStatus] = useState<{
+    state: 'checking' | 'done' | 'error'
+    message: string
+  } | null>(null)
   const hosts = hostsQuery.data ?? []
   const groups = groupsQuery.data ?? []
   const identities = identitiesQuery.data ?? []
@@ -166,7 +176,8 @@ export function HostsPage() {
   function closeEditor(): void {
     setEditorOpen(false)
     setDraft(EMPTY_HOST)
-    if (searchParams.has('new')) setSearchParams({}, { replace: true })
+    setHostKeyStatus(null)
+    if (searchParams.has('new') || searchParams.has('edit')) setSearchParams({}, { replace: true })
   }
 
   const location = useLocation()
@@ -180,10 +191,23 @@ export function HostsPage() {
     setEditorOpen(true)
   }
 
+  // "Open host editor" from the host-key dialog lands here as /hosts?edit=<id>.
+  const editRequest = searchParams.get('edit')
+  if (editRequest !== null && handledNewRequest !== location.key) {
+    const target = hosts.find((host) => host.id === editRequest)
+    if (target !== undefined) {
+      setHandledNewRequest(location.key)
+      setDraft(hostToInput(target, latestHostCredentialForHost(target.id, hostCredentials)))
+      setHostKeyStatus(null)
+      setEditorOpen(true)
+    }
+  }
+
   // ⌘F / Ctrl+F focuses search, ⌘N / Ctrl+N starts a new host, Esc closes the editor.
   useEffect(() => {
     function onKeyDown(event: KeyboardEvent): void {
       if (useCommandUi.getState().open !== null) return
+      if (useHostKeyPrompt.getState().prompt !== null) return
       if (matchesShortcut(event, 'hosts.search')) {
         event.preventDefault()
         searchRef.current?.focus()
@@ -252,14 +276,45 @@ export function HostsPage() {
       })
       const identity = identities.find((item) => item.id === draft.identityId)
       if (identity !== undefined && isTauri) {
+        const hostKeys = await ensureHostKeys({
+          id: savedHost.id,
+          teamId: null,
+          name: savedHost.name,
+          hostname: savedHost.hostname,
+          port: savedHost.port,
+          username: savedHost.username,
+          hostKeys: selected?.hostKeys ?? [],
+        }).catch((error: unknown) => {
+          setKeyStatus(typeof error === 'string' ? error : 'Could not read the host key.')
+          return undefined
+        })
+        if (hostKeys === undefined) return
+        if (hostKeys === null) {
+          setKeyStatus('Host key not approved, so the attached SSH key was not tested.')
+          return
+        }
         setKeyStatus('Testing attached SSH key...')
-        if (await testAttachedKey(savedHost, identity)) {
+        let works: boolean
+        try {
+          works = await testAttachedKey(savedHost, identity, hostKeys)
+        } catch (error) {
+          setKeyStatus(
+            handleHostKeyError(error, { ...savedHost, teamId: null, hostKeys: [] })
+              ? 'Host key verification failed, so the attached SSH key was not tested.'
+              : typeof error === 'string'
+                ? error
+                : 'Testing the attached SSH key failed.',
+          )
+          return
+        }
+        if (works) {
           setKeyStatus('Attached SSH key already works.')
           closeEditor()
           return
         }
         setBootstrap({
           host: savedHost,
+          hostKeys,
           identity,
           password: '',
           status: 'password',
@@ -302,21 +357,58 @@ export function HostsPage() {
     setBootstrap({ ...bootstrap, status: 'installing', error: undefined })
     setKeyStatus('Installing public key on the server...')
     try {
-      await installAttachedKey(bootstrap.host, bootstrap.identity, bootstrap.password)
-      if (!(await testAttachedKey(bootstrap.host, bootstrap.identity))) {
+      await installAttachedKey(
+        bootstrap.host,
+        bootstrap.identity,
+        bootstrap.password,
+        bootstrap.hostKeys,
+      )
+      if (!(await testAttachedKey(bootstrap.host, bootstrap.identity, bootstrap.hostKeys))) {
         throw new Error('Key install finished, but key authentication still failed.')
       }
       setBootstrap(null)
       closeEditor()
       setKeyStatus('Attached SSH key installed and verified.')
     } catch (error) {
+      if (handleHostKeyError(error, { ...bootstrap.host, teamId: null, hostKeys: [] })) {
+        setBootstrap(null)
+        setKeyStatus('Host key verification failed, so the key was not installed.')
+        return
+      }
       setBootstrap({
         ...bootstrap,
         password: '',
         status: 'password',
-        error: error instanceof Error ? error.message : 'SSH key install failed.',
+        error:
+          typeof error === 'string'
+            ? error
+            : error instanceof Error
+              ? error.message
+              : 'SSH key install failed.',
       })
       setKeyStatus('SSH key install failed.')
+    }
+  }
+
+  async function checkHostKey(): Promise<void> {
+    if (selected === null) return
+    setHostKeyStatus({ state: 'checking', message: 'Reading the server key…' })
+    try {
+      const result = await verifyFromEditor(selected)
+      setHostKeyStatus(
+        result === 'match'
+          ? { state: 'done', message: 'Server key matches the approved key.' }
+          : result === 'approved'
+            ? { state: 'done', message: 'Host key approved.' }
+            : result === 'replaced'
+              ? { state: 'done', message: 'Approved host key replaced.' }
+              : { state: 'done', message: 'Nothing changed.' },
+      )
+    } catch (error) {
+      setHostKeyStatus({
+        state: 'error',
+        message: typeof error === 'string' ? error : 'Could not read the server key.',
+      })
     }
   }
 
@@ -628,6 +720,14 @@ export function HostsPage() {
                 placeholder="prod, web, rails"
                 hint="Comma separated"
               />
+              {editing && selected !== null && (
+                <HostKeySection
+                  pins={selected.hostKeys}
+                  desktop={isTauri}
+                  status={hostKeyStatus}
+                  onCheck={() => void checkHostKey()}
+                />
+              )}
             </div>
 
             <div className="flex shrink-0 items-center gap-2 border-t border-border p-4">
@@ -724,6 +824,74 @@ export function HostsPage() {
         </div>
       )}
     </div>
+  )
+}
+
+function HostKeySection({
+  pins,
+  desktop,
+  status,
+  onCheck,
+}: {
+  pins: HostItem['hostKeys']
+  desktop: boolean
+  status: { state: 'checking' | 'done' | 'error'; message: string } | null
+  onCheck: () => void
+}) {
+  return (
+    <section className="flex flex-col gap-1.5" aria-labelledby="host-key-label">
+      <h3 id="host-key-label" className="text-[12px] font-medium text-fg-muted">
+        Host key
+      </h3>
+      {pins.length === 0 ? (
+        <p className="text-[12px] leading-5 text-fg-faint">
+          Not verified yet — you&apos;ll be asked to approve the fingerprint on first connect.
+        </p>
+      ) : (
+        <ul className="grid gap-1.5">
+          {pins.map((pin) => (
+            <li
+              key={`${pin.keyType} ${pin.publicKey}`}
+              className="rounded-md border border-border bg-surface px-3 py-2"
+            >
+              <div className="text-[11px] font-medium text-fg-muted">
+                {keyTypeLabel(pin.keyType)}
+              </div>
+              <div className="break-all font-mono text-[12px] text-fg">{pin.fingerprint}</div>
+            </li>
+          ))}
+        </ul>
+      )}
+      {desktop && (
+        <div className="flex flex-wrap items-center gap-2">
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={onCheck}
+            disabled={status?.state === 'checking'}
+          >
+            {status?.state === 'checking' ? (
+              <Loader2 size={12} className="animate-spin" aria-hidden />
+            ) : (
+              <ShieldCheck size={12} aria-hidden />
+            )}
+            {pins.length === 0 ? 'Verify host key' : 'Check host key'}
+          </Button>
+          {status !== null && status.state !== 'checking' && (
+            <span
+              role="status"
+              className={cn(
+                'text-[12px]',
+                status.state === 'error' ? 'text-danger' : 'text-fg-muted',
+              )}
+            >
+              {status.message}
+            </span>
+          )}
+        </div>
+      )}
+    </section>
   )
 }
 
@@ -900,7 +1068,11 @@ function savedHostFromDraft(id: string, draft: HostDraft): SavedHost {
   }
 }
 
-async function testAttachedKey(host: SavedHost, identity: IdentityItem): Promise<boolean> {
+async function testAttachedKey(
+  host: SavedHost,
+  identity: IdentityItem,
+  hostKeys: HostKeyPinPayload[],
+): Promise<boolean> {
   const auth = await authForIdentity(identity)
   if (auth.kind !== 'private-key') {
     return false
@@ -914,6 +1086,7 @@ async function testAttachedKey(host: SavedHost, identity: IdentityItem): Promise
         port: sshPort(host.port),
         username: host.username,
         privateKeyPem: Array.from(auth.privateKeyPem),
+        hostKeys,
       },
     })
     return response.works
@@ -926,6 +1099,7 @@ async function installAttachedKey(
   host: SavedHost,
   identity: IdentityItem,
   password: string,
+  hostKeys: HostKeyPinPayload[],
 ): Promise<void> {
   const auth = await authForIdentity(identity)
   if (auth.kind !== 'private-key') {
@@ -947,6 +1121,7 @@ async function installAttachedKey(
         username: host.username,
         publicKey: auth.publicKey,
         password: Array.from(passwordBytes),
+        hostKeys,
       },
     })
   } finally {
