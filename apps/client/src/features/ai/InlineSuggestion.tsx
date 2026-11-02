@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import type { SshSession } from '@trominal/ssh-transport'
 import type { Terminal } from '@xterm/xterm'
 import { useAuth } from '@/stores/auth'
-import { useAiSettings } from '@/features/vault/hooks'
+import { useReadyAiSettings } from '@/features/vault/hooks'
 import { adapterFor, collectChatText, type AdapterConfig } from './adapters'
 import { readRecentLines } from './recentLines'
 import { evaluateAutoSuggest } from './autoSuggestHeuristics'
@@ -35,7 +35,7 @@ const encoder = new TextEncoder()
  * if either is off, the hook installs no key handler and renders nothing.
  */
 export function InlineSuggestion({ terminal, session }: InlineSuggestionProps) {
-  const settings = useAiSettings().data ?? null
+  const settings = useReadyAiSettings()
   const hasPermission = useAuth((s) => s.hasPermission)
   const enabled =
     hasPermission('ai.use') && settings !== null && settings.features.inlineSuggestions
@@ -60,7 +60,7 @@ export function InlineSuggestion({ terminal, session }: InlineSuggestionProps) {
     const adapter = adapterFor(settings.provider)
     const config: AdapterConfig = {
       endpoint: settings.endpoint || adapter.defaultEndpoint,
-      model: settings.model || adapter.defaultModel,
+      model: settings.model,
       apiKey: settings.apiKey,
     }
 

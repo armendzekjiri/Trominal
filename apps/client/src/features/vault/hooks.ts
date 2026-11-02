@@ -369,6 +369,15 @@ export function useDeleteTunnel() {
 }
 
 /**
+ * AI settings the features can actually use: saved, with a model picked. Records saved before
+ * the model picker existed may have no model and count as not configured.
+ */
+export function useReadyAiSettings(): AiSettingsItem | null {
+  const settings = useAiSettings().data ?? null
+  return settings !== null && settings.model.trim() !== '' ? settings : null
+}
+
+/**
  * AI settings are a singleton per user (the migration enforces UNIQUE(user_id)),
  * so the list endpoint returns either zero records (never configured) or one.
  * The hook surfaces that as `AiSettingsItem | null` so consumers can branch
