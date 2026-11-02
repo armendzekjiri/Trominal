@@ -92,23 +92,23 @@ const platforms = [
           <div class="row">&nbsp;</div>
           <div class="row"><span class="term-c-dim"># Configure and boot</span></div>
           <div class="row">
-            <span class="term-prompt">$</span> cp .env.example .env
-            <span class="term-c-dim"># edit it: APP_KEY, DB password, mail</span>
+            <span class="term-prompt">$</span> ./docker/setup.sh
+            <span class="term-c-dim"># writes .env: APP_KEY, DB password</span>
           </div>
           <div class="row">
             <span class="term-prompt">$</span> docker compose up -d
           </div>
           <div class="row" style="color:var(--accent)">
-            ✓ trominal up · http://localhost:8000
+            ✓ trominal up · http://localhost
           </div>
           <div class="row">&nbsp;</div>
           <div class="row"><span class="term-c-dim"># Open in your browser</span></div>
           <div class="row" style="color:var(--ink-3)">
-            → <span class="term-c-blue">http://localhost:8000</span>
-            register first user (becomes admin)
+            → point a client at <span class="term-c-blue">http://localhost</span>
+            and register (first user becomes admin)
           </div>
           <div class="row" style="color:var(--ink-3)">
-            → <span class="term-c-blue">http://localhost:8000/admin</span>
+            → <span class="term-c-blue">http://localhost/admin</span>
             Filament panel for instance settings
           </div>
         </div>
