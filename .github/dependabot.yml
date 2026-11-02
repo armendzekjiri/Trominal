@@ -24,6 +24,15 @@ updates:
     directory: /apps/backend
     schedule:
       interval: weekly
+    # Runtime upgrades (PHP 8.4 -> 8.5, Node 20 -> 22) are deliberate changes;
+    # only digest and patch updates of the pinned tags come in automatically.
+    ignore:
+      - dependency-name: php
+        update-types: ['version-update:semver-major', 'version-update:semver-minor']
+      - dependency-name: node
+        update-types: ['version-update:semver-major', 'version-update:semver-minor']
+      - dependency-name: composer
+        update-types: ['version-update:semver-major']
     commit-message:
       prefix: chore(docker)
 
@@ -32,6 +41,10 @@ updates:
     directory: /
     schedule:
       interval: weekly
+    # Major versions are upgraded deliberately, with their own review.
+    ignore:
+      - dependency-name: '*'
+        update-types: ['version-update:semver-major']
     open-pull-requests-limit: 10
     groups:
       npm-minor-and-patch:
@@ -44,6 +57,10 @@ updates:
     directory: /apps/backend
     schedule:
       interval: weekly
+    # Major versions are upgraded deliberately, with their own review.
+    ignore:
+      - dependency-name: '*'
+        update-types: ['version-update:semver-major']
     groups:
       backend-npm-minor-and-patch:
         update-types: [minor, patch]
@@ -54,6 +71,10 @@ updates:
     directory: /apps/backend
     schedule:
       interval: weekly
+    # Major versions are upgraded deliberately, with their own review.
+    ignore:
+      - dependency-name: '*'
+        update-types: ['version-update:semver-major']
     open-pull-requests-limit: 10
     groups:
       composer-minor-and-patch:
@@ -68,6 +89,10 @@ updates:
       - /packages/crypto/parity
     schedule:
       interval: weekly
+    # Major versions are upgraded deliberately, with their own review.
+    ignore:
+      - dependency-name: '*'
+        update-types: ['version-update:semver-major']
     groups:
       cargo-minor-and-patch:
         update-types: [minor, patch]
