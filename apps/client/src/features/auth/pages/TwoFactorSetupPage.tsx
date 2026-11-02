@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { AuthShell } from '@/components/auth/AuthShell'
 import { Button } from '@/components/ui/button'
+import { QrCode } from '@/components/ui/qr-code'
 import { TextInput } from '@/components/ui/text-input'
 import { getApiClient } from '@/lib/api-client'
 import { useAuth } from '@/stores/auth'
@@ -144,12 +145,14 @@ export function TwoFactorSetupPage() {
 function SecretBlock({ secret }: { secret: TwoFactorEnableResponse | null }) {
   if (secret === null) return null
   return (
-    <div className="flex flex-col gap-1.5 rounded-md border border-border-strong bg-surface px-3 py-2.5">
-      <span className="text-[11px] font-medium uppercase tracking-wide text-fg-muted">Secret</span>
-      <code className="break-all font-mono text-[12px] text-fg">{secret.secret}</code>
-      <span className="mt-1 text-[11px] text-fg-faint">
-        Or scan: <span className="break-all font-mono">{secret.otpauth_uri}</span>
-      </span>
+    <div className="flex flex-col items-center gap-3 rounded-md border border-border-strong bg-surface px-3 py-3">
+      <QrCode value={secret.otpauth_uri} label="QR code for your authenticator app" />
+      <div className="flex w-full flex-col gap-1">
+        <span className="text-[11px] font-medium uppercase tracking-wide text-fg-muted">
+          Can't scan? Enter this secret
+        </span>
+        <code className="break-all font-mono text-[12px] text-fg">{secret.secret}</code>
+      </div>
     </div>
   )
 }

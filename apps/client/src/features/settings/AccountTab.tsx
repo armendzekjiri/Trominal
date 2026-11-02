@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Eye, EyeOff, KeyRound, Loader2, ShieldCheck, ShieldOff } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { QrCode } from '@/components/ui/qr-code'
 import { TextInput } from '@/components/ui/text-input'
 import { getApiClient } from '@/lib/api-client'
 import { useAuth } from '@/stores/auth'
@@ -33,6 +34,7 @@ import {
 import type {
   MasterPasswordChangeItem,
   MasterPasswordChangeRequest,
+  TwoFactorEnableResponse,
   VaultRecord,
   VaultRecordPayload,
   VaultResourceType,
@@ -117,7 +119,7 @@ export function AccountTab() {
 function TwoFactorSection({ enabled, onChange }: { enabled: boolean; onChange: () => void }) {
   const [status, setStatus] = useState<Status>({ kind: 'idle' })
   const [showSetup, setShowSetup] = useState(false)
-  const [setupSecret, setSetupSecret] = useState<string | null>(null)
+  const [setupSecret, setSetupSecret] = useState<TwoFactorEnableResponse | null>(null)
   const [otp, setOtp] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
   const [confirmCode, setConfirmCode] = useState('')
@@ -127,7 +129,7 @@ function TwoFactorSection({ enabled, onChange }: { enabled: boolean; onChange: (
     try {
       const api = await getApiClient()
       const response = await api.enableTwoFactor()
-      setSetupSecret(response.secret)
+      setSetupSecret(response)
       setShowSetup(true)
       setStatus({ kind: 'idle' })
     } catch (err) {
@@ -196,8 +198,16 @@ function TwoFactorSection({ enabled, onChange }: { enabled: boolean; onChange: (
 
       {showSetup && setupSecret !== null && (
         <div className="flex flex-col gap-2 border-t border-border-subtle pt-3">
-          <div className="rounded-md border border-border-strong bg-surface-2 px-3 py-2 font-mono text-[11px] text-fg-muted">
-            Add this to your authenticator: <span className="text-fg">{setupSecret}</span>
+          <div className="flex items-start gap-3 rounded-md border border-border-strong bg-surface-2 p-3">
+            <QrCode
+              value={setupSecret.otpauth_uri}
+              label="QR code for your authenticator app"
+              size={136}
+            />
+            <div className="flex min-w-0 flex-col gap-1 font-mono text-[11px] text-fg-muted">
+              <span>Scan with your authenticator app, or enter this secret:</span>
+              <span className="break-all text-fg">{setupSecret.secret}</span>
+            </div>
           </div>
           <TextInput
             label="6-digit code"
