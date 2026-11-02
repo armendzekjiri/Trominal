@@ -236,7 +236,7 @@ export function AskAiPanel({
                       : 'bg-surface-2 text-fg',
                 )}
               >
-                <div className="mb-1 font-mono text-[10px] uppercase tracking-wide text-fg-faint">
+                <div className="mb-1 font-mono text-[10px] text-fg-faint">
                   {bubble.role === 'user' ? 'You' : bubble.role === 'system' ? 'Error' : 'AI'}
                   {bubble.streaming === true ? ' · streaming…' : ''}
                 </div>
@@ -276,7 +276,7 @@ export function AskAiPanel({
                 }
               }}
               rows={3}
-              className="w-full resize-none rounded-md border border-border-strong bg-surface px-2.5 py-2 font-mono text-[12px] text-fg outline-none focus:border-accent focus:ring-2 focus:ring-accent-ring"
+              className="w-full resize-none rounded-md border border-border-input bg-surface px-2.5 py-2 font-mono text-[12px] text-fg outline-none focus:border-accent focus:ring-2 focus:ring-accent-ring"
               placeholder="Ask anything or pick a slash command…"
             />
             <div className="flex items-center gap-2">

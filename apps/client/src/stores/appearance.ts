@@ -57,7 +57,7 @@ export const APP_THEME_OPTIONS: ReadonlyArray<{
   label: string
   description: string
 }> = [
-  { id: 'dark', label: 'Dark', description: 'Warm charcoal default.' },
+  { id: 'dark', label: 'Dark', description: 'Cool slate default.' },
   { id: 'light', label: 'Light', description: 'Bright operator UI.' },
   { id: 'system', label: 'System', description: 'Follow OS preference.' },
 ]

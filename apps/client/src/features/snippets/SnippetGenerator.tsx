@@ -108,7 +108,7 @@ export function SnippetGenerator({ onApply, onClose }: Props) {
             onChange={(event) => setDescription(event.target.value)}
             rows={4}
             placeholder="Describe what the snippet should do — e.g. follow logs of pods that aren’t ready in a namespace."
-            className="w-full resize-none rounded-md border border-border-strong bg-surface px-2.5 py-2 font-mono text-[12px] text-fg outline-none focus:border-accent focus:ring-2 focus:ring-accent-ring"
+            className="w-full resize-none rounded-md border border-border-input bg-surface px-2.5 py-2 font-mono text-[12px] text-fg outline-none focus:border-accent focus:ring-2 focus:ring-accent-ring"
             disabled={submitting}
           />
           {error !== null && (

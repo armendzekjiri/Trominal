@@ -266,7 +266,7 @@ export function AiSettingsTab() {
               <select
                 value={draft.model}
                 onChange={(event) => setDraft({ ...draft, model: event.target.value })}
-                className="rounded-md border border-border-strong bg-surface px-2 py-1.5 font-mono text-[12px] text-fg outline-none focus:border-accent focus:ring-2 focus:ring-accent-ring"
+                className="rounded-md border border-border-input bg-surface px-2 py-1.5 font-mono text-[12px] text-fg outline-none focus:border-accent focus:ring-2 focus:ring-accent-ring"
               >
                 <option value="">— pick from {models.models.length} models —</option>
                 {models.models.map((model) => (
@@ -359,11 +359,7 @@ export function AiSettingsTab() {
 }
 
 function SectionLabel({ children }: { children: React.ReactNode }) {
-  return (
-    <span className="text-[11px] font-medium uppercase tracking-wide text-fg-muted">
-      {children}
-    </span>
-  )
+  return <span className="text-[12px] font-medium text-fg-muted">{children}</span>
 }
 
 function normalize(input: AiSettingsInput): AiSettingsInput {

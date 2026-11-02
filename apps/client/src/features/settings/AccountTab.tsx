@@ -74,13 +74,13 @@ export function AccountTab() {
       </header>
 
       {user !== null && (
-        <section className="rounded-md border border-border bg-surface p-4 text-[12px]">
+        <section className="rounded-lg border border-border bg-surface p-4 text-[12px]">
           <div className="flex items-center gap-3">
             <span className="rounded-md bg-accent-soft p-2 text-accent">
               <ShieldCheck size={14} />
             </span>
             <div className="min-w-0 flex-1">
-              <div className="text-[11px] uppercase tracking-wide text-fg-faint">Signed in as</div>
+              <div className="text-[11px] font-medium text-fg-faint">Signed in as</div>
               <div className="truncate font-mono text-[13px] text-fg">{user.email}</div>
             </div>
             <span className="rounded-sm border border-border-subtle bg-surface-2 px-2 py-1 font-mono text-[11px] text-fg-muted">
@@ -175,7 +175,7 @@ function TwoFactorSection({ enabled, onChange }: { enabled: boolean; onChange: (
   }
 
   return (
-    <section className="rounded-md border border-border bg-surface p-4">
+    <section className="rounded-lg border border-border bg-surface p-4">
       <header className="mb-3 flex items-center gap-3">
         <span className="rounded-md bg-accent-soft p-2 text-accent">
           {enabled ? <ShieldCheck size={14} /> : <ShieldOff size={14} />}
@@ -359,7 +359,7 @@ function ChangeMasterPasswordSection({
   }
 
   return (
-    <section className="rounded-md border border-border bg-surface p-4">
+    <section className="rounded-lg border border-border bg-surface p-4">
       <header className="mb-3 flex items-center gap-3">
         <span className="rounded-md bg-accent-soft p-2 text-accent">
           <KeyRound size={14} />

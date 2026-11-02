@@ -53,13 +53,13 @@ export function ConnectionTab() {
         </p>
       </header>
 
-      <section className="flex flex-col gap-3 rounded-md border border-border bg-surface p-4">
+      <section className="flex flex-col gap-3 rounded-lg border border-border bg-surface p-4">
         <div className="flex items-center gap-3">
           <span className="rounded-md bg-accent-soft p-2 text-accent">
             <Server size={14} />
           </span>
           <div className="min-w-0 flex-1">
-            <div className="text-[11px] uppercase tracking-wide text-fg-faint">Current server</div>
+            <div className="text-[11px] font-medium text-fg-faint">Current server</div>
             <div className="truncate font-mono text-[13px] text-fg">{baseUrl ?? '-'}</div>
           </div>
           <Link to="/connect" className="text-[12px] text-accent hover:underline">

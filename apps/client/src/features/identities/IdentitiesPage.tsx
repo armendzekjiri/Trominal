@@ -82,10 +82,15 @@ export function IdentitiesPage() {
   return (
     <div className="grid h-full min-h-0 grid-cols-[300px_1fr] bg-bg">
       <aside className="flex min-h-0 flex-col border-r border-border bg-bg-elev">
-        <div className="flex items-center justify-between border-b border-border p-3">
-          <div>
-            <div className="text-[13px] font-medium">Identities</div>
-            <div className="font-mono text-[11px] text-fg-faint">{identities.length} encrypted</div>
+        <div className="flex h-14 shrink-0 items-center justify-between gap-2 border-b border-border px-4">
+          <div className="flex items-center gap-2">
+            <h1 className="text-[15px] font-semibold text-fg">Identities</h1>
+            <span
+              className="rounded-full bg-surface-2 px-2 py-0.5 font-mono text-[11px] text-fg-muted"
+              title="Encrypted on this device"
+            >
+              {identities.length}
+            </span>
           </div>
           <Button size="sm" onClick={() => setDraft(EMPTY_IDENTITY)} aria-label="New identity">
             <Plus size={13} />
@@ -104,9 +109,9 @@ export function IdentitiesPage() {
                 type="button"
                 onClick={() => setDraft(identityToInput(identity))}
                 className={cn(
-                  'mb-1 w-full rounded-md border-l-2 px-2 py-2 text-left',
+                  'mb-1 w-full rounded-md border px-2.5 py-2 text-left transition-colors',
                   draft.id === identity.id
-                    ? 'border-accent bg-surface-3'
+                    ? 'border-accent bg-accent-soft'
                     : 'border-transparent hover:bg-surface-2',
                 )}
               >
@@ -167,24 +172,20 @@ export function IdentitiesPage() {
           </div>
 
           <label className="flex flex-col gap-1.5">
-            <span className="text-[11px] font-medium uppercase tracking-wide text-fg-muted">
-              Public key
-            </span>
+            <span className="text-[12px] font-medium text-fg-muted">Public key</span>
             <textarea
               value={draft.publicKey}
               onChange={(event) => setDraft({ ...draft, publicKey: event.target.value })}
-              className="min-h-28 resize-y rounded-md border border-border-strong bg-surface p-3 font-mono text-[12px] outline-none focus:border-accent"
+              className="min-h-28 resize-y rounded-md border border-border-input bg-surface p-3 font-mono text-[12px] outline-none focus:border-accent"
             />
           </label>
 
           <label className="flex flex-col gap-1.5">
-            <span className="text-[11px] font-medium uppercase tracking-wide text-fg-muted">
-              Private key
-            </span>
+            <span className="text-[12px] font-medium text-fg-muted">Private key</span>
             <textarea
               value={draft.privateKey}
               onChange={(event) => setDraft({ ...draft, privateKey: event.target.value })}
-              className="min-h-44 resize-y rounded-md border border-border-strong bg-surface p-3 font-mono text-[12px] outline-none focus:border-accent"
+              className="min-h-44 resize-y rounded-md border border-border-input bg-surface p-3 font-mono text-[12px] outline-none focus:border-accent"
               required
             />
           </label>

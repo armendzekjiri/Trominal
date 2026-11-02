@@ -84,7 +84,7 @@ export function FilePane({
         side={side}
       />
 
-      <div className="grid grid-cols-[minmax(0,1fr)_88px_120px] border-b border-border-subtle px-3 py-1.5 text-[11px] uppercase tracking-wide text-fg-faint">
+      <div className="grid grid-cols-[minmax(0,1fr)_88px_120px] border-b border-border-subtle px-3 py-1.5 text-[11px] font-medium text-fg-faint">
         <span>Name</span>
         <span className="text-right">Size</span>
         <span className="text-right">Modified</span>
