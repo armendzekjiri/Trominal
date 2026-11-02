@@ -19,9 +19,11 @@ use Throwable;
 
 /**
  * Turns the first WebSocket frame of a web SSH connection into an SSH
- * session, enforcing (in order): a valid single-use token bound to the
- * client address, the destination bound to that token, the egress policy on
- * the resolved address, and the connected peer.
+ * session (or a host key probe), enforcing in order: a valid single-use
+ * token bound to the client address, a pinned host key fingerprint, the
+ * destination bound to that token, the egress policy on the resolved
+ * address, the connected peer, and the presented host key. All of this
+ * happens before any credential is sent.
  */
 final class WebSshSessionOpener
 {
@@ -61,40 +63,103 @@ final class WebSshSessionOpener
             throw WebSshError::make(WebSshError::INVALID_TOKEN);
         }
 
+        $type = $decoded['type'] ?? null;
         $frame = null;
 
         try {
             try {
                 /** @var array<string, mixed> $decoded */
-                $frame = WebSshConnectFrame::fromArray($decoded);
+                $frame = match ($type) {
+                    'probe' => WebSshProbeFrame::fromArray($decoded),
+                    'connect' => WebSshConnectFrame::fromArray($decoded),
+                    default => throw WebSshError::make(WebSshError::INVALID_FRAME),
+                };
             } catch (ValidationException) {
                 throw WebSshError::make(WebSshError::INVALID_FRAME);
             } finally {
                 unset($decoded);
             }
 
-            return $this->openSession($token, $frame, $clientIp);
+            return $frame instanceof WebSshProbeFrame
+                ? $this->probe($token, $frame, $clientIp)
+                : $this->openSession($token, $frame, $clientIp);
         } catch (WebSshError $error) {
             $this->audit($token, 'ssh.session.denied', $clientIp, [
                 'transport' => 'websocket',
+                'mode' => $type === 'probe' ? 'probe' : 'connect',
                 'reason' => $error->errorCode,
-                ...($frame instanceof WebSshConnectFrame ? ['port' => $frame->port] : []),
+                ...($frame !== null ? ['port' => $frame->port] : []),
                 ...$error->auditContext,
             ]);
 
             throw $error;
         } finally {
-            $frame?->wipeSecrets();
+            if ($frame instanceof WebSshConnectFrame) {
+                $frame->wipeSecrets();
+            }
         }
     }
 
-    private function openSession(WsSessionToken $token, WebSshConnectFrame $frame, ?string $clientIp): WebSshOpenResult
+    /**
+     * First-use flow: report the presented host key so the user can verify
+     * and pin it. No credentials are involved.
+     */
+    private function probe(WsSessionToken $token, WebSshProbeFrame $frame, ?string $clientIp): WebSshOpenResult
     {
         $destination = $this->boundDestination($token, $frame->hostId, $frame->host, $frame->port);
         $decision = $this->vettedAddress($destination);
         $client = $this->connectTo($decision, $destination->port);
 
         try {
+            $hostKey = $this->presentedHostKey($client, $decision);
+        } finally {
+            $client->disconnect();
+        }
+
+        $this->audit($token, 'ssh.host_key.probed', $clientIp, [
+            'transport' => 'websocket',
+            'port' => $destination->port,
+            ...$decision->auditMetadata(),
+            'host_key_type' => $hostKey->keyType,
+            'host_key_fingerprint' => $hostKey->fingerprint,
+        ]);
+
+        return WebSshOpenResult::probe($token, $hostKey->fingerprint, $hostKey->keyType);
+    }
+
+    private function openSession(WsSessionToken $token, WebSshConnectFrame $frame, ?string $clientIp): WebSshOpenResult
+    {
+        // A pin is mandatory. Reject before any network access so a missing
+        // pin can never fall through to trust-on-first-use.
+        if ($frame->hostKeyFingerprint === null || $frame->hostKeyFingerprint === '') {
+            throw WebSshError::make(WebSshError::HOST_KEY_UNKNOWN);
+        }
+
+        if (! HostKeyFingerprint::isWellFormed($frame->hostKeyFingerprint)) {
+            throw WebSshError::make(WebSshError::INVALID_FRAME);
+        }
+
+        $destination = $this->boundDestination($token, $frame->hostId, $frame->host, $frame->port);
+        $decision = $this->vettedAddress($destination);
+        $client = $this->connectTo($decision, $destination->port);
+
+        try {
+            // Verify the server's host key against the pin BEFORE sending any
+            // credential. phpseclib also checks that the key exchange was
+            // signed by this key.
+            $hostKey = $this->presentedHostKey($client, $decision);
+
+            if (! $hostKey->matches($frame->hostKeyFingerprint)) {
+                throw WebSshError::make(WebSshError::HOST_KEY_MISMATCH, [
+                    'fingerprint' => $hostKey->fingerprint,
+                    'key_type' => $hostKey->keyType,
+                ])->withAuditContext([
+                    ...$decision->auditMetadata(),
+                    'host_key_type' => $hostKey->keyType,
+                    'host_key_fingerprint' => $hostKey->fingerprint,
+                ]);
+            }
+
             if (! $this->authenticate($client, $frame)) {
                 throw WebSshError::make(WebSshError::AUTH_FAILED)->withAuditContext($decision->auditMetadata());
             }
@@ -114,11 +179,28 @@ final class WebSshSessionOpener
             'transport' => 'websocket',
             'port' => $destination->port,
             ...$decision->auditMetadata(),
+            'host_key_type' => $hostKey->keyType,
+            'host_key_fingerprint' => $hostKey->fingerprint,
             'cols' => $frame->cols,
             'rows' => $frame->rows,
         ]);
 
-        return WebSshOpenResult::session($token, $client, null, null);
+        return WebSshOpenResult::session($token, $client, $hostKey->fingerprint, $hostKey->keyType);
+    }
+
+    private function presentedHostKey(WebSshClient $client, EgressDecision $decision): HostKeyFingerprint
+    {
+        try {
+            $blob = $client->serverHostKey();
+
+            if ($blob === null) {
+                throw new InvalidArgumentException('No host key.');
+            }
+
+            return HostKeyFingerprint::fromBlob($blob);
+        } catch (Throwable) {
+            throw WebSshError::make(WebSshError::HOST_KEY_UNAVAILABLE)->withAuditContext($decision->auditMetadata());
+        }
     }
 
     private function boundDestination(WsSessionToken $token, string $hostId, string $host, int $port): WebSshDestination

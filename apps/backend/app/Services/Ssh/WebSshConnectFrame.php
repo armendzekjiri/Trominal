@@ -16,6 +16,7 @@ final class WebSshConnectFrame
         public readonly string $username,
         public readonly int $cols,
         public readonly int $rows,
+        public readonly ?string $hostKeyFingerprint,
         public readonly ?string $authKind,
         public ?string $password,
         public ?string $privateKeyPemB64,
@@ -51,6 +52,9 @@ final class WebSshConnectFrame
             'username' => ['required', 'string', 'max:255'],
             'cols' => ['required', 'integer', 'min:1', 'max:500'],
             'rows' => ['required', 'integer', 'min:1', 'max:500'],
+            // Validated for syntax here; a missing pin is rejected by the
+            // session opener with a distinct "host key unknown" error.
+            'host_key_fingerprint' => ['nullable', 'string', 'max:64'],
             'auth' => ['nullable', 'array'],
             'auth.kind' => ['required_with:auth', 'in:password,private-key'],
             'auth.password' => ['required_if:auth.kind,password', 'string'],
@@ -68,6 +72,7 @@ final class WebSshConnectFrame
             username: self::requiredString($validated, 'username'),
             cols: self::requiredInt($validated, 'cols'),
             rows: self::requiredInt($validated, 'rows'),
+            hostKeyFingerprint: self::optionalString($validated['host_key_fingerprint'] ?? null),
             authKind: self::optionalString($auth['kind'] ?? null),
             password: self::optionalString($auth['password'] ?? null),
             privateKeyPemB64: self::optionalString($auth['private_key_pem_b64'] ?? null),

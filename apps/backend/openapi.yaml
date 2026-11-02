@@ -516,6 +516,35 @@ paths:
   /api/v1/ws/ssh-token:
     post:
       summary: Create a short-lived WebSocket SSH token for an owned host.
+      description: |
+        Issues a 30-second, single-use token bound to the requesting client IP
+        and to the stated destination (host_id + host + port). Web SSH is
+        disabled by default and, when enabled, the backend sees SSH
+        credentials in plaintext for the duration of the session.
+
+        WebSocket protocol at `websocket_url` (the token is never put in the URL).
+        The first client text frame is JSON and is one of:
+
+        - `{"type":"probe","token","host_id","host","port"}` — runs the SSH key
+          exchange without authenticating and replies
+          `{"type":"host_key","fingerprint":"SHA256:…","key_type":"ssh-ed25519"}`,
+          then closes. Use it on first connection so the user can explicitly
+          approve the fingerprint and pin it in the encrypted vault.
+        - `{"type":"connect","token","host_id","host","port","host_key_fingerprint",
+          "username","cols","rows","auth"}` — `host_key_fingerprint` (OpenSSH
+          `SHA256:` format) is required. The proxy compares it with the
+          server's host key before sending any credential, then replies
+          `{"type":"ready","fingerprint","key_type"}`. Terminal data follows as
+          binary frames; `{"type":"resize","cols","rows"}` resizes the PTY.
+
+        Failures reply `{"type":"error","code","message"}` and close. Codes:
+        `invalid_frame`, `invalid_token`, `web_ssh_disabled`,
+        `destination_mismatch`, `destination_unresolvable`,
+        `destination_denied` (non-public address not in
+        TROMINAL_WEB_SSH_ALLOWED_CIDRS), `connect_failed`, `host_key_unknown`
+        (no pin sent), `host_key_mismatch` (also carries the presented
+        `fingerprint` and `key_type`), `host_key_unavailable`, `auth_failed`,
+        `session_failed`.
       security:
         - bearerAuth: []
       requestBody:

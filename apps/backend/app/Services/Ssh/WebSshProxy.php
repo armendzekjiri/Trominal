@@ -19,12 +19,20 @@ use Throwable;
 /**
  * WebSocket endpoint for web SSH.
  *
- * Protocol (client → server, first text frame, JSON):
- *   connect: {type:"connect", token, host_id, host, port, username, cols, rows, auth}
- * Server → client control frames (JSON text):
- *   {type:"ready"} once the shell is open, or
- *   {type:"error", code, message} followed by close.
- * After "ready", binary/text frames carry terminal data; {type:"resize"} frames resize.
+ * The first client text frame (JSON) carries the single-use token and is one of:
+ *   probe:   {type:"probe", token, host_id, host, port}
+ *            → {type:"host_key", fingerprint:"SHA256:…", key_type} then close.
+ *              Nothing is authenticated; the client shows the fingerprint for
+ *              explicit approval and pins it in its encrypted vault.
+ *   connect: {type:"connect", token, host_id, host, port, host_key_fingerprint,
+ *             username, cols, rows, auth}
+ *            → {type:"ready", fingerprint, key_type} once the host key matched
+ *              the pin, authentication succeeded and the shell is open.
+ * Any failure → {type:"error", code, message[, fingerprint, key_type]} then close.
+ * Codes include host_key_unknown (no pin sent), host_key_mismatch (presented
+ * key differs; the presented fingerprint is included), destination_mismatch
+ * and destination_denied. After "ready", binary frames carry terminal data
+ * and {type:"resize", cols, rows} frames resize the PTY.
  */
 final class WebSshProxy
 {
@@ -126,14 +134,23 @@ final class WebSshProxy
 
         $state->token = $result->token;
 
-        if (! $result->client instanceof WebSshClient) {
+        if ($result->kind === WebSshOpenResult::PROBE || ! $result->client instanceof WebSshClient) {
+            $connection->send($this->jsonFrame([
+                'type' => 'host_key',
+                'fingerprint' => $result->fingerprint,
+                'key_type' => $result->keyType,
+            ]));
             $connection->close();
 
             return;
         }
 
         $state->client = $result->client;
-        $connection->send($this->jsonFrame(['type' => 'ready']));
+        $connection->send($this->jsonFrame([
+            'type' => 'ready',
+            'fingerprint' => $result->fingerprint,
+            'key_type' => $result->keyType,
+        ]));
         $state->readTimer = $this->readPump($connection, $result->client);
     }
 
