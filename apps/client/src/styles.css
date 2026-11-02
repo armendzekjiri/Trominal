@@ -138,10 +138,13 @@ select {
   background: transparent;
 }
 
-/* Visible keyboard focus everywhere (WCAG 2.4.7 / 2.4.11). */
-:focus-visible {
-  outline: 2px solid var(--color-accent-ring);
-  outline-offset: 2px;
+/* Visible keyboard focus everywhere (WCAG 2.4.7 / 2.4.11). In the base layer so a
+   component that draws its own ring (e.g. a field wrapper) can opt out with outline-none. */
+@layer base {
+  :focus-visible {
+    outline: 2px solid var(--color-accent-ring);
+    outline-offset: 2px;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {

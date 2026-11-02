@@ -11,10 +11,13 @@ import {
   X,
 } from 'lucide-react'
 import { useEffect, useId, useRef, useState, type FormEvent, type ReactNode } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
+import { Kbd } from '@/components/ui/kbd'
 import { TextInput } from '@/components/ui/text-input'
 import { cn } from '@/lib/cn'
+import { formatShortcut, matchesShortcut } from '@/lib/shortcuts'
+import { useCommandUi } from '@/features/app/command-ui'
 import { isTauri } from '@/lib/platform'
 import {
   hostCredentialsForHost,
@@ -153,6 +156,8 @@ export function HostsPage() {
   const searchRef = useRef<HTMLInputElement>(null)
   const navigate = useNavigate()
 
+  const [searchParams, setSearchParams] = useSearchParams()
+
   function openNewHost(): void {
     setDraft(EMPTY_HOST)
     setEditorOpen(true)
@@ -161,16 +166,28 @@ export function HostsPage() {
   function closeEditor(): void {
     setEditorOpen(false)
     setDraft(EMPTY_HOST)
+    if (searchParams.has('new')) setSearchParams({}, { replace: true })
+  }
+
+  const location = useLocation()
+  const [handledNewRequest, setHandledNewRequest] = useState<string | null>(null)
+
+  // Command palette "New host" lands here as /hosts?new=1. Handled once per navigation,
+  // during render (React's pattern for deriving state from props/URL).
+  if (searchParams.get('new') === '1' && handledNewRequest !== location.key) {
+    setHandledNewRequest(location.key)
+    setDraft(EMPTY_HOST)
+    setEditorOpen(true)
   }
 
   // ⌘F / Ctrl+F focuses search, ⌘N / Ctrl+N starts a new host, Esc closes the editor.
   useEffect(() => {
     function onKeyDown(event: KeyboardEvent): void {
-      const mod = event.metaKey || event.ctrlKey
-      if (mod && event.key.toLowerCase() === 'f') {
+      if (useCommandUi.getState().open !== null) return
+      if (matchesShortcut(event, 'hosts.search')) {
         event.preventDefault()
         searchRef.current?.focus()
-      } else if (mod && event.key.toLowerCase() === 'n') {
+      } else if (matchesShortcut(event, 'hosts.new')) {
         event.preventDefault()
         setDraft(EMPTY_HOST)
         setEditorOpen(true)
@@ -340,9 +357,13 @@ export function HostsPage() {
                 placeholder="Search hosts"
                 className="min-w-0 flex-1 bg-transparent text-[13px] text-fg outline-none placeholder:text-fg-faint"
               />
-              <kbd className="hidden font-mono text-[10px] text-fg-faint sm:inline">⌘F</kbd>
+              <Kbd id="hosts.search" className="hidden sm:inline-flex" />
             </label>
-            <Button size="md" onClick={openNewHost} title="New host (⌘N)">
+            <Button
+              size="md"
+              onClick={openNewHost}
+              title={`New host (${formatShortcut('hosts.new')})`}
+            >
               <Plus size={14} aria-hidden />
               New host
             </Button>

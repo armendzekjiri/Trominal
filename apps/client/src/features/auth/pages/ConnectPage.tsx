@@ -1,12 +1,15 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Server } from 'lucide-react'
 import { AuthShell } from '@/components/auth/AuthShell'
 import { Button } from '@/components/ui/button'
 import { TextInput } from '@/components/ui/text-input'
-import { setApiBaseUrl } from '@/lib/config'
+import { getApiBaseUrl, setApiBaseUrl } from '@/lib/config'
+import { openExternal } from '@/lib/open-external'
 import { buildProbeClient, resetApiClient } from '@/lib/api-client'
 import type { ServerInfoResponse } from '@trominal/api-client'
+
+const SELF_HOSTING_URL = 'https://trominal.app/docs/self-hosting'
 
 type ProbeState =
   | { kind: 'idle' }
@@ -20,8 +23,19 @@ function normaliseUrl(value: string): string {
 
 export function ConnectPage() {
   const navigate = useNavigate()
-  const [url, setUrl] = useState('http://localhost:8000')
+  const [url, setUrl] = useState('')
   const [probe, setProbe] = useState<ProbeState>({ kind: 'idle' })
+
+  // Pre-fill the server already in use, so "switch server" starts from where you are.
+  useEffect(() => {
+    let active = true
+    void getApiBaseUrl().then((saved) => {
+      if (active && saved !== null && saved !== '') setUrl((current) => current || saved)
+    })
+    return () => {
+      active = false
+    }
+  }, [])
 
   const handleProbe = async (e: React.FormEvent): Promise<void> => {
     e.preventDefault()
@@ -64,12 +78,14 @@ export function ConnectPage() {
         <>
           Don't have a server yet?{' '}
           <a
-            href="https://github.com/anthropics/claude-code/issues"
-            target="_blank"
-            rel="noreferrer"
+            href={SELF_HOSTING_URL}
+            onClick={(event) => {
+              event.preventDefault()
+              void openExternal(SELF_HOSTING_URL)
+            }}
             className="text-accent hover:underline"
           >
-            Read the deploy guide →
+            Read the self-hosting guide →
           </a>
         </>
       }
@@ -89,7 +105,10 @@ export function ConnectPage() {
         />
 
         {probe.kind === 'ok' && (
-          <div className="flex items-center gap-2.5 rounded-md border border-accent-ring bg-accent-soft px-3 py-2.5 text-[12px]">
+          <div
+            role="status"
+            className="flex items-center gap-2.5 rounded-md border border-accent-ring bg-accent-soft px-3 py-2.5 text-[12px]"
+          >
             <span className="text-accent">✓</span>
             <div className="flex-1">
               <div className="font-medium text-fg">Reachable · {probe.info.instance_name}</div>
@@ -101,7 +120,10 @@ export function ConnectPage() {
           </div>
         )}
         {probe.kind === 'error' && (
-          <div className="flex items-center gap-2.5 rounded-md border border-danger bg-danger-soft px-3 py-2.5 text-[12px] text-fg">
+          <div
+            role="alert"
+            className="flex items-center gap-2.5 rounded-md border border-danger bg-danger-soft px-3 py-2.5 text-[12px] text-fg"
+          >
             <span className="text-danger">!</span>
             <span className="flex-1">{probe.message}</span>
           </div>

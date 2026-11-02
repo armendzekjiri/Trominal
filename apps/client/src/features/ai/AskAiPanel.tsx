@@ -4,7 +4,7 @@ import type { Terminal } from '@xterm/xterm'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/cn'
 import { useAuth } from '@/stores/auth'
-import { useAiSettings } from '@/features/vault/hooks'
+import { useReadyAiSettings } from '@/features/vault/hooks'
 import { adapterFor, type AdapterConfig, type ChatMessage } from './adapters'
 import { readRecentLines } from './recentLines'
 
@@ -55,8 +55,7 @@ export function AskAiPanel({
   pendingPrompt = null,
 }: AskAiPanelProps) {
   const hasPermission = useAuth((s) => s.hasPermission)
-  const settingsQuery = useAiSettings()
-  const settings = settingsQuery.data ?? null
+  const settings = useReadyAiSettings()
 
   const [draft, setDraft] = useState('')
   const [bubbles, setBubbles] = useState<ChatBubble[]>([])
@@ -118,7 +117,7 @@ export function AskAiPanel({
     const messages = composeMessages([...bubblesRef.current, userBubble], recent, sessionLabel)
     const config: AdapterConfig = {
       endpoint: settings.endpoint || adapter.defaultEndpoint,
-      model: settings.model || adapter.defaultModel,
+      model: settings.model,
       apiKey: settings.apiKey,
     }
 
@@ -185,7 +184,7 @@ export function AskAiPanel({
         <span className="text-[13px] font-medium text-fg">Ask AI</span>
         {settings !== null && (
           <span className="font-mono text-[11px] text-fg-faint">
-            {settings.provider} · {settings.model || adapter?.defaultModel}
+            {settings.provider} · {settings.model}
           </span>
         )}
         <button
@@ -205,8 +204,8 @@ export function AskAiPanel({
         />
       ) : settings === null ? (
         <PanelMessage
-          title="No AI provider configured"
-          body="Open Settings → AI to point Trominal at your provider and feature toggles."
+          title="AI is not set up yet"
+          body="Open Settings → AI, add your API key and pick a model."
         />
       ) : !enabled ? (
         <PanelMessage
@@ -236,7 +235,7 @@ export function AskAiPanel({
                       : 'bg-surface-2 text-fg',
                 )}
               >
-                <div className="mb-1 font-mono text-[10px] uppercase tracking-wide text-fg-faint">
+                <div className="mb-1 font-mono text-[10px] text-fg-faint">
                   {bubble.role === 'user' ? 'You' : bubble.role === 'system' ? 'Error' : 'AI'}
                   {bubble.streaming === true ? ' · streaming…' : ''}
                 </div>
@@ -276,7 +275,7 @@ export function AskAiPanel({
                 }
               }}
               rows={3}
-              className="w-full resize-none rounded-md border border-border-strong bg-surface px-2.5 py-2 font-mono text-[12px] text-fg outline-none focus:border-accent focus:ring-2 focus:ring-accent-ring"
+              className="w-full resize-none rounded-md border border-border-input bg-surface px-2.5 py-2 font-mono text-[12px] text-fg outline-none focus:border-accent focus:ring-2 focus:ring-accent-ring"
               placeholder="Ask anything or pick a slash command…"
             />
             <div className="flex items-center gap-2">

@@ -107,6 +107,8 @@ describe('anthropicAdapter', () => {
         apiKey: 'sk-ant-x',
       })
 
+      // The API pages at 20 by default; ask for the maximum so the picker shows every model.
+      expect(fetchSpy.mock.calls[0]?.[0]).toBe('https://api.anthropic.com/v1/models?limit=1000')
       expect(models[0]).toEqual({ id: 'claude-sonnet-4-6', label: 'Claude Sonnet 4.6' })
       expect(models.map((entry) => entry.id)).toEqual([
         'claude-sonnet-4-6',

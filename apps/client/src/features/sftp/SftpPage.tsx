@@ -352,11 +352,11 @@ function SftpPageDesktop() {
 
   return (
     <div className="grid h-full min-h-0 grid-rows-[auto_1fr_auto] bg-bg">
-      <header className="flex items-center gap-3 border-b border-border bg-bg-elev px-4 py-2">
-        <ArrowDownUp size={15} className="text-accent" />
+      <header className="flex min-h-14 items-center gap-3 border-b border-border bg-bg-elev px-5 py-2">
+        <ArrowDownUp size={15} className="text-accent" aria-hidden />
         <div className="flex flex-col">
-          <span className="text-[14px] font-medium">SFTP</span>
-          <span className="font-mono text-[11px] text-fg-faint">
+          <h1 className="text-[15px] font-semibold text-fg">SFTP</h1>
+          <span className="font-mono text-[11px] text-fg-muted">
             {summary.active} active · {summary.pending} queued · {summary.done} done ·{' '}
             {summary.failed} failed
           </span>

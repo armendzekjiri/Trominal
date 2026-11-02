@@ -68,7 +68,7 @@ export function AdvancedTab() {
         </p>
       </header>
 
-      <section className="rounded-md border border-border bg-surface p-4">
+      <section className="rounded-lg border border-border bg-surface p-4">
         <header className="mb-3 flex items-center gap-3">
           <span className="rounded-md bg-accent-soft p-2 text-accent">
             <Sparkles size={14} />

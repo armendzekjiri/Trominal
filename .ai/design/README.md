@@ -29,11 +29,20 @@ This folder is the visual source of truth for the client app. Read it before cha
 
 Approved by the maintainer on 2026-11-02: keep Trominal's green accent, move to a Termius-style structure on cool slate surfaces. Where this section and an older mockup disagree, **this section wins**. The mockups are updated screen by screen as each area is rebuilt.
 
-Rebuilt so far: **app shell** and **Hosts**. Not yet: auth, terminal, snippets, identities, tunnels, SFTP, settings. They keep their current layout on the new tokens.
+Rebuilt so far: **app shell** (top bar + collapsible sidebar), **Hosts**, **auth screens**, **Settings**, and the shared header/label/list styles used by Snippets, Identities, Tunnels, SFTP and Terminal. Those five keep their own layouts; only their chrome follows this spec.
 
 ### App shell
 
-- Left sidebar, 224px, `bg-elev`, full height. From the top: logo row, team scope switcher, primary nav, then pinned to the bottom: Settings, Lock vault, and an account row (initials avatar, email, role badge, menu with "Open admin panel" for admins and "Sign out").
+- **Top bar**, 44px, `bg-elev`, bottom border, full window width above the sidebar and content. It is the window's drag region. On macOS desktop the native title bar is hidden (`titleBarStyle: Overlay`) and the bar leaves 78px on the left for the traffic lights; Windows/Linux keep the native title bar. From the left:
+  - Sidebar toggle (`⌘B` / `Ctrl+B`).
+  - **Vault tab**: the current section's icon and name (Hosts, Snippets, …). Active whenever you're not on a terminal session; clicking it returns to the last section you used.
+  - **Session tabs** (desktop): one per open terminal, status dot + name, close button on hover/active, middle-click closes. Tabs are 32px tall, `r-3`, max 200px, truncated. Active: `surface-2` fill, `fg` text, 2px `accent` underline. Inactive: `fg-muted`, hover `surface`.
+  - **+** opens a menu: "Local shell" (`⌘T`) then every saved host.
+  - Trailing: the search / command palette button ("Search", `⌘K`).
+- **Left sidebar**, `bg-elev`, below the top bar. Two widths, remembered per device:
+  - Expanded, 224px: team scope switcher, primary nav, then pinned to the bottom Settings, Lock vault, and an account row (initials avatar, email, role badge, "Open admin panel" for admins, "Sign out").
+  - Collapsed, 60px icon rail: icons only (each with a tooltip and `aria-label`), no team switcher, account row shrinks to the avatar. Width animates over 200ms (off under `prefers-reduced-motion`).
+- The Terminal page no longer has its own tab strip; it shows the active session's toolbar (command line, Connect / Reconnect / Disconnect, Ask AI) under the top bar.
 - Nav rows: 34px tall, `r-3`, 16px lucide icon + label. Active: `accent-soft` background, `accent` icon, `fg` text, `aria-current="page"`. Hover: `surface-2`.
 - Every icon-only control has an `aria-label`; every control has a visible `:focus-visible` ring (2px `accent-ring`, 2px offset).
 
@@ -49,3 +58,23 @@ Rebuilt so far: **app shell** and **Hosts**. Not yet: auth, terminal, snippets, 
 - **Editor panel**: slides in from the right (380px, `bg-elev`, left border) only while creating or editing a host; `Esc` closes it. It holds the existing host form (label, hostname, port, username, group, identity, colour swatches, tags) and Save / Delete / Connect.
 - **Empty vault**: centred illustration-free empty state: icon tile, "No hosts yet", one-line explanation, **New host** button.
 - Motion: 150-200ms transitions on hover, focus and panel open, disabled under `prefers-reduced-motion`.
+
+### Auth screens
+
+- Two columns at `lg` and up: a brand panel (`bg-elev`, accent glow top-left, one-line claim, three pillars: end-to-end encrypted, self-hosted, built for teams; licence line at the bottom) and the form column. Below `lg`: the form column alone, with the logo above it.
+- Form column: max 380px (register 400px), server badge as a pill top-right, 22px title, field labels in sentence case.
+
+### Page chrome (all sections)
+
+- Every section starts with a 56px header: 15px semibold title, optional count pill, actions on the trailing side.
+- Field labels: 12px medium `fg-muted`, sentence case. Column/section headers: 11px medium `fg-faint`. No uppercase-tracking labels.
+- Selectable list rows: full 1px border, selected = `accent` border + `accent-soft` fill (no left stripe).
+- Settings: left menu styled like the main sidebar, unfinished sections carry a "Soon" pill; the active section is in the URL (`/settings?tab=…`).
+- Settings → AI: provider, endpoint, API key, then **Fetch models** lists what that endpoint offers (filterable list, arrow keys move the selection). No model is ever hardcoded or pre-filled; "Enter a model ID manually" covers gateways without a model list. Save and Test stay disabled until a model is picked.
+
+### Keyboard
+
+- All bindings live in `apps/client/src/lib/shortcuts.ts`; the palette, tooltips, the ⌘/ sheet and Settings → Shortcuts read from it. Add a binding there, never inline.
+- ⌘K command palette (pages, settings sections, actions, "Connect to <host>"), ⌘/ shortcut sheet, ⌘, settings, ⌘⇧L lock, ⌘1–6 sections, ⌘B sidebar, ⌘F / ⌘N on Hosts, ⌘T new local shell and ⌘⇧[ / ⌘⇧] previous/next session tab (both work from any section). Ctrl replaces ⌘ on Windows/Linux.
+- Inside the terminal on Windows/Linux, Ctrl chords go to the shell, not the app.
+- Overlays (palette, sheet) are `role="dialog"` + `aria-modal`, trap Tab, close on Esc and backdrop click, and return focus to where it was.

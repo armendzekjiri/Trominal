@@ -14,5 +14,4 @@ export const customAdapter: AiAdapter = {
   id: 'custom',
   label: 'Custom (OpenAI-compatible)',
   defaultEndpoint: '',
-  defaultModel: '',
 }

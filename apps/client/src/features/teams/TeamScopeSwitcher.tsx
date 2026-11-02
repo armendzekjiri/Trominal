@@ -106,7 +106,7 @@ export function TeamScopeSwitcher() {
     <div className="px-2">
       <label
         htmlFor="team-scope"
-        className="mb-1 flex items-center gap-1.5 text-[10px] uppercase text-fg-faint"
+        className="mb-1.5 flex items-center gap-1.5 text-[11px] font-medium text-fg-faint"
       >
         <Building2 size={12} />
         Workspace

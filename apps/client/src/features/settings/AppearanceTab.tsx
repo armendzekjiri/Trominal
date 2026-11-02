@@ -45,7 +45,7 @@ export function AppearanceTab() {
         </Button>
       </header>
 
-      <section className="rounded-md border border-border bg-surface p-4">
+      <section className="rounded-lg border border-border bg-surface p-4">
         <SettingsSectionHeader
           icon={<Palette size={14} />}
           title="Theme"
@@ -81,7 +81,7 @@ export function AppearanceTab() {
         </div>
       </section>
 
-      <section className="rounded-md border border-border bg-surface p-4">
+      <section className="rounded-lg border border-border bg-surface p-4">
         <SettingsSectionHeader
           icon={<Type size={14} />}
           title="Terminal font size"
@@ -120,7 +120,7 @@ export function AppearanceTab() {
         </div>
       </section>
 
-      <section className="rounded-md border border-border bg-surface p-4">
+      <section className="rounded-lg border border-border bg-surface p-4">
         <SettingsSectionHeader
           icon={<Monitor size={14} />}
           title="Terminal palette"

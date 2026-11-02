@@ -80,7 +80,7 @@ export function TwoFactorPage() {
               onChange={(e) => setDigit(i, e.target.value)}
               onKeyDown={(e) => handleKey(i, e)}
               onPaste={handlePaste}
-              className="h-14 w-12 rounded-md border border-border-strong bg-surface text-center font-mono text-[22px] font-medium text-fg outline-none focus:border-accent focus:ring-2 focus:ring-accent-ring"
+              className="h-14 w-12 rounded-md border border-border-input bg-surface text-center font-mono text-[22px] font-medium text-fg outline-none focus:border-accent focus:ring-2 focus:ring-accent-ring"
             />
           ))}
         </div>
