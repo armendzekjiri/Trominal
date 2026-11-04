@@ -106,8 +106,6 @@ final class TeamService
      * @param  array{
      *     member_id?: string,
      *     expected_key_version: int,
-     *     expected_name_ciphertext: string,
-     *     expected_name_nonce: string,
      *     user_id: string,
      *     role: string,
      *     wrapped_team_key_ciphertext: string,
@@ -196,6 +194,8 @@ final class TeamService
     /**
      * @param  array{
      *     expected_key_version: int,
+     *     expected_name_ciphertext: string,
+     *     expected_name_nonce: string,
      *     name_ciphertext: string,
      *     name_nonce: string,
      *     remaining_members: list<array{member_id: string, wrapped_team_key_ciphertext: string, wrapped_team_key_nonce: string}>,
