@@ -685,7 +685,7 @@ Tunnels and SFTP are separate product areas because they serve different workflo
 - Team names are decrypted client-side by decrypting the user's private key with the in-memory vault key, unwrapping the member-specific team key, then decrypting `teams.name_ciphertext`. Failed team-name decrypts fall back to a non-secret team id label.
 - Vault list hooks now include the selected team id in their TanStack Query cache keys, pass `?team=<team_id>` through the API client, and decrypt team-scoped records with the selected team key plus team-scoped associated data. AI settings remain personal-only.
 - The selected team key is memory-only and is wiped on workspace switch, vault lock, and logout.
-- Client create/edit/delete actions for vault resources are intentionally guarded while a team workspace is selected. Team writes require the next Phase 8 slice because resources must be encrypted with the team key and team-scoped associated data, not the personal vault key.
+- Team resource writes use the selected team key and team-scoped associated data; the server rejects stale key versions.
 
 #### Phase 8F implementation notes
 
@@ -693,7 +693,7 @@ Tunnels and SFTP are separate product areas because they serve different workflo
 - The team create and add-member APIs accept client-generated `member_id` values, and server info advertises `team_client_member_ids`. The client checks this capability before creating a team so an older server cannot silently create an inaccessible team.
 - The Filament team view groups operator-safe metadata and explains that team names are encrypted; membership roles are easier to distinguish. The admin panel does not create teams or reveal encrypted data.
 - Owners and admins with the appropriate permission can add existing instance users from the members dialog. The client wraps the team key for the recipient, and the server rejects invitations prepared for a stale key version.
-- The server serializes team-scoped vault writes against key rotation, rejects stale key versions, and checks the original encrypted team name and record fields before applying a rotation. Rotation also rejects records that omit populated encrypted fields. The client still blocks team-scoped writes and member removal until it can encrypt writes and prepare complete rotation payloads using team-scoped associated data.
+- The server serializes team-scoped vault writes against key rotation, rejects stale key versions, and checks the original encrypted team name and record fields before applying a rotation. The client encrypts shared items with team-scoped associated data and prepares key rotation when an authorized manager removes a member. Both flows require server-advertised safety capabilities.
 
 ### Phase 9 — Polish, Docs, Release
 

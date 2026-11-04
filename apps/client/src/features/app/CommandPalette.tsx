@@ -20,6 +20,7 @@ import { Kbd } from '@/components/ui/kbd'
 import { cn } from '@/lib/cn'
 import type { ShortcutId } from '@/lib/shortcuts'
 import { useHosts } from '@/features/vault/hooks'
+import { useVaultActionAccess } from '@/features/vault/access'
 import { useAppearance } from '@/stores/appearance'
 import { useAuth } from '@/stores/auth'
 import { useLayout } from '@/stores/layout'
@@ -69,6 +70,9 @@ export function CommandPalette() {
 }
 
 function PaletteDialog() {
+  const can = useVaultActionAccess()
+  const canConnectHosts = can('hosts.connect')
+  const canCreateHosts = can('hosts.create')
   const close = useCommandUi((s) => s.close)
   const showShortcuts = useCommandUi((s) => s.show)
   const navigate = useNavigate()
@@ -151,6 +155,7 @@ function PaletteDialog() {
         run: () => void logout(),
       },
     ]
+    if (!canCreateHosts) list.splice(0, 1)
     if (user?.roles.includes('admin') === true) {
       list.push({
         id: 'admin',
@@ -184,7 +189,7 @@ function PaletteDialog() {
         run: go(`/settings?tab=${tab.id}`),
       })
     }
-    if (hasPermission('hosts.connect')) {
+    if (canConnectHosts) {
       for (const host of hosts) {
         list.push({
           id: `host-${host.id}`,
@@ -200,6 +205,8 @@ function PaletteDialog() {
     return list
   }, [
     appTheme,
+    canConnectHosts,
+    canCreateHosts,
     hasPermission,
     hostsData,
     lock,

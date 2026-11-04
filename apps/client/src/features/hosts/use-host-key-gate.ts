@@ -1,6 +1,8 @@
 import { useMemo } from 'react'
 import { isTauri } from '@/lib/platform'
 import { useSaveHostKeys } from '@/features/vault/hooks'
+import { useVaultActionAccess } from '@/features/vault/access'
+import { useTeamScope } from '@/features/teams/store'
 import type { HostItem, HostKeyPin } from '@/features/vault/model'
 import { useHostKeyPrompt, type HostKeyPromptMode } from './host-key-prompt'
 import {
@@ -49,11 +51,18 @@ export async function scanHostKeys(host: Pick<HostItem, 'hostname' | 'port'>) {
 export function useHostKeyGate() {
   // mutateAsync is stable, so the returned functions are too (safe in effect deps).
   const { mutateAsync: saveHostKeys } = useSaveHostKeys()
-  return useMemo(() => createHostKeyGate(saveHostKeys), [saveHostKeys])
+  const canUpdate = useVaultActionAccess()('hosts.update')
+  const teamId = useTeamScope((state) => state.selectedTeamId)
+  return useMemo(
+    () => createHostKeyGate(saveHostKeys, teamId, canUpdate),
+    [saveHostKeys, teamId, canUpdate],
+  )
 }
 
 function createHostKeyGate(
   saveHostKeys: (input: { hostId: string; hostKeys: HostKeyPin[] }) => Promise<unknown>,
+  teamId: string | null,
+  canUpdate: boolean,
 ) {
   async function approveAndStore(
     host: HostKeyHost,
@@ -62,7 +71,7 @@ function createHostKeyGate(
     expected: ScannedHostKey[] = [],
   ): Promise<HostKeyPin[] | null> {
     if (presented.length === 0) return null
-    const persist = canPersistPins(host)
+    const persist = canPersistPins(host, teamId, canUpdate)
     const approved = await useHostKeyPrompt.getState().ask({
       mode,
       hostId: host.id,
@@ -77,8 +86,7 @@ function createHostKeyGate(
     if (persist) {
       await saveHostKeys({ hostId: host.id, hostKeys: pins })
     }
-    // Also kept for this session: team hosts can't be written, and open
-    // tabs may hold a host snapshot from before the vault refetched.
+    // Open tabs may hold a host snapshot from before the vault refetched.
     useHostKeyPrompt.getState().rememberForSession(host.id, pins)
     return pins
   }

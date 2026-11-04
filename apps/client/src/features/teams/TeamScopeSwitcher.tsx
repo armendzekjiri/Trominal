@@ -26,10 +26,12 @@ export function TeamScopeSwitcher() {
   const clearSelectedTeamKey = useTeamScope((state) => state.clearSelectedTeamKey)
   const reconcileTeamIds = useTeamScope((state) => state.reconcileTeamIds)
   const user = useAuth((state) => state.user)
-  const canCreateTeam = useAuth((state) =>
-    state.hasPermission('teams.create') && state.hasPermission('teams.read.own'),
+  const canCreateTeam = useAuth(
+    (state) => state.hasPermission('teams.create') && state.hasPermission('teams.read.own'),
   )
   const canInvite = useAuth((state) => state.hasPermission('teams.members.invite'))
+  const canRemove = useAuth((state) => state.hasPermission('teams.members.remove'))
+  const canAssignRoles = useAuth((state) => state.hasPermission('teams.roles.assign'))
   const vaultKey = useVault((state) => state.key)
   const teamsQuery = useTeamSummaries()
   const teams = teamsQuery.data ?? EMPTY_TEAMS
@@ -169,6 +171,10 @@ export function TeamScopeSwitcher() {
           key={selectedTeam.id}
           team={selectedTeam}
           canAdd={canInvite && (selectedTeam.role === 'owner' || selectedTeam.role === 'admin')}
+          canRemove={canRemove && (selectedTeam.role === 'owner' || selectedTeam.role === 'admin')}
+          canAssignRoles={
+            canAssignRoles && (selectedTeam.role === 'owner' || selectedTeam.role === 'admin')
+          }
         />
       )}
       {selectedTeamKeyError !== null && (

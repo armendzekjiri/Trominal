@@ -14,6 +14,7 @@ import {
   sessionNumber,
 } from '@/lib/shortcuts'
 import { useHosts } from '@/features/vault/hooks'
+import { useVaultActionAccess } from '@/features/vault/access'
 import { statusToDot, tabTitle, useTerminalActions } from '@/features/terminal/use-terminal-actions'
 import { useAuth } from '@/stores/auth'
 import { useLayout } from '@/stores/layout'
@@ -175,7 +176,9 @@ function SessionTabs({ onTerminal }: { onTerminal: boolean }) {
 
 function NewSessionMenu() {
   const navigate = useNavigate()
-  const hosts = useHosts().data ?? []
+  const canConnectHosts = useVaultActionAccess()('hosts.connect')
+  const hostsData = useHosts().data
+  const hosts = canConnectHosts ? (hostsData ?? []) : []
   const { addHostTab, addLocalTab } = useTerminalActions()
   const [open, setOpen] = useState(false)
   const buttonRef = useRef<HTMLButtonElement>(null)
@@ -254,7 +257,9 @@ function NewSessionMenu() {
           <div className="px-3 pb-1 pt-1.5 text-[11px] font-medium text-fg-faint">Hosts</div>
           {hosts.length === 0 ? (
             <div className="px-3 py-2 text-[12px] text-fg-faint">
-              No hosts yet. Add one on the Hosts page.
+              {canConnectHosts
+                ? 'No hosts yet. Add one on the Hosts page.'
+                : 'Host connections are unavailable in this workspace.'}
             </div>
           ) : (
             <div className="max-h-72 overflow-y-auto">

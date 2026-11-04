@@ -752,6 +752,8 @@ components:
         - setup_token_required
         - team_client_member_ids
         - team_member_key_version_guard
+        - team_vault_key_version_guard
+        - team_rotation_snapshot_guard
       properties:
         instance_name:
           type: string
@@ -777,6 +779,12 @@ components:
         team_member_key_version_guard:
           type: boolean
           description: Adding a member requires a current team key version and is serialized against key rotation.
+        team_vault_key_version_guard:
+          type: boolean
+          description: Team vault writes require the current key version and are serialized against rotation.
+        team_rotation_snapshot_guard:
+          type: boolean
+          description: Rotation rejects incomplete records and stale encrypted team or record snapshots.
     RegisterRequest:
       type: object
       required:

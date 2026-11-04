@@ -83,8 +83,8 @@ export function CreateTeamDialog() {
             <div>
               <Dialog.Title className="text-[15px] font-semibold text-fg">Create team</Dialog.Title>
               <Dialog.Description className="mt-1 text-[12px] text-fg-muted">
-                The team name is encrypted on your device. You can add existing users after creation;
-                shared item editing is not available yet.
+                The team name and shared items are encrypted on your device. You can add existing
+                users after creation.
               </Dialog.Description>
             </div>
             <Dialog.Close asChild>

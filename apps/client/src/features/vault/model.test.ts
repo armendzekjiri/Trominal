@@ -18,6 +18,37 @@ import {
 } from './model'
 
 describe('vault model helpers', () => {
+  it('binds team host ciphertext to the team scope', async () => {
+    const key = new Uint8Array(32).fill(9)
+    const id = newVaultId()
+    const teamId = newVaultId()
+    const payload = await encryptHostInput(
+      id,
+      key,
+      {
+        name: 'Shared host',
+        hostname: 'example.test',
+        port: '',
+        username: '',
+        tags: [],
+        color: '',
+        groupId: null,
+      },
+      teamId,
+    )
+    expect(payload.team_id).toBe(teamId)
+    const record = {
+      ...payload,
+      id,
+      team_id: teamId,
+      type: 'hosts' as const,
+      created_at: null,
+      updated_at: null,
+      deleted_at: null,
+    }
+    expect((await decryptHost(record, key)).name).toBe('Shared host')
+    await expect(decryptHost({ ...record, team_id: newVaultId() }, key)).rejects.toThrow()
+  })
   it('generates ULIDs for client-bound vault associated data', () => {
     expect(newVaultId(1_778_200_000_000)).toMatch(/^[0-9A-HJKMNP-TV-Z]{26}$/)
   })

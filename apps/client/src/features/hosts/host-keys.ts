@@ -112,9 +112,13 @@ export function effectivePins(
   return host.hostKeys.length > 0 ? host.hostKeys : null
 }
 
-/** Only personal hosts can store pins today (team editing isn't available). */
-export function canPersistPins(host: Pick<HostItem, 'teamId'>): boolean {
-  return host.teamId === null
+/** Persist only in the selected workspace when its role permits updates. */
+export function canPersistPins(
+  host: Pick<HostItem, 'teamId'>,
+  selectedTeamId: string | null = null,
+  canUpdate = true,
+): boolean {
+  return canUpdate && host.teamId === selectedTeamId
 }
 
 /** `ssh-ed25519` → `ED25519`, `ecdsa-sha2-nistp256` → `ECDSA`, `ssh-rsa` → `RSA`. */

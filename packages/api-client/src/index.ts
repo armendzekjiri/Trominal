@@ -18,13 +18,7 @@ type FetchInit = {
 
 /** Supported encrypted vault resource collections. */
 export type VaultResourceType =
-  | 'groups'
-  | 'hosts'
-  | 'host-credentials'
-  | 'snippets'
-  | 'identities'
-  | 'tunnels'
-  | 'ai-settings'
+  'groups' | 'hosts' | 'host-credentials' | 'snippets' | 'identities' | 'tunnels' | 'ai-settings'
 
 /** Client-supplied encrypted field payload for a vault record. */
 export type VaultRecordPayload = Record<string, boolean | number | string | null>
@@ -103,6 +97,8 @@ export type ServerInfoResponse = {
   team_client_member_ids?: boolean
   /** True when membership adds are checked and serialized against team key rotation. */
   team_member_key_version_guard?: boolean
+  team_vault_key_version_guard?: boolean
+  team_rotation_snapshot_guard?: boolean
   /**
    * True while the instance has no users and the operator configured a setup
    * code, which the first (admin) registration must send as `setup_token`.
