@@ -36,6 +36,7 @@ final class TeamService
     /**
      * @param  array{
      *     id?: string,
+     *     member_id?: string,
      *     name_ciphertext: string,
      *     name_nonce: string,
      *     wrapped_team_key_ciphertext: string,
@@ -55,13 +56,17 @@ final class TeamService
             ]);
             $team->save();
 
-            $team->members()->create([
+            $member = $team->members()->make([
                 'user_id' => $actor->id,
                 'role' => TeamMember::ROLE_OWNER,
                 'wrapped_team_key_ciphertext' => $payload['wrapped_team_key_ciphertext'],
                 'wrapped_team_key_nonce' => $payload['wrapped_team_key_nonce'],
                 'key_version' => 1,
             ]);
+            if (isset($payload['member_id'])) {
+                $member->setAttribute('id', $payload['member_id']);
+            }
+            $member->save();
 
             AuditLog::record($actor, 'team.created', 'team', (string) $team->id);
 
@@ -70,17 +75,22 @@ final class TeamService
     }
 
     /**
-     * @param  array{name_ciphertext: string, name_nonce: string}  $payload
+     * @param  array{expected_key_version: int, name_ciphertext: string, name_nonce: string}  $payload
      */
     public function update(User $actor, Team $team, array $payload): Team
     {
-        $this->requireTeamAction($actor, $team, TeamAction::UpdateTeam, 'You cannot update this team.');
+        return DB::transaction(function () use ($actor, $team, $payload): Team {
+            $team = Team::query()->whereKey($team->id)->lockForUpdate()->firstOrFail();
+            $this->requireTeamAction($actor, $team, TeamAction::UpdateTeam, 'You cannot update this team.');
+            abort_if((int) $team->key_version !== (int) $payload['expected_key_version'], 409, 'The team key changed. Refresh and retry.');
+            $team->update([
+                'name_ciphertext' => $payload['name_ciphertext'],
+                'name_nonce' => $payload['name_nonce'],
+            ]);
+            AuditLog::record($actor, 'team.updated', 'team', (string) $team->id);
 
-        $team->update($payload);
-
-        AuditLog::record($actor, 'team.updated', 'team', (string) $team->id);
-
-        return $team->refresh();
+            return $team->refresh();
+        });
     }
 
     public function delete(User $actor, Team $team): void
@@ -94,6 +104,8 @@ final class TeamService
 
     /**
      * @param  array{
+     *     member_id?: string,
+     *     expected_key_version: int,
      *     user_id: string,
      *     role: string,
      *     wrapped_team_key_ciphertext: string,
@@ -102,43 +114,51 @@ final class TeamService
      */
     public function addMember(User $actor, Team $team, array $payload): TeamMember
     {
-        $actorMembership = $this->requireManager($actor, $team);
+        return DB::transaction(function () use ($actor, $team, $payload): TeamMember {
+            $team = Team::query()->whereKey($team->id)->lockForUpdate()->firstOrFail();
+            $actorMembership = $this->requireManager($actor, $team);
+            abort_if((int) $team->key_version !== (int) $payload['expected_key_version'], 409, 'The team key changed. Refresh and retry.');
 
-        if ($payload['role'] === TeamMember::ROLE_OWNER && ! $actorMembership->allows(TeamAction::AssignOwner)) {
-            throw new AuthorizationException('Only team owners can add another owner.');
-        }
+            if ($payload['role'] === TeamMember::ROLE_OWNER && ! $actorMembership->allows(TeamAction::AssignOwner)) {
+                throw new AuthorizationException('Only team owners can add another owner.');
+            }
 
-        /** @var User $targetUser */
-        $targetUser = User::query()->whereKey($payload['user_id'])->firstOrFail();
+            /** @var User $targetUser */
+            $targetUser = User::query()->whereKey($payload['user_id'])->firstOrFail();
 
-        if ($targetUser->suspended_at !== null) {
-            throw ValidationException::withMessages([
-                'user_id' => __('Suspended users cannot be added to teams.'),
+            if ($targetUser->suspended_at !== null) {
+                throw ValidationException::withMessages([
+                    'user_id' => __('Suspended users cannot be added to teams.'),
+                ]);
+            }
+
+            if ($team->members()->where('user_id', $targetUser->id)->exists()) {
+                throw ValidationException::withMessages([
+                    'user_id' => __('The user is already a member of this team.'),
+                ]);
+            }
+
+            /** @var TeamMember $member */
+            $member = $team->members()->make([
+                'user_id' => $targetUser->id,
+                'role' => $payload['role'],
+                'wrapped_team_key_ciphertext' => $payload['wrapped_team_key_ciphertext'],
+                'wrapped_team_key_nonce' => $payload['wrapped_team_key_nonce'],
+                'key_version' => $team->key_version,
             ]);
-        }
+            if (isset($payload['member_id'])) {
+                $member->setAttribute('id', $payload['member_id']);
+            }
+            $member->save();
 
-        if ($team->members()->where('user_id', $targetUser->id)->exists()) {
-            throw ValidationException::withMessages([
-                'user_id' => __('The user is already a member of this team.'),
+            AuditLog::record($actor, 'team.member.added', 'team_member', (string) $member->id, [
+                'team_id' => (string) $team->id,
+                'user_id' => (string) $targetUser->id,
+                'role' => $payload['role'],
             ]);
-        }
 
-        /** @var TeamMember $member */
-        $member = $team->members()->create([
-            'user_id' => $targetUser->id,
-            'role' => $payload['role'],
-            'wrapped_team_key_ciphertext' => $payload['wrapped_team_key_ciphertext'],
-            'wrapped_team_key_nonce' => $payload['wrapped_team_key_nonce'],
-            'key_version' => $team->key_version,
-        ]);
-
-        AuditLog::record($actor, 'team.member.added', 'team_member', (string) $member->id, [
-            'team_id' => (string) $team->id,
-            'user_id' => (string) $targetUser->id,
-            'role' => $payload['role'],
-        ]);
-
-        return $member->refresh();
+            return $member->refresh();
+        });
     }
 
     /**
@@ -146,44 +166,54 @@ final class TeamService
      */
     public function updateMember(User $actor, Team $team, TeamMember $member, array $payload): TeamMember
     {
-        $actorMembership = $this->requireManager($actor, $team);
-        $this->ensureMemberBelongsToTeam($team, $member);
+        return DB::transaction(function () use ($actor, $team, $member, $payload): TeamMember {
+            $team = Team::query()->whereKey($team->id)->lockForUpdate()->firstOrFail();
+            $actorMembership = $this->requireManager($actor, $team);
+            $this->ensureMemberBelongsToTeam($team, $member);
+            $member = $team->members()->whereKey($member->id)->lockForUpdate()->firstOrFail();
 
-        if ($payload['role'] === TeamMember::ROLE_OWNER && ! $actorMembership->allows(TeamAction::AssignOwner)) {
-            throw new AuthorizationException('Only team owners can assign owner role.');
-        }
+            if ($payload['role'] === TeamMember::ROLE_OWNER && ! $actorMembership->allows(TeamAction::AssignOwner)) {
+                throw new AuthorizationException('Only team owners can assign owner role.');
+            }
 
-        if ($member->isOwner() && $payload['role'] !== TeamMember::ROLE_OWNER) {
-            $this->assertNotLastOwner($team, $member);
-        }
+            if ($member->isOwner() && $payload['role'] !== TeamMember::ROLE_OWNER) {
+                $this->assertNotLastOwner($team, $member);
+            }
 
-        $member->update(['role' => $payload['role']]);
+            $member->update(['role' => $payload['role']]);
 
-        AuditLog::record($actor, 'team.member.role_changed', 'team_member', (string) $member->id, [
-            'team_id' => (string) $team->id,
-            'role' => $payload['role'],
-        ]);
+            AuditLog::record($actor, 'team.member.role_changed', 'team_member', (string) $member->id, [
+                'team_id' => (string) $team->id,
+                'role' => $payload['role'],
+            ]);
 
-        return $member->refresh();
+            return $member->refresh();
+        });
     }
 
     /**
      * @param  array{
+     *     expected_key_version: int,
+     *     expected_name_ciphertext: string,
+     *     expected_name_nonce: string,
+     *     name_ciphertext: string,
+     *     name_nonce: string,
      *     remaining_members: list<array{member_id: string, wrapped_team_key_ciphertext: string, wrapped_team_key_nonce: string}>,
-     *     reencrypted_resources: list<array{type: string, id: string, fields: array<string, mixed>}>
+     *     reencrypted_resources: list<array{type: string, id: string, original_fields: array<string, mixed>, fields: array<string, mixed>}>
      * }  $payload
      */
     public function removeMember(User $actor, Team $team, TeamMember $member, array $payload): void
     {
-        $this->requireManager($actor, $team);
-        $this->ensureMemberBelongsToTeam($team, $member);
-
-        if ($member->isOwner()) {
-            $this->assertNotLastOwner($team, $member);
-        }
-
         DB::transaction(function () use ($actor, $team, $member, $payload): void {
-            $team->refresh();
+            $team = Team::query()->whereKey($team->id)->lockForUpdate()->firstOrFail();
+            $this->requireManager($actor, $team);
+            $this->ensureMemberBelongsToTeam($team, $member);
+            $member = $team->members()->whereKey($member->id)->lockForUpdate()->firstOrFail();
+            if ($member->isOwner()) {
+                $this->assertNotLastOwner($team, $member);
+            }
+            abort_if((int) $team->key_version !== (int) $payload['expected_key_version'], 409, 'The team key changed. Refresh and retry.');
+            abort_if($team->name_ciphertext !== $payload['expected_name_ciphertext'] || $team->name_nonce !== $payload['expected_name_nonce'], 409, 'The team name changed. Refresh and retry.');
             $remainingMembers = $team->members()
                 ->whereKeyNot($member->id)
                 ->lockForUpdate()
@@ -213,7 +243,11 @@ final class TeamService
             );
 
             $member->delete();
-            $team->forceFill(['key_version' => $newKeyVersion])->save();
+            $team->forceFill([
+                'key_version' => $newKeyVersion,
+                'name_ciphertext' => $payload['name_ciphertext'],
+                'name_nonce' => $payload['name_nonce'],
+            ])->save();
 
             AuditLog::record($actor, 'team.member.removed', 'team_member', (string) $member->id, [
                 'team_id' => (string) $team->id,
@@ -336,7 +370,7 @@ final class TeamService
      * or any unexpected record is supplied — the caller's transaction
      * rolls back on either branch.
      *
-     * @param  list<array{type: string, id: string, fields: array<string, mixed>}>  $reencrypted
+     * @param  list<array{type: string, id: string, original_fields: array<string, mixed>, fields: array<string, mixed>}>  $reencrypted
      */
     private function applyResourceReencryption(Team $team, array $reencrypted): int
     {
@@ -382,6 +416,24 @@ final class TeamService
             $record = $expected[$type]->firstWhere(
                 static fn (Model $row): bool => (string) $row->getKey() === $id,
             );
+            $currentFields = [];
+            foreach ($allowedFields as $field) {
+                $value = $record->getAttribute($field);
+                if ($value !== null) {
+                    $currentFields[$field] = $value;
+                }
+            }
+            $originalFields = $entry['original_fields'];
+            ksort($currentFields);
+            ksort($originalFields);
+            abort_if($currentFields !== $originalFields, 409, 'A team record changed. Refresh and retry.');
+            foreach ($allowedFields as $field) {
+                if ($record->getAttribute($field) !== null && (! array_key_exists($field, $entry['fields']) || ! is_string($entry['fields'][$field]) || $entry['fields'][$field] === '')) {
+                    throw ValidationException::withMessages([
+                        'reencrypted_resources' => __('Every populated encrypted field must be re-encrypted before removing a member.'),
+                    ]);
+                }
+            }
             $record->update($entry['fields']);
         }
 

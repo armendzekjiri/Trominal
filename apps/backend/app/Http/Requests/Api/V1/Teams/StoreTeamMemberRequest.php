@@ -21,6 +21,8 @@ final class StoreTeamMemberRequest extends FormRequest
     public function rules(): array
     {
         return [
+            'member_id' => ['sometimes', 'ulid', 'unique:team_members,id'],
+            'expected_key_version' => ['required', 'integer', 'min:1'],
             'user_id' => ['required', 'ulid', 'exists:users,id'],
             'role' => ['required', 'string', Rule::in(TeamMember::ROLES)],
             'wrapped_team_key_ciphertext' => ['required', 'string', 'max:65535'],
@@ -30,6 +32,8 @@ final class StoreTeamMemberRequest extends FormRequest
 
     /**
      * @return array{
+     *     member_id?: string,
+     *     expected_key_version: int,
      *     user_id: string,
      *     role: string,
      *     wrapped_team_key_ciphertext: string,
@@ -39,6 +43,8 @@ final class StoreTeamMemberRequest extends FormRequest
     public function payload(): array
     {
         /** @var array{
+         *     member_id?: string,
+         *     expected_key_version: int,
          *     user_id: string,
          *     role: string,
          *     wrapped_team_key_ciphertext: string,

@@ -750,6 +750,10 @@ components:
         - registration_open
         - web_ssh_enabled
         - setup_token_required
+        - team_client_member_ids
+        - team_member_key_version_guard
+        - team_vault_key_version_guard
+        - team_rotation_snapshot_guard
       properties:
         instance_name:
           type: string
@@ -769,6 +773,18 @@ components:
         setup_token_required:
           type: boolean
           description: True while the instance has no users and a setup token is configured. The token itself is never returned.
+        team_client_member_ids:
+          type: boolean
+          description: The team API accepts client-generated membership IDs for wrapped-key associated data.
+        team_member_key_version_guard:
+          type: boolean
+          description: Adding a member requires a current team key version and is serialized against key rotation.
+        team_vault_key_version_guard:
+          type: boolean
+          description: Team vault writes require the current key version and are serialized against rotation.
+        team_rotation_snapshot_guard:
+          type: boolean
+          description: Rotation rejects incomplete records and stale encrypted team or record snapshots.
     RegisterRequest:
       type: object
       required:
@@ -953,6 +969,9 @@ components:
         id:
           type: string
           description: Optional client-generated ULID used to bind AEAD associated data before create.
+        member_id:
+          type: string
+          description: Client-generated owner membership ULID used to bind the wrapped key before create.
         name_ciphertext:
           type: string
         name_nonce:
@@ -963,8 +982,12 @@ components:
           type: string
     TeamUpdateRequest:
       type: object
-      required: [name_ciphertext, name_nonce]
+      required: [expected_key_version, name_ciphertext, name_nonce]
       properties:
+        expected_key_version:
+          type: integer
+          minimum: 1
+          description: Team key version used to encrypt the name.
         name_ciphertext:
           type: string
         name_nonce:
@@ -974,9 +997,17 @@ components:
       required:
         - user_id
         - role
+        - expected_key_version
         - wrapped_team_key_ciphertext
         - wrapped_team_key_nonce
       properties:
+        member_id:
+          type: string
+          description: Client-generated membership ULID used to bind the wrapped key before adding the member.
+        expected_key_version:
+          type: integer
+          minimum: 1
+          description: Current team key version used to prepare the member's wrapped key.
         user_id:
           type: string
         role:
@@ -993,8 +1024,22 @@ components:
           $ref: '#/components/schemas/TeamRole'
     TeamMemberRemoveRequest:
       type: object
-      required: [remaining_members, reencrypted_resources]
+      required: [expected_key_version, expected_name_ciphertext, expected_name_nonce, name_ciphertext, name_nonce, remaining_members, reencrypted_resources]
       properties:
+        expected_name_ciphertext:
+          type: string
+          description: Current encrypted team name used when preparing rotation.
+        expected_name_nonce:
+          type: string
+        expected_key_version:
+          type: integer
+          minimum: 1
+          description: Current team key version used to prepare the rotation; stale rotations are rejected.
+        name_ciphertext:
+          type: string
+          description: Team name re-encrypted under the new team key.
+        name_nonce:
+          type: string
         remaining_members:
           type: array
           items:
@@ -1015,16 +1060,20 @@ components:
             the team's records after rotation; this is enforced by the
             server, which validates that the list covers exactly the team's
             current set of vault rows. Each `fields` map must contain only
-            ciphertext / nonce columns for that resource type.
+            ciphertext / nonce columns for that resource type, including every
+            currently populated encrypted field and its nonce.
           type: array
           items:
             type: object
-            required: [type, id, fields]
+            required: [type, id, original_fields, fields]
             properties:
               type:
                 $ref: '#/components/schemas/VaultResourceType'
               id:
                 type: string
+              original_fields:
+                $ref: '#/components/schemas/VaultRecordPayload'
+                description: Every non-null encrypted field and nonce read before rotation, used to detect concurrent edits.
               fields:
                 $ref: '#/components/schemas/VaultRecordPayload'
     TeamResponse:
@@ -1078,6 +1127,10 @@ components:
             - string
             - 'null'
           description: Optional team scope. Omit or null for personal vault records.
+        team_key_version:
+          type: integer
+          minimum: 1
+          description: Required for creating or updating team-scoped records. Must match the current team key version.
       examples:
         - name_ciphertext: 'base64-ciphertext'
           name_nonce: 'base64-nonce'

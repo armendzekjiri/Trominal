@@ -22,6 +22,13 @@ class MembersRelationManager extends RelationManager
                     ->sortable(),
                 TextColumn::make('role')
                     ->badge()
+                    ->formatStateUsing(fn (string $state): string => ucfirst($state))
+                    ->color(fn (string $state): string => match ($state) {
+                        'owner' => 'primary',
+                        'admin' => 'info',
+                        'member' => 'success',
+                        default => 'gray',
+                    })
                     ->sortable(),
                 TextColumn::make('key_version')
                     ->label('Key version')

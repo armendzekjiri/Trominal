@@ -18,13 +18,7 @@ type FetchInit = {
 
 /** Supported encrypted vault resource collections. */
 export type VaultResourceType =
-  | 'groups'
-  | 'hosts'
-  | 'host-credentials'
-  | 'snippets'
-  | 'identities'
-  | 'tunnels'
-  | 'ai-settings'
+  'groups' | 'hosts' | 'host-credentials' | 'snippets' | 'identities' | 'tunnels' | 'ai-settings'
 
 /** Client-supplied encrypted field payload for a vault record. */
 export type VaultRecordPayload = Record<string, boolean | number | string | null>
@@ -99,6 +93,12 @@ export type ServerInfoResponse = {
   registration_mode: 'single' | 'open' | 'invite' | 'closed'
   registration_open: boolean
   web_ssh_enabled: boolean
+  /** True when client-generated membership IDs are accepted for encrypted team keys. */
+  team_client_member_ids?: boolean
+  /** True when membership adds are checked and serialized against team key rotation. */
+  team_member_key_version_guard?: boolean
+  team_vault_key_version_guard?: boolean
+  team_rotation_snapshot_guard?: boolean
   /**
    * True while the instance has no users and the operator configured a setup
    * code, which the first (admin) registration must send as `setup_token`.
@@ -270,6 +270,7 @@ export type TeamDto = {
 /** Request body for POST /api/v1/teams. */
 export type CreateTeamRequest = {
   id?: string
+  member_id?: string
   name_ciphertext: string
   name_nonce: string
   wrapped_team_key_ciphertext: string
@@ -278,12 +279,15 @@ export type CreateTeamRequest = {
 
 /** Request body for PATCH /api/v1/teams/{id}. */
 export type UpdateTeamRequest = {
+  expected_key_version: number
   name_ciphertext: string
   name_nonce: string
 }
 
 /** Request body for POST /api/v1/teams/{id}/members. */
 export type AddTeamMemberRequest = {
+  member_id?: string
+  expected_key_version: number
   user_id: string
   role: TeamRole
   wrapped_team_key_ciphertext: string
@@ -306,6 +310,7 @@ export type TeamMemberKeyRewrap = {
 export type TeamReencryptedResource = {
   type: VaultResourceType
   id: string
+  original_fields: VaultRecordPayload
   fields: VaultRecordPayload
 }
 
@@ -319,6 +324,11 @@ export type TeamReencryptedResource = {
  * `reencrypted_resources` covers exactly the team's current set of records.
  */
 export type RemoveTeamMemberRequest = {
+  expected_key_version: number
+  expected_name_ciphertext: string
+  expected_name_nonce: string
+  name_ciphertext: string
+  name_nonce: string
   remaining_members: TeamMemberKeyRewrap[]
   reencrypted_resources: TeamReencryptedResource[]
 }

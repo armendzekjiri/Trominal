@@ -23,7 +23,11 @@ final class SystemTest extends TestCase
             ->assertJsonPath('registration_mode', 'single')
             ->assertJsonPath('registration_open', true)
             ->assertJsonPath('web_ssh_enabled', false)
-            ->assertJsonPath('setup_token_required', false);
+            ->assertJsonPath('setup_token_required', false)
+            ->assertJsonPath('team_client_member_ids', true)
+            ->assertJsonPath('team_member_key_version_guard', true)
+            ->assertJsonPath('team_vault_key_version_guard', true)
+            ->assertJsonPath('team_rotation_snapshot_guard', true);
     }
 
     public function test_reports_web_ssh_disabled_when_the_setting_is_missing(): void

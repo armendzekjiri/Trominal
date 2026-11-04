@@ -59,6 +59,22 @@ final class TeamVaultAuthorizationTest extends TestCase
         $this->seed(RoleAndPermissionSeeder::class);
     }
 
+    public function test_team_writes_require_the_current_key_version(): void
+    {
+        ['team' => $team, 'actor' => $actor, 'records' => $records] = $this->fixture('owner', true);
+        $headers = $this->bearerHeaders($actor);
+        $resource = self::resources()['hosts'];
+        $record = $records['hosts'];
+        $field = $resource['field'];
+        $original = $record->getAttribute($field);
+
+        $this->postJson('/api/v1/vault/hosts', ['team_id' => $team->id, ...$resource['payload']], $headers)->assertUnprocessable();
+        $this->postJson('/api/v1/vault/hosts', ['team_id' => $team->id, 'team_key_version' => 2, ...$resource['payload']], $headers)->assertConflict();
+        $this->patchJson('/api/v1/vault/hosts/'.$record->getKey(), [$field => 'stale'], $headers)->assertUnprocessable();
+        $this->patchJson('/api/v1/vault/hosts/'.$record->getKey(), [$field => 'stale', 'team_key_version' => 2], $headers)->assertConflict();
+        self::assertSame($original, $record->refresh()->getAttribute($field));
+    }
+
     /**
      * @return array<string, array{string, bool}>
      */
@@ -107,6 +123,7 @@ final class TeamVaultAuthorizationTest extends TestCase
 
             $response = $this->postJson("/api/v1/vault/{$type}", [
                 'team_id' => $team->id,
+                'team_key_version' => 1,
                 ...$resource['payload'],
             ], $headers);
 
@@ -135,6 +152,7 @@ final class TeamVaultAuthorizationTest extends TestCase
             $original = $record->getAttribute($field);
 
             $response = $this->patchJson("/api/v1/vault/{$type}/{$record->getKey()}", [
+                'team_key_version' => 1,
                 $field => "changed-by-{$role}",
             ], $headers);
 
@@ -264,12 +282,14 @@ final class TeamVaultAuthorizationTest extends TestCase
         $this->postJson("/api/v1/teams/{$teamId}/members", [
             'user_id' => $viewer->id,
             'role' => 'viewer',
+            'expected_key_version' => 1,
             'wrapped_team_key_ciphertext' => 'sample',
             'wrapped_team_key_nonce' => 'sample',
         ], $this->bearerHeaders($owner))->assertCreated();
 
         $hostId = (string) $this->postJson('/api/v1/vault/hosts', [
             'team_id' => $teamId,
+            'team_key_version' => 1,
             'name_ciphertext' => 'sample',
             'name_nonce' => 'sample',
             'hostname_ciphertext' => 'sample',

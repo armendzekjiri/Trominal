@@ -1,6 +1,7 @@
 import { Copy, FileKey2, KeyRound, Loader2, Plus, Trash2, Upload } from 'lucide-react'
 import { useState, type FormEvent } from 'react'
 import { Button } from '@/components/ui/button'
+import { useVaultActionAccess } from '@/features/vault/access'
 import { TextInput } from '@/components/ui/text-input'
 import { cn } from '@/lib/cn'
 import { useDeleteIdentity, useIdentities, useSaveIdentity } from '@/features/vault/hooks'
@@ -30,6 +31,7 @@ function identityToInput(identity: IdentityItem): IdentityInput {
 }
 
 export function IdentitiesPage() {
+  const can = useVaultActionAccess()
   const identitiesQuery = useIdentities()
   const saveIdentity = useSaveIdentity()
   const deleteIdentity = useDeleteIdentity()
@@ -38,6 +40,7 @@ export function IdentitiesPage() {
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
+    if (!can(draft.id === undefined ? 'identities.create' : 'identities.update')) return
     await saveIdentity.mutateAsync(draft)
   }
 
@@ -92,9 +95,11 @@ export function IdentitiesPage() {
               {identities.length}
             </span>
           </div>
-          <Button size="sm" onClick={() => setDraft(EMPTY_IDENTITY)} aria-label="New identity">
-            <Plus size={13} />
-          </Button>
+          {can('identities.create') && (
+            <Button size="sm" onClick={() => setDraft(EMPTY_IDENTITY)} aria-label="New identity">
+              <Plus size={13} />
+            </Button>
+          )}
         </div>
         <div className="min-h-0 flex-1 overflow-auto p-2">
           {identitiesQuery.isLoading ? (
@@ -191,10 +196,12 @@ export function IdentitiesPage() {
           </label>
 
           <div className="flex flex-wrap gap-2">
-            <Button disabled={saveIdentity.isPending}>
-              {saveIdentity.isPending ? <Loader2 size={13} className="animate-spin" /> : null}
-              Save encrypted identity
-            </Button>
+            {can(draft.id === undefined ? 'identities.create' : 'identities.update') && (
+              <Button disabled={saveIdentity.isPending}>
+                {saveIdentity.isPending ? <Loader2 size={13} className="animate-spin" /> : null}
+                Save encrypted identity
+              </Button>
+            )}
             <Button
               type="button"
               variant="outline"
@@ -217,7 +224,7 @@ export function IdentitiesPage() {
                 }}
               />
             </label>
-            {draft.id !== undefined && (
+            {draft.id !== undefined && can('identities.delete') && (
               <Button
                 type="button"
                 variant="outline"

@@ -14,6 +14,7 @@ import {
 import { useEffect, useId, useRef, useState, type FormEvent, type ReactNode } from 'react'
 import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
+import { useVaultActionAccess } from '@/features/vault/access'
 import { Kbd } from '@/components/ui/kbd'
 import { TextInput } from '@/components/ui/text-input'
 import { cn } from '@/lib/cn'
@@ -137,6 +138,7 @@ function hostToInput(host: HostItem, credential: HostCredentialItem | null): Hos
 }
 
 export function HostsPage() {
+  const can = useVaultActionAccess()
   const hostsQuery = useHosts()
   const groupsQuery = useGroups()
   const identitiesQuery = useIdentities()
@@ -169,6 +171,7 @@ export function HostsPage() {
   const [searchParams, setSearchParams] = useSearchParams()
 
   function openNewHost(): void {
+    if (!can('hosts.create')) return
     setDraft(EMPTY_HOST)
     setEditorOpen(true)
   }
@@ -185,7 +188,11 @@ export function HostsPage() {
 
   // Command palette "New host" lands here as /hosts?new=1. Handled once per navigation,
   // during render (React's pattern for deriving state from props/URL).
-  if (searchParams.get('new') === '1' && handledNewRequest !== location.key) {
+  if (
+    searchParams.get('new') === '1' &&
+    handledNewRequest !== location.key &&
+    can('hosts.create')
+  ) {
     setHandledNewRequest(location.key)
     setDraft(EMPTY_HOST)
     setEditorOpen(true)
@@ -211,7 +218,7 @@ export function HostsPage() {
       if (matchesShortcut(event, 'hosts.search')) {
         event.preventDefault()
         searchRef.current?.focus()
-      } else if (matchesShortcut(event, 'hosts.new')) {
+      } else if (matchesShortcut(event, 'hosts.new') && can('hosts.create')) {
         event.preventDefault()
         setDraft(EMPTY_HOST)
         setEditorOpen(true)
@@ -222,7 +229,7 @@ export function HostsPage() {
     }
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
-  }, [bootstrap])
+  }, [bootstrap, can])
 
   const visibleHosts = hosts.filter((host) => {
     const haystack = [host.name, host.hostname, host.username, host.tags.join(' ')]
@@ -242,6 +249,7 @@ export function HostsPage() {
 
   async function submitHost(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
+    if (!can(draft.id === undefined ? 'hosts.create' : 'hosts.update')) return
     setKeyStatus(null)
     setBootstrap(null)
     const host = await saveHost.mutateAsync({
@@ -414,6 +422,7 @@ export function HostsPage() {
 
   async function submitGroup(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
+    if (!can('hosts.create')) return
     if (groupName.trim() === '') {
       return
     }
@@ -451,14 +460,16 @@ export function HostsPage() {
               />
               <Kbd id="hosts.search" className="hidden sm:inline-flex" />
             </label>
-            <Button
-              size="md"
-              onClick={openNewHost}
-              title={`New host (${formatShortcut('hosts.new')})`}
-            >
-              <Plus size={14} aria-hidden />
-              New host
-            </Button>
+            {can('hosts.create') && (
+              <Button
+                size="md"
+                onClick={openNewHost}
+                title={`New host (${formatShortcut('hosts.new')})`}
+              >
+                <Plus size={14} aria-hidden />
+                New host
+              </Button>
+            )}
           </div>
         </header>
 
@@ -530,7 +541,7 @@ export function HostsPage() {
                   <Check size={13} aria-hidden />
                 </button>
               </form>
-            ) : (
+            ) : can('hosts.create') ? (
               <button
                 type="button"
                 onClick={() => setAddingGroup(true)}
@@ -539,7 +550,7 @@ export function HostsPage() {
                 <Plus size={12} aria-hidden />
                 Group
               </button>
-            )}
+            ) : null}
           </div>
 
           {loading ? (
@@ -548,7 +559,7 @@ export function HostsPage() {
               Decrypting vault…
             </div>
           ) : hosts.length === 0 ? (
-            <EmptyHosts onCreate={openNewHost} />
+            <EmptyHosts onCreate={can('hosts.create') ? openNewHost : undefined} />
           ) : visibleHosts.length === 0 ? (
             <p className="py-6 text-[13px] text-fg-muted">No hosts match this search or group.</p>
           ) : (
@@ -568,6 +579,7 @@ export function HostsPage() {
                       setEditorOpen(true)
                     }}
                     onConnect={() => navigate(`/terminal?host=${host.id}`)}
+                    canConnect={can('hosts.connect')}
                   />
                 </li>
               ))}
@@ -731,13 +743,15 @@ export function HostsPage() {
             </div>
 
             <div className="flex shrink-0 items-center gap-2 border-t border-border p-4">
-              <Button type="submit" disabled={saveHost.isPending}>
-                {saveHost.isPending || saveHostCredential.isPending ? (
-                  <Loader2 size={13} className="animate-spin" aria-hidden />
-                ) : null}
-                {editing ? 'Save' : 'Create host'}
-              </Button>
-              {selected !== null && (
+              {can(editing ? 'hosts.update' : 'hosts.create') && (
+                <Button type="submit" disabled={saveHost.isPending}>
+                  {saveHost.isPending || saveHostCredential.isPending ? (
+                    <Loader2 size={13} className="animate-spin" aria-hidden />
+                  ) : null}
+                  {editing ? 'Save' : 'Create host'}
+                </Button>
+              )}
+              {selected !== null && can('hosts.connect') && (
                 <Button variant="outline" asChild>
                   <Link to={`/terminal?host=${selected.id}`}>
                     <Terminal size={13} aria-hidden />
@@ -745,7 +759,7 @@ export function HostsPage() {
                   </Link>
                 </Button>
               )}
-              {editing && (
+              {editing && can('hosts.delete') && (
                 <Button
                   type="button"
                   variant="ghost"
@@ -935,18 +949,20 @@ function HostCard({
   selected,
   onSelect,
   onConnect,
+  canConnect,
 }: {
   host: HostItem
   hasIdentity: boolean
   selected: boolean
   onSelect: () => void
   onConnect: () => void
+  canConnect: boolean
 }) {
   const color = solid(host.color || DEFAULT_HOST_COLOR)
   const name = host.name || host.hostname
   return (
     <div
-      onDoubleClick={onConnect}
+      onDoubleClick={canConnect ? onConnect : undefined}
       className={cn(
         'group relative flex items-start gap-3 rounded-lg border bg-surface p-3.5 transition-colors duration-150',
         selected
@@ -993,17 +1009,19 @@ function HostCard({
           </div>
         )}
       </div>
-      <button
-        type="button"
-        onClick={onConnect}
-        aria-label={`Connect to ${name}`}
-        className="absolute inset-y-0 right-0 z-10 flex items-center rounded-r-lg bg-gradient-to-l from-surface-2 from-60% to-transparent pl-10 pr-3 opacity-0 transition-opacity duration-150 focus-visible:opacity-100 group-focus-within:opacity-100 group-hover:opacity-100"
-      >
-        <span className="flex h-7 items-center gap-1.5 rounded-md bg-accent px-2.5 text-[12px] font-medium text-accent-fg hover:bg-accent-hover">
-          <Terminal size={12} aria-hidden />
-          Connect
-        </span>
-      </button>
+      {canConnect && (
+        <button
+          type="button"
+          onClick={onConnect}
+          aria-label={`Connect to ${name}`}
+          className="absolute inset-y-0 right-0 z-10 flex items-center rounded-r-lg bg-gradient-to-l from-surface-2 from-60% to-transparent pl-10 pr-3 opacity-0 transition-opacity duration-150 focus-visible:opacity-100 group-focus-within:opacity-100 group-hover:opacity-100"
+        >
+          <span className="flex h-7 items-center gap-1.5 rounded-md bg-accent px-2.5 text-[12px] font-medium text-accent-fg hover:bg-accent-hover">
+            <Terminal size={12} aria-hidden />
+            Connect
+          </span>
+        </button>
+      )}
     </div>
   )
 }
@@ -1037,7 +1055,7 @@ function SelectField({
   )
 }
 
-function EmptyHosts({ onCreate }: { onCreate: () => void }) {
+function EmptyHosts({ onCreate }: { onCreate?: () => void }) {
   return (
     <div className="flex flex-col items-center justify-center gap-3 rounded-lg border border-dashed border-border-strong px-6 py-16 text-center">
       <span className="flex size-12 items-center justify-center rounded-lg bg-accent-soft text-accent">
@@ -1050,10 +1068,12 @@ function EmptyHosts({ onCreate }: { onCreate: () => void }) {
           it is synced.
         </p>
       </div>
-      <Button onClick={onCreate}>
-        <Plus size={14} aria-hidden />
-        New host
-      </Button>
+      {onCreate && (
+        <Button onClick={onCreate}>
+          <Plus size={14} aria-hidden />
+          New host
+        </Button>
+      )}
     </div>
   )
 }

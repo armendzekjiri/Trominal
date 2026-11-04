@@ -4,6 +4,7 @@ import { getActiveApiBaseUrl, getApiClient } from '@/lib/api-client'
 import { useAuth } from '@/stores/auth'
 import { useVault } from '@/stores/vault'
 import { newVaultId } from './ids'
+import { captureVaultWriteScope } from './write-scope'
 import {
   decryptAiSettings,
   decryptGroup,
@@ -67,14 +68,6 @@ function useActiveVaultResourceKey(): Uint8Array | null {
 
 function teamListOptions(teamId: string | null): { teamId: string } | undefined {
   return teamId === null ? undefined : { teamId }
-}
-
-function assertPersonalWriteScope(): void {
-  if (useTeamScope.getState().selectedTeamId !== null) {
-    throw new Error(
-      'Team editing is not available yet. Switch to Personal vault to change records.',
-    )
-  }
 }
 
 const vaultKeys = {
@@ -245,10 +238,13 @@ export function useSaveGroup() {
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: async (input: GroupInput) => {
-      assertPersonalWriteScope()
+      const scope = captureVaultWriteScope()
       const id = input.id ?? newVaultId()
       const api = await getApiClient()
-      const payload = await encryptGroupInput(id, vaultKey(), input)
+      await scope.requireSupported(api)
+      const payload = await encryptGroupInput(id, scope.key, input, scope.teamId ?? undefined)
+      if (scope.version !== null) payload.team_key_version = scope.version
+      scope.assertCurrent()
       return input.id === undefined
         ? api.createVaultRecord('groups', payload)
         : api.updateVaultRecord('groups', id, payload)
@@ -261,10 +257,13 @@ export function useSaveHost() {
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: async (input: HostInput) => {
-      assertPersonalWriteScope()
+      const scope = captureVaultWriteScope()
       const id = input.id ?? newVaultId()
       const api = await getApiClient()
-      const payload = await encryptHostInput(id, vaultKey(), input)
+      await scope.requireSupported(api)
+      const payload = await encryptHostInput(id, scope.key, input, scope.teamId ?? undefined)
+      if (scope.version !== null) payload.team_key_version = scope.version
+      scope.assertCurrent()
       return input.id === undefined
         ? api.createVaultRecord('hosts', payload)
         : api.updateVaultRecord('hosts', id, payload)
@@ -275,15 +274,23 @@ export function useSaveHost() {
 
 /**
  * Replace only a host's approved SSH host keys (PATCH of the encrypted
- * `host_keys` field). Personal vault only, like every other write today.
+ * `host_keys` field) in the selected workspace.
  */
 export function useSaveHostKeys() {
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: async ({ hostId, hostKeys }: { hostId: string; hostKeys: HostKeyPin[] }) => {
-      assertPersonalWriteScope()
+      const scope = captureVaultWriteScope()
       const api = await getApiClient()
-      const payload = await encryptHostKeysPayload(hostId, vaultKey(), hostKeys)
+      await scope.requireSupported(api)
+      const payload = await encryptHostKeysPayload(
+        hostId,
+        scope.key,
+        hostKeys,
+        scope.teamId ?? undefined,
+      )
+      if (scope.version !== null) payload.team_key_version = scope.version
+      scope.assertCurrent()
       return api.updateVaultRecord('hosts', hostId, payload)
     },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: vaultKeys.hostsRoot }),
@@ -294,8 +301,13 @@ export function useDeleteHost() {
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: async (id: string) => {
-      assertPersonalWriteScope()
+      const scope = captureVaultWriteScope()
       const api = await getApiClient()
+      await scope.requireSupported(api)
+      const record = await api.getVaultRecord('hosts', id)
+      scope.assertCurrent()
+      if ((record.team_id ?? null) !== scope.teamId)
+        throw new Error('The record belongs to a different workspace.')
       await api.deleteVaultRecord('hosts', id)
     },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: vaultKeys.hostsRoot }),
@@ -306,10 +318,18 @@ export function useSaveHostCredential() {
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: async (input: HostCredentialInput) => {
-      assertPersonalWriteScope()
+      const scope = captureVaultWriteScope()
       const id = input.id ?? newVaultId()
       const api = await getApiClient()
-      const payload = await encryptHostCredentialInput(id, vaultKey(), input)
+      await scope.requireSupported(api)
+      const payload = await encryptHostCredentialInput(
+        id,
+        scope.key,
+        input,
+        scope.teamId ?? undefined,
+      )
+      if (scope.version !== null) payload.team_key_version = scope.version
+      scope.assertCurrent()
       return input.id === undefined
         ? api.createVaultRecord('host-credentials', payload)
         : api.updateVaultRecord('host-credentials', id, payload)
@@ -322,8 +342,13 @@ export function useDeleteHostCredential() {
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: async (id: string) => {
-      assertPersonalWriteScope()
+      const scope = captureVaultWriteScope()
       const api = await getApiClient()
+      await scope.requireSupported(api)
+      const record = await api.getVaultRecord('host-credentials', id)
+      scope.assertCurrent()
+      if ((record.team_id ?? null) !== scope.teamId)
+        throw new Error('The record belongs to a different workspace.')
       await api.deleteVaultRecord('host-credentials', id)
     },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: vaultKeys.hostCredentialsRoot }),
@@ -334,10 +359,13 @@ export function useSaveSnippet() {
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: async (input: SnippetInput) => {
-      assertPersonalWriteScope()
+      const scope = captureVaultWriteScope()
       const id = input.id ?? newVaultId()
       const api = await getApiClient()
-      const payload = await encryptSnippetInput(id, vaultKey(), input)
+      await scope.requireSupported(api)
+      const payload = await encryptSnippetInput(id, scope.key, input, scope.teamId ?? undefined)
+      if (scope.version !== null) payload.team_key_version = scope.version
+      scope.assertCurrent()
       return input.id === undefined
         ? api.createVaultRecord('snippets', payload)
         : api.updateVaultRecord('snippets', id, payload)
@@ -350,8 +378,13 @@ export function useDeleteSnippet() {
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: async (id: string) => {
-      assertPersonalWriteScope()
+      const scope = captureVaultWriteScope()
       const api = await getApiClient()
+      await scope.requireSupported(api)
+      const record = await api.getVaultRecord('snippets', id)
+      scope.assertCurrent()
+      if ((record.team_id ?? null) !== scope.teamId)
+        throw new Error('The record belongs to a different workspace.')
       await api.deleteVaultRecord('snippets', id)
     },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: vaultKeys.snippetsRoot }),
@@ -362,10 +395,13 @@ export function useSaveIdentity() {
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: async (input: IdentityInput) => {
-      assertPersonalWriteScope()
+      const scope = captureVaultWriteScope()
       const id = input.id ?? newVaultId()
       const api = await getApiClient()
-      const payload = await encryptIdentityInput(id, vaultKey(), input)
+      await scope.requireSupported(api)
+      const payload = await encryptIdentityInput(id, scope.key, input, scope.teamId ?? undefined)
+      if (scope.version !== null) payload.team_key_version = scope.version
+      scope.assertCurrent()
       return input.id === undefined
         ? api.createVaultRecord('identities', payload)
         : api.updateVaultRecord('identities', id, payload)
@@ -378,8 +414,13 @@ export function useDeleteIdentity() {
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: async (id: string) => {
-      assertPersonalWriteScope()
+      const scope = captureVaultWriteScope()
       const api = await getApiClient()
+      await scope.requireSupported(api)
+      const record = await api.getVaultRecord('identities', id)
+      scope.assertCurrent()
+      if ((record.team_id ?? null) !== scope.teamId)
+        throw new Error('The record belongs to a different workspace.')
       await api.deleteVaultRecord('identities', id)
     },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: vaultKeys.identitiesRoot }),
@@ -390,10 +431,13 @@ export function useSaveTunnel() {
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: async (input: TunnelInput) => {
-      assertPersonalWriteScope()
+      const scope = captureVaultWriteScope()
       const id = input.id ?? newVaultId()
       const api = await getApiClient()
-      const payload = await encryptTunnelInput(id, vaultKey(), input)
+      await scope.requireSupported(api)
+      const payload = await encryptTunnelInput(id, scope.key, input, scope.teamId ?? undefined)
+      if (scope.version !== null) payload.team_key_version = scope.version
+      scope.assertCurrent()
       return input.id === undefined
         ? api.createVaultRecord('tunnels', payload)
         : api.updateVaultRecord('tunnels', id, payload)
@@ -406,8 +450,13 @@ export function useDeleteTunnel() {
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: async (id: string) => {
-      assertPersonalWriteScope()
+      const scope = captureVaultWriteScope()
       const api = await getApiClient()
+      await scope.requireSupported(api)
+      const record = await api.getVaultRecord('tunnels', id)
+      scope.assertCurrent()
+      if ((record.team_id ?? null) !== scope.teamId)
+        throw new Error('The record belongs to a different workspace.')
       await api.deleteVaultRecord('tunnels', id)
     },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: vaultKeys.tunnelsRoot }),

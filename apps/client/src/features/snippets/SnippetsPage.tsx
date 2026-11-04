@@ -1,6 +1,7 @@
 import { Code2, Copy, Loader2, Play, Plus, Search, Sparkles, Trash2 } from 'lucide-react'
 import { useState, type FormEvent } from 'react'
 import { Button } from '@/components/ui/button'
+import { useVaultActionAccess } from '@/features/vault/access'
 import { TextInput } from '@/components/ui/text-input'
 import { cn } from '@/lib/cn'
 import { useAuth } from '@/stores/auth'
@@ -63,6 +64,7 @@ function MarkdownPreview({ body }: { body: string }) {
 }
 
 export function SnippetsPage() {
+  const can = useVaultActionAccess()
   const snippetsQuery = useSnippets()
   const saveSnippet = useSaveSnippet()
   const deleteSnippet = useDeleteSnippet()
@@ -84,6 +86,7 @@ export function SnippetsPage() {
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
+    if (!can(draft.id === undefined ? 'snippets.create' : 'snippets.update')) return
     await saveSnippet.mutateAsync(draft)
   }
 
@@ -110,9 +113,11 @@ export function SnippetsPage() {
               className="min-w-0 flex-1 bg-transparent text-[12px] outline-none placeholder:text-fg-faint"
             />
           </div>
-          <Button size="sm" onClick={() => setDraft(EMPTY_SNIPPET)} aria-label="New snippet">
-            <Plus size={13} />
-          </Button>
+          {can('snippets.create') && (
+            <Button size="sm" onClick={() => setDraft(EMPTY_SNIPPET)} aria-label="New snippet">
+              <Plus size={13} />
+            </Button>
+          )}
         </div>
         <div className="min-h-0 flex-1 overflow-auto p-2">
           {snippetsQuery.isLoading ? (
@@ -208,10 +213,12 @@ export function SnippetsPage() {
             <Play size={13} aria-hidden />
             Run
           </Button>
-          <Button size="sm" disabled={saveSnippet.isPending}>
-            Save
-          </Button>
-          {draft.id !== undefined && (
+          {can(draft.id === undefined ? 'snippets.create' : 'snippets.update') && (
+            <Button size="sm" disabled={saveSnippet.isPending}>
+              Save
+            </Button>
+          )}
+          {draft.id !== undefined && can('snippets.delete') && (
             <Button
               type="button"
               variant="outline"

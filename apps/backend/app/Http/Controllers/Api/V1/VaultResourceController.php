@@ -8,6 +8,7 @@ use App\Enums\TeamAction;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Api\V1\VaultResourceRequest;
 use App\Models\AuditLog;
+use App\Models\Team;
 use App\Models\TeamMember;
 use App\Models\User;
 use App\Support\Vault\SerializesVaultRecords;
@@ -68,8 +69,12 @@ final class VaultResourceController extends Controller
         $teamId = $this->payloadTeamId($payload, $resource);
 
         if ($teamId !== null) {
+            $team = Team::query()->whereKey($teamId)->lockForUpdate()->firstOrFail();
             $this->ensureTeamAction($user, $teamId, TeamAction::CreateRecords);
+            $this->checkTeamKeyVersion($team, $payload['team_key_version'] ?? null);
         }
+
+        unset($payload['team_key_version']);
 
         $this->validateRelationshipsBelongToScope($user, $payload, $resource['relationship_fields'], $teamId);
 
@@ -115,10 +120,18 @@ final class VaultResourceController extends Controller
         $resource = $request->vaultResource();
         $vaultRecord = $this->resolveRecord($resource['model'], $record);
 
-        Gate::authorize('update', $vaultRecord);
-
         $payload = $request->payload();
         $teamId = $this->recordTeamId($vaultRecord, $resource);
+
+        if ($teamId !== null) {
+            $team = Team::query()->whereKey($teamId)->lockForUpdate()->firstOrFail();
+            $vaultRecord = $this->resolveRecord($resource['model'], $record);
+        }
+        Gate::authorize('update', $vaultRecord);
+        if ($teamId !== null) {
+            $this->checkTeamKeyVersion($team, $payload['team_key_version'] ?? null);
+        }
+        unset($payload['team_key_version']);
 
         if (array_key_exists('team_id', $payload) && $payload['team_id'] !== $teamId) {
             throw ValidationException::withMessages([
@@ -142,6 +155,12 @@ final class VaultResourceController extends Controller
         $user = $this->user($request);
         $resource = VaultResourceRegistry::get($vaultType);
         $vaultRecord = $this->resolveRecord($resource['model'], $record);
+
+        $teamId = $this->recordTeamId($vaultRecord, $resource);
+        if ($teamId !== null) {
+            Team::query()->whereKey($teamId)->lockForUpdate()->firstOrFail();
+            $vaultRecord = $this->resolveRecord($resource['model'], $record);
+        }
 
         Gate::authorize('delete', $vaultRecord);
 
@@ -189,6 +208,15 @@ final class VaultResourceController extends Controller
         $record = $modelClass::query()->findOrFail($id);
 
         return $record;
+    }
+
+    private function checkTeamKeyVersion(Team $team, mixed $version): void
+    {
+        if ($version === null) {
+            throw ValidationException::withMessages(['team_key_version' => __('The team key version is required.')]);
+        }
+
+        abort_if((int) $team->key_version !== (int) $version, 409, 'The team key changed. Refresh and retry.');
     }
 
     /**

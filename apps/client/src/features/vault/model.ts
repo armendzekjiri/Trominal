@@ -223,7 +223,7 @@ export function personalRecordAd(resource: VaultResourceType, id: string): strin
   return makeAd(AD_RESOURCE[resource], id)
 }
 
-function recordAd(record: VaultRecord, resource: EncryptedVaultResource): string {
+export function recordAd(record: VaultRecord, resource: EncryptedVaultResource): string {
   const teamId = relationField(record, 'team_id')
 
   if (teamId === null) {
@@ -419,7 +419,12 @@ async function encryptText(
     return
   }
 
-  const envelope = await encrypt(value, key, makeAd(AD_RESOURCE[resource], id))
+  const teamId = payload.team_id
+  const ad =
+    typeof teamId === 'string'
+      ? makeAd(`team_${AD_RESOURCE[resource]}`, `${id}:${teamId}`)
+      : makeAd(AD_RESOURCE[resource], id)
+  const envelope = await encrypt(value, key, ad)
   payload[`${field}_ciphertext`] = envelope.ct
   payload[`${field}_nonce`] = envelope.n
 }
@@ -524,8 +529,17 @@ export async function decryptTunnel(record: VaultRecord, key: Uint8Array): Promi
   }
 }
 
-export async function encryptHostInput(id: string, key: Uint8Array, input: HostInput) {
-  const payload: VaultRecordPayload = { id, group_id: input.groupId }
+export async function encryptHostInput(
+  id: string,
+  key: Uint8Array,
+  input: HostInput,
+  teamId?: string,
+) {
+  const payload: VaultRecordPayload = {
+    id,
+    group_id: input.groupId,
+    ...(teamId ? { team_id: teamId } : {}),
+  }
   await encryptText(payload, key, 'hosts', id, 'name', input.name, false)
   await encryptText(payload, key, 'hosts', id, 'hostname', input.hostname, false)
   await encryptText(payload, key, 'hosts', id, 'port', input.port)
@@ -543,8 +557,9 @@ export async function encryptHostKeysPayload(
   id: string,
   key: Uint8Array,
   hostKeys: HostKeyPin[],
+  teamId?: string,
 ): Promise<VaultRecordPayload> {
-  const payload: VaultRecordPayload = {}
+  const payload: VaultRecordPayload = teamId ? { team_id: teamId } : {}
   await encryptHostKeysInto(payload, key, id, hostKeys)
   return payload
 }
@@ -564,11 +579,13 @@ export async function encryptHostCredentialInput(
   id: string,
   key: Uint8Array,
   input: HostCredentialInput,
+  teamId?: string,
 ) {
   const payload: VaultRecordPayload = {
     id,
     host_id: input.hostId,
     identity_id: input.identityId,
+    ...(teamId ? { team_id: teamId } : {}),
   }
   await encryptText(payload, key, 'host-credentials', id, 'label', input.label, false)
   await encryptText(payload, key, 'host-credentials', id, 'username', input.username)
@@ -584,19 +601,30 @@ export async function encryptHostCredentialInput(
   return payload
 }
 
-export async function encryptGroupInput(id: string, key: Uint8Array, input: GroupInput) {
+export async function encryptGroupInput(
+  id: string,
+  key: Uint8Array,
+  input: GroupInput,
+  teamId?: string,
+) {
   const payload: VaultRecordPayload = {
     id,
     parent_id: input.parentId,
     sort_order: input.sortOrder,
+    ...(teamId ? { team_id: teamId } : {}),
   }
   await encryptText(payload, key, 'groups', id, 'name', input.name, false)
   await encryptText(payload, key, 'groups', id, 'color', input.color)
   return payload
 }
 
-export async function encryptSnippetInput(id: string, key: Uint8Array, input: SnippetInput) {
-  const payload: VaultRecordPayload = { id }
+export async function encryptSnippetInput(
+  id: string,
+  key: Uint8Array,
+  input: SnippetInput,
+  teamId?: string,
+) {
+  const payload: VaultRecordPayload = { id, ...(teamId ? { team_id: teamId } : {}) }
   await encryptText(payload, key, 'snippets', id, 'title', input.title, false)
   await encryptText(payload, key, 'snippets', id, 'body', input.body, false)
   await encryptText(payload, key, 'snippets', id, 'tags', JSON.stringify(input.tags))
@@ -611,8 +639,17 @@ export async function encryptSnippetInput(id: string, key: Uint8Array, input: Sn
   return payload
 }
 
-export async function encryptIdentityInput(id: string, key: Uint8Array, input: IdentityInput) {
-  const payload: VaultRecordPayload = { id, key_type: input.keyType }
+export async function encryptIdentityInput(
+  id: string,
+  key: Uint8Array,
+  input: IdentityInput,
+  teamId?: string,
+) {
+  const payload: VaultRecordPayload = {
+    id,
+    key_type: input.keyType,
+    ...(teamId ? { team_id: teamId } : {}),
+  }
   await encryptText(payload, key, 'identities', id, 'name', input.name, false)
   await encryptText(payload, key, 'identities', id, 'public_key', input.publicKey)
   await encryptText(payload, key, 'identities', id, 'private_key', input.privateKey, false)
@@ -633,11 +670,17 @@ export async function encryptAiSettingsInput(id: string, key: Uint8Array, input:
   return payload
 }
 
-export async function encryptTunnelInput(id: string, key: Uint8Array, input: TunnelInput) {
+export async function encryptTunnelInput(
+  id: string,
+  key: Uint8Array,
+  input: TunnelInput,
+  teamId?: string,
+) {
   const payload: VaultRecordPayload = {
     id,
     host_id: input.hostId,
     enabled: input.enabled,
+    ...(teamId ? { team_id: teamId } : {}),
   }
   await encryptText(payload, key, 'tunnels', id, 'name', input.name, false)
   await encryptText(payload, key, 'tunnels', id, 'config', JSON.stringify(input.config), false)

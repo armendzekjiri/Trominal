@@ -17,7 +17,7 @@ This document describes Trominal's threat model, what guarantees we make, what g
 | Server-database thief          | Steals a DB dump                         | ✅ All secrets encrypted with vault key derived from user master password (server doesn't have it) |
 | Server compromise (read-only)  | Reads files + memory at rest             | ✅ At-rest secrets encrypted; ⚠️ live web SSH sessions exposed (see §3)                            |
 | Server compromise (active)     | Modifies code                            | ⚠️ Detection only — audit log + integrity checks. Not preventable by client.                       |
-| Malicious self-hoster          | Operator of the Trominal instance        | ✅ For desktop client (backend not in SSH path); ⚠️ for web client (see §3)                        |
+| Malicious self-hoster          | Operator of the Trominal instance        | ⚠️ Desktop SSH stays local, but substituted member public keys can expose shared team keys; web SSH also exposes credentials (see §3) |
 | Local malware on user's device | Reads memory, keylogger                  | ❌ Out of scope — same limitation as every password manager                                        |
 | Stolen device, unlocked        | Has access to running session            | ⚠️ Auto-lock mitigates; recommend OS-level full-disk encryption                                    |
 | Stolen device, locked          | No session access                        | ✅ Master password required to unlock vault                                                        |
@@ -63,6 +63,13 @@ ciphertext = XChaCha20-Poly1305(
 - AEAD with associated data binds ciphertext to its resource — server can't move a host's password ciphertext to a different host.
 - Nonce is random (XChaCha20 makes this safe for ≤ 2^80 messages).
 - `vault_version` on the user record bumps on master password change → all clients re-derive on next sync.
+
+### Team vaults and member removal
+
+- Shared records use a separate team key and associated data that includes the team and record IDs. The team key is wrapped separately for each member's public key; the server stores only the wrapped keys and ciphertext.
+- Removing a member generates a new team key, re-encrypts the team name and current shared records, and re-wraps the key for remaining members. The server checks key versions and the original encrypted snapshot to reject stale rotations and writes.
+- Removal cannot erase plaintext, old keys, or old ciphertext that a former member previously copied. Rotate credentials on the target systems when access must be revoked there as well.
+- Member public keys are supplied by the server and are not independently verified by an authenticated key directory. An actively malicious server that substitutes a member's public key can obtain a subsequently shared team key. Use a trusted server; end-to-end verification of member keys is not yet available.
 
 ### 2.3 Login authentication
 

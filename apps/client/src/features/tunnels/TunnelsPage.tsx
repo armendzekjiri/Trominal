@@ -11,6 +11,7 @@ import {
 } from 'lucide-react'
 import { useEffect, useState, type FormEvent } from 'react'
 import { Button } from '@/components/ui/button'
+import { useVaultActionAccess } from '@/features/vault/access'
 import { TextInput } from '@/components/ui/text-input'
 import { cn } from '@/lib/cn'
 import { isTauri } from '@/lib/platform'
@@ -76,6 +77,7 @@ function tunnelToInput(tunnel: TunnelItem): TunnelInput {
 }
 
 export function TunnelsPage() {
+  const can = useVaultActionAccess()
   const tunnelsQuery = useTunnels()
   const hostsQuery = useHosts()
   const credentialsQuery = useHostCredentials()
@@ -148,6 +150,7 @@ export function TunnelsPage() {
 
   async function submitTunnel(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
+    if (!can(draft.id === undefined ? 'tunnels.create' : 'tunnels.update')) return
     setStatus(null)
     const input = normalizedDraft(draft)
     const validation = validateTunnel(input)
@@ -305,10 +308,12 @@ export function TunnelsPage() {
               <RefreshCw size={13} />
               Refresh
             </Button>
-            <Button size="sm" onClick={() => setDraft(EMPTY_TUNNEL)}>
-              <Plus size={13} />
-              New tunnel
-            </Button>
+            {can('tunnels.create') && (
+              <Button size="sm" onClick={() => setDraft(EMPTY_TUNNEL)}>
+                <Plus size={13} />
+                New tunnel
+              </Button>
+            )}
           </div>
         </div>
 
@@ -491,35 +496,40 @@ export function TunnelsPage() {
           )}
 
           <div className="flex flex-wrap gap-2">
-            <Button disabled={saveTunnel.isPending}>
-              {saveTunnel.isPending ? <Loader2 size={13} className="animate-spin" /> : null}
-              Save tunnel
-            </Button>
+            {can(draft.id === undefined ? 'tunnels.create' : 'tunnels.update') && (
+              <Button disabled={saveTunnel.isPending}>
+                {saveTunnel.isPending ? <Loader2 size={13} className="animate-spin" /> : null}
+                Save tunnel
+              </Button>
+            )}
             {selectedTunnel !== null && (
               <>
-                {runtime[selectedTunnel.id] === undefined ? (
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={() => void startTunnel(selectedTunnel)}
-                  >
-                    <Play size={13} />
-                    Start
-                  </Button>
-                ) : (
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={() => void stopTunnel(selectedTunnel.id)}
-                  >
-                    <CircleStop size={13} />
-                    Stop
+                {can('hosts.connect') &&
+                  (runtime[selectedTunnel.id] === undefined ? (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => void startTunnel(selectedTunnel)}
+                    >
+                      <Play size={13} />
+                      Start
+                    </Button>
+                  ) : (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => void stopTunnel(selectedTunnel.id)}
+                    >
+                      <CircleStop size={13} />
+                      Stop
+                    </Button>
+                  ))}
+                {can('tunnels.delete') && (
+                  <Button type="button" variant="outline" onClick={() => void removeTunnel()}>
+                    <Trash2 size={13} />
+                    Delete
                   </Button>
                 )}
-                <Button type="button" variant="outline" onClick={() => void removeTunnel()}>
-                  <Trash2 size={13} />
-                  Delete
-                </Button>
               </>
             )}
           </div>

@@ -13,6 +13,7 @@ use BackedEnum;
 use Filament\Infolists\Components\TextEntry;
 use Filament\Resources\Pages\PageRegistration;
 use Filament\Resources\Resource;
+use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Table;
@@ -58,22 +59,23 @@ class TeamResource extends Resource
     {
         return $schema
             ->components([
-                TextEntry::make('id')
-                    ->label('Team ID')
-                    ->copyable(),
-                TextEntry::make('creator.email')
-                    ->label('Created by')
-                    ->placeholder('Unknown'),
-                TextEntry::make('key_version')
-                    ->label('Key version')
-                    ->badge(),
-                TextEntry::make('members_count')
-                    ->counts('members')
-                    ->label('Members'),
-                TextEntry::make('created_at')
-                    ->dateTime(),
-                TextEntry::make('updated_at')
-                    ->dateTime(),
+                Section::make('Team overview')
+                    ->description('Team names are encrypted and are visible only in the client to team members.')
+                    ->schema([
+                        TextEntry::make('id')->label('Team ID')->copyable(),
+                        TextEntry::make('creator.email')->label('Created by')->placeholder('Unknown'),
+                        TextEntry::make('members_count')->counts('members')->label('Members'),
+                        TextEntry::make('key_version')->label('Key version')->badge(),
+                    ])
+                    ->columns(2)
+                    ->columnSpanFull(),
+                Section::make('Activity')
+                    ->schema([
+                        TextEntry::make('created_at')->label('Created')->dateTime(),
+                        TextEntry::make('updated_at')->label('Last updated')->dateTime(),
+                    ])
+                    ->columns(2)
+                    ->columnSpanFull(),
             ])
             ->columns(2);
     }

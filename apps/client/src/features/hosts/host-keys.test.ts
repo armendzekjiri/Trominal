@@ -90,9 +90,12 @@ describe('host key approval state', () => {
     expect(effectivePins(freshHost, { h2: [] })).toBeNull()
   })
 
-  it('only persists pins for personal hosts', () => {
+  it('persists pins only when the host belongs to the writable workspace', () => {
     expect(canPersistPins({ teamId: null })).toBe(true)
     expect(canPersistPins({ teamId: 'team_1' })).toBe(false)
+    expect(canPersistPins({ teamId: 'team_1' }, 'team_1', true)).toBe(true)
+    expect(canPersistPins({ teamId: 'team_1' }, 'team_1', false)).toBe(false)
+    expect(canPersistPins({ teamId: null }, 'team_1', true)).toBe(false)
   })
 
   it('labels key types', () => {

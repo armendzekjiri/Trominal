@@ -31,9 +31,11 @@ final class TeamsTest extends TestCase
         $user = $this->userWithRole('user');
         $headers = $this->bearerHeaders($user);
         $teamId = '01JZ1000000000000000000000';
+        $memberId = '01JZ1000000000000000000001';
 
         $create = $this->postJson('/api/v1/teams', [
             'id' => $teamId,
+            'member_id' => $memberId,
             ...self::teamPayload(),
         ], $headers);
 
@@ -43,6 +45,7 @@ final class TeamsTest extends TestCase
             ->assertJsonPath('data.name_ciphertext', 'team-name-ciphertext')
             ->assertJsonPath('data.key_version', 1)
             ->assertJsonPath('data.current_member.role', TeamMember::ROLE_OWNER)
+            ->assertJsonPath('data.current_member.id', $memberId)
             ->assertJsonCount(1, 'data.members');
 
         $rawTeamName = DB::table('teams')->where('id', $teamId)->value('name_ciphertext');
@@ -54,6 +57,7 @@ final class TeamsTest extends TestCase
         self::assertNotSame('owner-wrapped-team-key', $rawWrappedKey);
 
         $this->patchJson("/api/v1/teams/{$teamId}", [
+            'expected_key_version' => 1,
             'name_ciphertext' => 'updated-team-name-ciphertext',
             'name_nonce' => 'updated-team-name-nonce',
         ], $headers)
@@ -84,6 +88,47 @@ final class TeamsTest extends TestCase
             ->assertJsonPath('data.0.current_member.role', TeamMember::ROLE_OWNER);
     }
 
+    public function test_rejects_invalid_or_duplicate_client_membership_ids(): void
+    {
+        $owner = $this->userWithRole('user');
+        $headers = $this->bearerHeaders($owner);
+        $team = $this->createTeamForOwner($owner);
+        $existingMemberId = (string) $team->members()->firstOrFail()->id;
+        $this->postJson('/api/v1/teams', [...self::teamPayload(), 'member_id' => 'invalid'], $headers)
+            ->assertUnprocessable()->assertJsonValidationErrors('member_id');
+        $this->postJson('/api/v1/teams', [...self::teamPayload(), 'member_id' => $existingMemberId], $headers)
+            ->assertUnprocessable()->assertJsonValidationErrors('member_id');
+        $other = $this->userWithRole('user');
+        $this->postJson("/api/v1/teams/{$team->id}/members", [
+            ...self::memberPayload($other, TeamMember::ROLE_MEMBER),
+            'member_id' => $existingMemberId,
+        ], $headers)->assertUnprocessable()->assertJsonValidationErrors('member_id');
+    }
+
+    public function test_rejects_member_wrap_from_a_stale_team_key_version(): void
+    {
+        $owner = $this->userWithRole('user');
+        $other = $this->userWithRole('user');
+        $team = $this->createTeamForOwner($owner);
+        $this->postJson("/api/v1/teams/{$team->id}/members", [
+            ...self::memberPayload($other, TeamMember::ROLE_MEMBER),
+            'expected_key_version' => 2,
+        ], $this->bearerHeaders($owner))->assertConflict();
+        self::assertSame(1, $team->members()->count());
+    }
+
+    public function test_rejects_team_name_encrypted_for_a_stale_key(): void
+    {
+        $owner = $this->userWithRole('user');
+        $team = $this->createTeamForOwner($owner);
+        $this->patchJson("/api/v1/teams/{$team->id}", [
+            'expected_key_version' => 2,
+            'name_ciphertext' => 'stale-name',
+            'name_nonce' => 'stale-nonce',
+        ], $this->bearerHeaders($owner))->assertConflict();
+        self::assertNotSame('stale-name', $team->refresh()->name_ciphertext);
+    }
+
     public function test_owner_looks_up_user_adds_member_and_member_can_view_team_members(): void
     {
         $owner = $this->userWithRole('user');
@@ -97,11 +142,13 @@ final class TeamsTest extends TestCase
             ->assertJsonPath('data.public_key', $memberUser->public_key);
 
         $memberPayload = self::memberPayload($memberUser, TeamMember::ROLE_MEMBER);
+        $memberPayload['member_id'] = '01JZ2000000000000000000001';
 
         $add = $this->postJson("/api/v1/teams/{$team->id}/members", $memberPayload, $headers);
 
         $add
             ->assertCreated()
+            ->assertJsonPath('data.id', $memberPayload['member_id'])
             ->assertJsonPath('data.user_id', $memberUser->id)
             ->assertJsonPath('data.role', TeamMember::ROLE_MEMBER)
             ->assertJsonPath('data.wrapped_team_key_ciphertext', $memberPayload['wrapped_team_key_ciphertext'])
@@ -137,6 +184,7 @@ final class TeamsTest extends TestCase
         )->assertForbidden();
 
         $this->patchJson("/api/v1/teams/{$team->id}", [
+            'expected_key_version' => 1,
             'name_ciphertext' => 'member-update-ciphertext',
             'name_nonce' => 'member-update-nonce',
         ], $memberHeaders)->assertForbidden();
@@ -189,6 +237,7 @@ final class TeamsTest extends TestCase
         $headers = $this->bearerHeaders($owner);
 
         $this->deleteJson("/api/v1/teams/{$team->id}/members/{$member->id}", [
+            ...self::rotationMetadata(),
             'remaining_members' => [
                 [
                     'member_id' => $ownerMember->id,
@@ -202,6 +251,7 @@ final class TeamsTest extends TestCase
             ->assertJsonValidationErrors(['remaining_members']);
 
         $this->deleteJson("/api/v1/teams/{$team->id}/members/{$member->id}", [
+            ...self::rotationMetadata(),
             'remaining_members' => [
                 [
                     'member_id' => $ownerMember->id,
@@ -228,6 +278,39 @@ final class TeamsTest extends TestCase
         self::assertSame('rotated-admin-wrap', $adminMember->wrapped_team_key_ciphertext);
         self::assertFalse(TeamMember::query()->whereKey($member->id)->exists());
         self::assertSame(1, AuditLog::query()->where('action', 'team.member.removed')->count());
+    }
+
+    public function test_rotation_requires_fresh_version_and_reencrypted_team_name(): void
+    {
+        $owner = $this->userWithRole('user');
+        $memberUser = $this->userWithRole('user');
+        $team = $this->createTeamForOwner($owner);
+        $ownerMember = $team->members()->where('user_id', $owner->id)->firstOrFail();
+        $member = $this->createMembership($team, $memberUser, TeamMember::ROLE_MEMBER);
+        $url = "/api/v1/teams/{$team->id}/members/{$member->id}";
+        $headers = $this->bearerHeaders($owner);
+        $payload = [
+            'expected_key_version' => 1,
+            'expected_name_ciphertext' => 'team-name-ciphertext',
+            'expected_name_nonce' => 'team-name-nonce',
+            'name_ciphertext' => 'rotated-team-name',
+            'name_nonce' => 'rotated-team-name-nonce',
+            'remaining_members' => [[
+                'member_id' => $ownerMember->id,
+                'wrapped_team_key_ciphertext' => 'rotated-wrap',
+                'wrapped_team_key_nonce' => 'rotated-nonce',
+            ]],
+            'reencrypted_resources' => [],
+        ];
+        $missingName = $payload;
+        unset($missingName['name_ciphertext']);
+        $this->deleteJson($url, $missingName, $headers)->assertUnprocessable()->assertJsonValidationErrors('name_ciphertext');
+        $this->deleteJson($url, [...$payload, 'expected_key_version' => 2], $headers)->assertConflict();
+        $this->deleteJson($url, [...$payload, 'expected_name_ciphertext' => 'stale'], $headers)->assertConflict();
+        $this->deleteJson($url, $payload, $headers)->assertNoContent();
+        self::assertSame('rotated-team-name', $team->refresh()->name_ciphertext);
+        self::assertSame('rotated-team-name-nonce', $team->name_nonce);
+        self::assertSame(2, $team->key_version);
     }
 
     public function test_removing_member_requires_reencryption_of_every_team_scoped_record(): void
@@ -258,6 +341,7 @@ final class TeamsTest extends TestCase
 
         // Missing host re-encryption rejects.
         $this->deleteJson("/api/v1/teams/{$team->id}/members/{$member->id}", [
+            ...self::rotationMetadata(),
             'remaining_members' => [[
                 'member_id' => $ownerMember->id,
                 'wrapped_team_key_ciphertext' => 'rotated-owner-wrap',
@@ -270,6 +354,7 @@ final class TeamsTest extends TestCase
 
         // Unexpected record id rejects.
         $this->deleteJson("/api/v1/teams/{$team->id}/members/{$member->id}", [
+            ...self::rotationMetadata(),
             'remaining_members' => [[
                 'member_id' => $ownerMember->id,
                 'wrapped_team_key_ciphertext' => 'rotated-owner-wrap',
@@ -278,6 +363,7 @@ final class TeamsTest extends TestCase
             'reencrypted_resources' => [[
                 'type' => 'hosts',
                 'id' => '01J0FAKEHOSTID0000000000000',
+                'original_fields' => [],
                 'fields' => [
                     'name_ciphertext' => 'new-name-ct',
                     'name_nonce' => 'new-name-nonce',
@@ -289,6 +375,7 @@ final class TeamsTest extends TestCase
 
         // Field outside the ciphertext allowlist rejects.
         $this->deleteJson("/api/v1/teams/{$team->id}/members/{$member->id}", [
+            ...self::rotationMetadata(),
             'remaining_members' => [[
                 'member_id' => $ownerMember->id,
                 'wrapped_team_key_ciphertext' => 'rotated-owner-wrap',
@@ -297,6 +384,7 @@ final class TeamsTest extends TestCase
             'reencrypted_resources' => [[
                 'type' => 'hosts',
                 'id' => (string) $host->id,
+                'original_fields' => [],
                 // team_id sneaking in would let a malicious caller move the
                 // record between teams during rotation.
                 'fields' => ['team_id' => null],
@@ -305,8 +393,9 @@ final class TeamsTest extends TestCase
             ->assertUnprocessable()
             ->assertJsonValidationErrors(['reencrypted_resources']);
 
-        // Complete payload succeeds, ciphertext rotates, audit log records the count.
+        // A record cannot retain ciphertext encrypted with the old team key.
         $this->deleteJson("/api/v1/teams/{$team->id}/members/{$member->id}", [
+            ...self::rotationMetadata(),
             'remaining_members' => [[
                 'member_id' => $ownerMember->id,
                 'wrapped_team_key_ciphertext' => 'rotated-owner-wrap',
@@ -315,6 +404,47 @@ final class TeamsTest extends TestCase
             'reencrypted_resources' => [[
                 'type' => 'hosts',
                 'id' => (string) $host->id,
+                'original_fields' => [
+                    'name_ciphertext' => 'old-name-ct', 'name_nonce' => 'old-name-nonce',
+                    'hostname_ciphertext' => 'old-hostname-ct', 'hostname_nonce' => 'old-hostname-nonce',
+                ],
+                'fields' => ['name_ciphertext' => 'new-name', 'name_nonce' => 'new-nonce'],
+            ]],
+        ], $headers)->assertUnprocessable();
+
+        // A snapshot taken before another edit must not overwrite that edit.
+        $this->deleteJson("/api/v1/teams/{$team->id}/members/{$member->id}", [
+            ...self::rotationMetadata(),
+            'remaining_members' => [[
+                'member_id' => $ownerMember->id,
+                'wrapped_team_key_ciphertext' => 'rotated-owner-wrap',
+                'wrapped_team_key_nonce' => 'rotated-owner-nonce',
+            ]],
+            'reencrypted_resources' => [[
+                'type' => 'hosts', 'id' => (string) $host->id,
+                'original_fields' => ['name_ciphertext' => 'stale'],
+                'fields' => [
+                    'name_ciphertext' => 'rotated-name-ct', 'name_nonce' => 'rotated-name-nonce',
+                    'hostname_ciphertext' => 'rotated-hostname-ct', 'hostname_nonce' => 'rotated-hostname-nonce',
+                ],
+            ]],
+        ], $headers)->assertConflict();
+
+        // Complete payload succeeds, ciphertext rotates, audit log records the count.
+        $this->deleteJson("/api/v1/teams/{$team->id}/members/{$member->id}", [
+            ...self::rotationMetadata(),
+            'remaining_members' => [[
+                'member_id' => $ownerMember->id,
+                'wrapped_team_key_ciphertext' => 'rotated-owner-wrap',
+                'wrapped_team_key_nonce' => 'rotated-owner-nonce',
+            ]],
+            'reencrypted_resources' => [[
+                'type' => 'hosts',
+                'id' => (string) $host->id,
+                'original_fields' => [
+                    'name_ciphertext' => 'old-name-ct', 'name_nonce' => 'old-name-nonce',
+                    'hostname_ciphertext' => 'old-hostname-ct', 'hostname_nonce' => 'old-hostname-nonce',
+                ],
                 'fields' => [
                     'name_ciphertext' => 'rotated-name-ct',
                     'name_nonce' => 'rotated-name-nonce',
@@ -342,6 +472,18 @@ final class TeamsTest extends TestCase
             ->assertForbidden();
     }
 
+    /** @return array{expected_key_version: int, name_ciphertext: string, name_nonce: string} */
+    private static function rotationMetadata(): array
+    {
+        return [
+            'expected_key_version' => 1,
+            'expected_name_ciphertext' => 'team-name-ciphertext',
+            'expected_name_nonce' => 'team-name-nonce',
+            'name_ciphertext' => 'rotated-team-name',
+            'name_nonce' => 'rotated-team-name-nonce',
+        ];
+    }
+
     private function userWithRole(string $role): User
     {
         $user = User::factory()->create();
@@ -364,13 +506,14 @@ final class TeamsTest extends TestCase
     }
 
     /**
-     * @return array{user_id: string, role: string, wrapped_team_key_ciphertext: string, wrapped_team_key_nonce: string}
+     * @return array{user_id: string, role: string, expected_key_version: int, wrapped_team_key_ciphertext: string, wrapped_team_key_nonce: string}
      */
     private static function memberPayload(User $user, string $role): array
     {
         return [
             'user_id' => (string) $user->id,
             'role' => $role,
+            'expected_key_version' => 1,
             'wrapped_team_key_ciphertext' => "wrapped-team-key-for-{$user->id}",
             'wrapped_team_key_nonce' => "wrapped-team-key-nonce-for-{$user->id}",
         ];

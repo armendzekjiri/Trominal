@@ -9,6 +9,7 @@ import { cn } from '@/lib/cn'
 import { isTauri } from '@/lib/platform'
 import { useAuth } from '@/stores/auth'
 import { useHostCredentials, useHosts, useIdentities } from '@/features/vault/hooks'
+import { useVaultActionAccess } from '@/features/vault/access'
 import type { HostItem } from '@/features/vault/model'
 import { AskAiPanel, type PendingPrompt } from '@/features/ai/AskAiPanel'
 import { InlineSuggestion } from '@/features/ai/InlineSuggestion'
@@ -40,6 +41,7 @@ function WebTerminalUnavailable() {
  * shortcuts live in the app top bar (`features/app/TopBar.tsx`).
  */
 function DesktopTerminalPage() {
+  const canConnectHosts = useVaultActionAccess()('hosts.connect')
   const [searchParams] = useSearchParams()
   const hostsQuery = useHosts()
   const hostCredentialsQuery = useHostCredentials()
@@ -113,7 +115,7 @@ function DesktopTerminalPage() {
   const queriesReady =
     !hostsQuery.isLoading && !hostCredentialsQuery.isLoading && !identitiesQuery.isLoading
   useEffect(() => {
-    if (!queriesReady) return
+    if (!queriesReady || !canConnectHosts) return
     const hostId = searchParams.get('host')
     if (hostId === null || hostId === autoOpenedHostId.current) return
     const host = hosts.find((candidate) => candidate.id === hostId)
@@ -125,7 +127,7 @@ function DesktopTerminalPage() {
     } else {
       addHostTabRef.current(host)
     }
-  }, [searchParams, hosts, queriesReady, setActiveId])
+  }, [searchParams, hosts, queriesReady, setActiveId, canConnectHosts])
 
   return (
     <div className="flex h-full min-h-0 flex-col bg-bg">
