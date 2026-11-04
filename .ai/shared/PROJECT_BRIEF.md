@@ -687,6 +687,14 @@ Tunnels and SFTP are separate product areas because they serve different workflo
 - The selected team key is memory-only and is wiped on workspace switch, vault lock, and logout.
 - Client create/edit/delete actions for vault resources are intentionally guarded while a team workspace is selected. Team writes require the next Phase 8 slice because resources must be encrypted with the team key and team-scoped associated data, not the personal vault key.
 
+#### Phase 8F implementation notes
+
+- A permitted user can create a team from the workspace switcher. The client generates the team and owner-membership IDs, encrypts the name, wraps the team key for the owner, and wipes the generated key after preparing the request.
+- The team create and add-member APIs accept client-generated `member_id` values, and server info advertises `team_client_member_ids`. The client checks this capability before creating a team so an older server cannot silently create an inaccessible team.
+- The Filament team view groups operator-safe metadata and explains that team names are encrypted; membership roles are easier to distinguish. The admin panel does not create teams or reveal encrypted data.
+- Owners and admins with the appropriate permission can add existing instance users from the members dialog. The client wraps the team key for the recipient, and the server rejects invitations prepared for a stale key version.
+- The server serializes team-scoped vault writes against key rotation, rejects stale key versions, and checks the original encrypted team name and record fields before applying a rotation. Rotation also rejects records that omit populated encrypted fields. The client still blocks team-scoped writes and member removal until it can encrypt writes and prepare complete rotation payloads using team-scoped associated data.
+
 ### Phase 9 — Polish, Docs, Release
 
 - Settings → Connection (change API URL).

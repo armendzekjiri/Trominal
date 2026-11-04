@@ -28,6 +28,8 @@ final class VaultResourceRequest extends FormRequest
             $rules['id'] = ['sometimes', 'ulid'];
         }
 
+        $rules['team_key_version'] = ['sometimes', 'integer', 'min:1'];
+
         foreach ($resource['fields'] as $field) {
             $rules[$field] = $this->rulesForField(
                 $field,

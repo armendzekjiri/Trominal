@@ -8,6 +8,8 @@ import { useAuth } from '@/stores/auth'
 import { useVault } from '@/stores/vault'
 import { unwrapTeamKeyForTeam, useTeamSummaries, type TeamSummary } from './api'
 import { useTeamScope } from './store'
+import { CreateTeamDialog } from './CreateTeamDialog'
+import { TeamMembersDialog } from './TeamMembersDialog'
 
 const PERSONAL_SCOPE = 'personal'
 const EMPTY_TEAMS: TeamSummary[] = []
@@ -24,6 +26,10 @@ export function TeamScopeSwitcher() {
   const clearSelectedTeamKey = useTeamScope((state) => state.clearSelectedTeamKey)
   const reconcileTeamIds = useTeamScope((state) => state.reconcileTeamIds)
   const user = useAuth((state) => state.user)
+  const canCreateTeam = useAuth((state) =>
+    state.hasPermission('teams.create') && state.hasPermission('teams.read.own'),
+  )
+  const canInvite = useAuth((state) => state.hasPermission('teams.members.invite'))
   const vaultKey = useVault((state) => state.key)
   const teamsQuery = useTeamSummaries()
   const teams = teamsQuery.data ?? EMPTY_TEAMS
@@ -152,10 +158,18 @@ export function TeamScopeSwitcher() {
           className="pointer-events-none absolute right-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-fg-faint"
         />
       </div>
+      {canCreateTeam && <CreateTeamDialog />}
       {selectedTeam !== null && (
         <div className="mt-1 truncate text-[10px] text-fg-faint">
           {selectedTeam.role} - key v{selectedTeam.keyVersion}
         </div>
+      )}
+      {selectedTeam !== null && (
+        <TeamMembersDialog
+          key={selectedTeam.id}
+          team={selectedTeam}
+          canAdd={canInvite && (selectedTeam.role === 'owner' || selectedTeam.role === 'admin')}
+        />
       )}
       {selectedTeamKeyError !== null && (
         <div className="mt-1 truncate text-[10px] text-danger">{selectedTeamKeyError}</div>

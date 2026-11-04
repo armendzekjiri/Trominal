@@ -20,6 +20,7 @@ final class StoreTeamRequest extends FormRequest
     {
         return [
             'id' => ['sometimes', 'ulid'],
+            'member_id' => ['sometimes', 'ulid', 'unique:team_members,id'],
             'name_ciphertext' => ['required', 'string', 'max:65535'],
             'name_nonce' => ['required', 'string', 'max:128'],
             'wrapped_team_key_ciphertext' => ['required', 'string', 'max:65535'],
@@ -30,6 +31,7 @@ final class StoreTeamRequest extends FormRequest
     /**
      * @return array{
      *     id?: string,
+     *     member_id?: string,
      *     name_ciphertext: string,
      *     name_nonce: string,
      *     wrapped_team_key_ciphertext: string,
@@ -40,6 +42,7 @@ final class StoreTeamRequest extends FormRequest
     {
         /** @var array{
          *     id?: string,
+         *     member_id?: string,
          *     name_ciphertext: string,
          *     name_nonce: string,
          *     wrapped_team_key_ciphertext: string,

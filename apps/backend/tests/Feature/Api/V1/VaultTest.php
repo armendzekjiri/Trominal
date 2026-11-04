@@ -170,6 +170,7 @@ final class VaultTest extends TestCase
         $create = $this->postJson('/api/v1/vault/snippets', [
             'id' => '01JZ2000000000000000000000',
             'team_id' => $team->id,
+            'team_key_version' => 1,
             ...self::snippetPayload(),
         ], $headers);
 
@@ -218,6 +219,7 @@ final class VaultTest extends TestCase
 
         $this->postJson('/api/v1/vault/hosts', [
             'team_id' => $team->id,
+            'team_key_version' => 1,
             'group_id' => $personalGroup->id,
             ...self::hostPayload(),
         ], $headers)
@@ -233,6 +235,7 @@ final class VaultTest extends TestCase
 
         $this->postJson('/api/v1/vault/hosts', [
             'team_id' => $team->id,
+            'team_key_version' => 1,
             'group_id' => $teamGroup->id,
             ...self::hostPayload(),
         ], $headers)

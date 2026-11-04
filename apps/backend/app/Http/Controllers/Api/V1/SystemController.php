@@ -26,6 +26,8 @@ final class SystemController extends Controller
             'registration_mode' => $registration['mode'] ?? 'single',
             'registration_open' => (bool) ($registration['open'] ?? false),
             'web_ssh_enabled' => (bool) ($registration['web_ssh_enabled'] ?? false),
+            'team_client_member_ids' => true,
+            'team_member_key_version_guard' => true,
             // Only whether a setup code is needed; the code itself is never exposed.
             'setup_token_required' => AuthService::setupTokenRequired(),
         ]);

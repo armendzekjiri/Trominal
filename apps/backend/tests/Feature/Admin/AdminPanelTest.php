@@ -139,7 +139,11 @@ final class AdminPanelTest extends TestCase
 
         $this->actingAs($admin)
             ->get("/admin/teams/{$team->id}")
-            ->assertOk();
+            ->assertOk()
+            ->assertSee('Team overview')
+            ->assertSee('Team names are encrypted')
+            ->assertDontSee('team-name-ciphertext')
+            ->assertDontSee('wrapped-key-');
 
         $this->actingAs($admin);
 

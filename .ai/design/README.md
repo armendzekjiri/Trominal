@@ -81,6 +81,11 @@ Desktop SSH, SFTP, tunnels and key install never trust a server on their own. Th
 - Settings: left menu styled like the main sidebar, unfinished sections carry a "Soon" pill; the active section is in the URL (`/settings?tab=…`).
 - Settings → AI: provider, endpoint, API key, then **Fetch models** lists what that endpoint offers (filterable list, arrow keys move the selection). No model is ever hardcoded or pre-filled; "Enter a model ID manually" covers gateways without a model list. Save and Test stay disabled until a model is picked.
 
+### Team workspaces
+
+- The workspace switcher offers **Create team** to users with `teams.create` and `teams.read.own`. A compact dialog asks for a team name, with Cancel and Create buttons and a short explanation that the team name is encrypted. Show validation or server errors in the dialog. On success, select the new team in the switcher. Team management and shared resource writes remain subject to the member's team role.
+- For a selected team, a **Members** dialog lists its members and roles. Owners and admins with `teams.members.invite` can add an existing instance user by email and choose a permitted role; only owners can assign the owner role. Key wrapping happens locally, and a changed or locked workspace cancels the request before it is submitted.
+
 ### Keyboard
 
 - All bindings live in `apps/client/src/lib/shortcuts.ts`; the palette, tooltips, the ⌘/ sheet and Settings → Shortcuts read from it. Add a binding there, never inline.

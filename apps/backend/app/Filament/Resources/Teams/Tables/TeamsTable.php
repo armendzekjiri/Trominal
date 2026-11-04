@@ -63,6 +63,8 @@ class TeamsTable
                         return true;
                     })),
             ])
+            ->emptyStateHeading('No teams yet')
+            ->emptyStateDescription('Users with permission can create teams in the Trominal client.')
             ->defaultSort('created_at', 'desc');
     }
 }
