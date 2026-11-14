@@ -13,11 +13,11 @@
     "typecheck": "wrangler types && astro check"
   },
   "dependencies": {
-    "@astrojs/cloudflare": "^14.4.4",
-    "@astrojs/mdx": "^8.1.2",
+    "@astrojs/cloudflare": "^14.4.7",
+    "@astrojs/mdx": "^8.1.5",
     "@fontsource/inter": "^5.3.0",
     "@fontsource/jetbrains-mono": "^5.3.0",
-    "astro": "^7.4.5",
+    "astro": "^7.4.11",
     "marked": "^14.1.4",
     "tailwindcss": "^3.4.19"
   },
@@ -25,6 +25,6 @@
     "@astrojs/check": "^0.9.12",
     "@types/node": "^22.20.5",
     "typescript": "^5.9.3",
-    "wrangler": "^4.156.2"
+    "wrangler": "^4.160.1"
   }
 }
